@@ -285,7 +285,9 @@ struct DefaultListView: View {
                     dismiss()   // dismiss DefaultListView after saving
                 },
                 onDelete: {
-                    dismiss()   // dismiss DefaultListView without saving
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                        dismiss()   // dismiss DefaultListView without saving
+                    }
                 }
             )
         }

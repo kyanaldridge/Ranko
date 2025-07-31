@@ -445,7 +445,7 @@ struct CreateNewRanko: View {
                              isPresented: $showLayoutPicker)
         }
         
-        .fullScreenCover(item: $fullScreenListDestination, onDismiss: { dismiss() }) { destination in
+        .fullScreenCover(item: $fullScreenListDestination, onDismiss: { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { dismiss() } }) { destination in
             switch destination {
             case .defaultList:
                 DefaultListView(rankoName: rankoName, description: description, isPrivate: isPrivate, category: selectedCategoryChip, onSave: {_ in })
