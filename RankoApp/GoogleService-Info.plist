@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>675762669809-igmgju3laea0lv57sdjhi6tt0lbh0c0e.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.675762669809-igmgju3laea0lv57sdjhi6tt0lbh0c0e</string>
+	<key>API_KEY</key>
+	<string>AIzaSyC4Tx7dAFxMOh1rt2OoyrPdix-gsARy6Jg</string>
+	<key>GCM_SENDER_ID</key>
+	<string>675762669809</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>Ranko.RankoApp</string>
+	<key>PROJECT_ID</key>
+	<string>ranko-kyan</string>
+	<key>STORAGE_BUCKET</key>
+	<string>ranko-kyan.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false/>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false/>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true/>
+	<key>IS_GCM_ENABLED</key>
+	<true/>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true/>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:675762669809:ios:99b7a8261cf7ecd39d8150</string>
+	<key>DATABASE_URL</key>
+	<string>https://ranko-kyan-default-rtdb.firebaseio.com</string>
+	<key>GIDClientID</key>
+	<string>675762669809-5edsl8jjfqg24a40jqgrfcrrsdrh2lga.apps.googleusercontent.com</string>
+</dict>
+</plist>
