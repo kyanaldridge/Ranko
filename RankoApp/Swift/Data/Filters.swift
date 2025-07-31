@@ -25,154 +25,220 @@ struct FilterChip: Identifiable, Equatable, Codable {
 
 // Global color mapping for filter chips
 let filterChipIconColors: [String: Color] = [
-   
-   "1001": Color(red: 0.51, green: 0, blue: 0),              // Maroon
-   "1002": Color(red: 0.78, green: 0, blue: 0),              // Dark Red
-   "1003": Color(red: 1, green: 0, blue: 0),                 // Red
-   "1004": Color(red: 1, green: 0.2, blue: 0),               // Red-Orange
-   "1005": Color(red: 1, green: 0.35, blue: 0),              // Orange
-   "1006": Color(red: 1, green: 0.52, blue: 0),              // Lighter Orange
-   "1007": Color(red: 1, green: 0.65, blue: 0),              // Orange-Yellow
-   "1008": Color(red: 1, green: 0.72, blue: 0),              // Darker Yellow
-   "1009": Color(red: 1, green: 0.78, blue: 0),              // Yellow
-   "1010": Color(red: 0.62, green: 0.87, blue: 0),           // Lime
-   "1011": Color(red: 0.29, green: 0.77, blue: 0),           // Green
-   "1012": Color(red: 0, green: 0.45, blue: 0),              // Dark Green
-   "1013": Color(red: 0, green: 0.35, blue: 0),              // Darker Green
-   "1014": Color(red: 0, green: 0.73, blue: 0.56),           // Dark Turquoise
-   "1015": Color(red: 0, green: 0.75, blue: 0.77),           // Turquoise
-   "1016": Color(red: 0, green: 0.73, blue: 1),              // Light Blue
-   "1017": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "1018": Color(red: 0, green: 0.38, blue: 1),              // Dark Blue
-   "1019": Color(red: 0, green: 0.32, blue: 0.84),           // Deep Dark Blue
-   "1020": Color(red: 0.2, green: 0, blue: 1),               // Purple-Blue
-   "1021": Color(red: 0.29, green: 0, blue: 0.77),           // Dark Purple
-   "1022": Color(red: 0.44, green: 0, blue: 0.77),           // Purple
-   "1023": Color(red: 0.61, green: 0, blue: 0.77),           // Violet
-   "1024": Color(red: 0.77, green: 0, blue: 0.76),           // Purple-Pink
-   "1025": Color(red: 1, green: 0, blue: 0.98),              // Neon-Pink
-   "1026": Color(red: 0.95, green: 0, blue: 0.67),           // Pink
-   "1027": Color(red: 1, green: 0, blue: 0.44),              // Hot Pink
-   "1028": Color(red: 0, green: 0, blue: 0),                 // Black
-   "1029": Color(red: 1, green: 1, blue: 1),                 // White
-   "1030": Color(red: 1, green: 0.65, blue: 0),              // Gold
-   "1031": Color(red: 0.635, green: 0.7, blue: 0.698),       // Silver
-   "1032": Color(red: 0.56, green: 0.33, blue: 0),           // Bronze
+
+    "1001": Color(hex: 0x680000),     // Blood Red
+    "1002": Color(hex: 0x9F0606),     // Penn Red
+    "1003": Color(hex: 0xC90F0F),     // Engineering Orange
+    "1004": Color(hex: 0xF21818),     // Red
+    "1005": Color(hex: 0xF63413),     // Scarlet
+    "1006": Color(hex: 0xF9500D),     // Tangelo
+    "1007": Color(hex: 0xFC6C08),     // Pumpkin
+    "1008": Color(hex: 0xFE7A05),     // Safety Orange
+    "1009": Color(hex: 0xFFA503),     // Orange
+    "1010": Color(hex: 0xFFBA02),     // Selective Yellow
+    "1011": Color(hex: 0xFFCF00),     // Jonquil
+    "1012": Color(hex: 0xDFD701),     // Citrine
+    "1013": Color(hex: 0xBEDF01),     // Pear
+    "1014": Color(hex: 0xACCA01),     // Yellow Green
+    "1015": Color(hex: 0x9AB501),     // Apple Green Light
+    "1016": Color(hex: 0x769801),     // Apple Green Dark
+    "1017": Color(hex: 0x5B8200),     // Avocado
+    "1018": Color(hex: 0x459440),     // Forest Green
+    "1019": Color(hex: 0x3A9D60),     // Shamrock Green
+    "1020": Color(hex: 0x2FA580),     // Jungle Green
+    "1021": Color(hex: 0x24AEA0),     // Keppel
+    "1022": Color(hex: 0x19B7C0),     // Verdigris
+    "1023": Color(hex: 0x03C8FF),     // Vivid Sky Blue
+    "1024": Color(hex: 0x03B0E2),     // Process Cyan
+    "1025": Color(hex: 0x0394C0),     // Blue Green
+    "1026": Color(hex: 0x03789E),     // Cerulean
+    "1027": Color(hex: 0x035F80),     // Lapis Lazuli
+    "1028": Color(hex: 0x03539C),     // Polynesian Blue
+    "1029": Color(hex: 0x0248B1),     // Cobalt Blue
+    "1030": Color(hex: 0x0243BE),     // Violet Blue
+    "1031": Color(hex: 0x013DCA),     // Persian Blue
+    "1032": Color(hex: 0x0031E2),     // Palatinate Blue
+    "1033": Color(hex: 0x1025C7),     // Medium Blue
+    "1034": Color(hex: 0x1F19AC),     // Zaffre
+    "1035": Color(hex: 0x2E0D91),     // Ultramarine
+    "1036": Color(hex: 0x360784),     // Persian Indigo
+    "1037": Color(hex: 0x3D0076),     // Indigo
+    "1038": Color(hex: 0x4D007C),     // Light Indigo
+    "1039": Color(hex: 0x5C0082),     // Lightest Indigo
+    "1040": Color(hex: 0x7B008E),     // Purple
+    "1041": Color(hex: 0xA000A0),     // Mauveine
+    "1042": Color(hex: 0xC800B8),     // Steel Pink
+    "1043": Color(hex: 0xF000D0),     // Hot Magenta
+    "1044": Color(hex: 0xB60077),     // Red Violet
+    "1045": Color(hex: 0xA20059),     // Murrey
+    "1046": Color(hex: 0x8F003B),     // Claret
+    "1047": Color(hex: 0x7B001E),     // Burgundy
    
    "Music": Color(red: 1, green: 0, blue: 0),
    "Sports": Color(red: 1, green: 0.2, blue: 0),
-   "Food & Drink":Color(red: 1, green: 0.35, blue: 0),
+   "Food & Drink": Color(red: 1, green: 0.35, blue: 0),
    "Nature": Color(red: 1, green: 0.65, blue: 0),
    "Entertainment": Color(red: 1, green: 0.78, blue: 0),
    "Humanities": Color(red: 0.62, green: 0.87, blue: 0),
-   "Science":Color(red: 0.29, green: 0.77, blue: 0),
-   "People":Color(red: 0, green: 0.45, blue: 0),
-   "Brands":Color(red: 0, green: 0.73, blue: 0.56),
-   "Hobbies & Activities":Color(red: 0, green: 0.62, blue: 0.95),
-   "Technology":Color(red: 0, green: 0.32, blue: 0.84),
-   "Art & Design":Color(red: 0.29, green: 0, blue: 0.77),
-   "Vehicles":Color(red: 0.44, green: 0, blue: 0.77),
-   "Culture":Color(red: 0.77, green: 0, blue: 0.76),
-   "Occupation":Color(red: 0.95, green: 0, blue: 0.67),
+   "Science": Color(red: 0.29, green: 0.77, blue: 0),
+   "People": Color(red: 0, green: 0.45, blue: 0),
+   "Brands": Color(red: 0, green: 0.73, blue: 0.56),
+   "Hobbies & Activities": Color(red: 0, green: 0.62, blue: 0.95),
+   "Technology & Math": Color(red: 0, green: 0.32, blue: 0.84),
+   "Art & Design": Color(red: 0.29, green: 0, blue: 0.77),
+   "Vehicles": Color(red: 0.44, green: 0, blue: 0.77),
+   "Culture": Color(red: 0.77, green: 0, blue: 0.76),
+   "Occupation": Color(red: 0.95, green: 0, blue: 0.67),
    "Random": Color(red: 1, green: 0, blue: 0.44),
    
    "Artists & Bands": Color(red: 1, green: 0.35, blue: 0),
    "Songs": Color(red: 1, green: 0.72, blue: 0),
    "Albums": Color(red: 0.62, green: 0.87, blue: 0),
    "Instruments": Color(red: 0.29, green: 0.77, blue: 0),
-   "Festivals":Color(red: 0, green: 0.35, blue: 0),
+   "Festivals": Color(red: 0, green: 0.35, blue: 0),
    "Band Members": Color(red: 0, green: 0.75, blue: 0.77),
    "Record Labels": Color(red: 0, green: 0.62, blue: 0.95),
    "Genres": Color(red: 0.44, green: 0, blue: 0.77),
    
-   "Sport":Color(red: 1, green: 0, blue: 0),
-   "Athletes":Color(red: 0.2, green: 0, blue: 1),
-   "Leagues & Tournaments":Color(red: 1, green: 0.72, blue: 0),
-   "Clubs & Teams":Color(red: 0.62, green: 0.87, blue: 0),
-   "Football":Color(red: 0, green: 0, blue: 0),
-   "Basketball":Color(red: 1, green: 0.2, blue: 0),
-   "Australian Football":Color(red: 1, green: 0, blue: 0),
-   "American Football":Color(red: 0.51, green: 0, blue: 0),
-   "Tennis":Color(red: 0.62, green: 0.87, blue: 0),
-   "Motorsport":Color(red: 1, green: 0.72, blue: 0),
-   "Olympics":Color(red: 0.29, green: 0.77, blue: 0),
-   "Stadiums & Venues":Color(red: 0.44, green: 0, blue: 0.77),
-   "F1 Constructors":Color(red: 0, green: 0.62, blue: 0.95),
-   "Coaches & Managers":Color(red: 0.95, green: 0, blue: 0.67),
-   "Commentators":Color(red: 0, green: 0.45, blue: 0),
-   "Rivalries":Color(red: 1, green: 0.72, blue: 0),
-   "Mascots":Color(red: 0, green: 0.32, blue: 0.84),
-   "Gym Machines":Color(red: 0.29, green: 0, blue: 0.77),
-   "Gym Exercises":Color(red: 1, green: 0, blue: 0.44),
+   "Sport": Color(red: 1, green: 0, blue: 0),
+   "Athletes": Color(red: 0.2, green: 0, blue: 1),
+   "Leagues & Tournaments": Color(red: 1, green: 0.72, blue: 0),
+   "Clubs & Teams": Color(red: 0.62, green: 0.87, blue: 0),
+   "Football": Color(red: 0, green: 0, blue: 0),
+   "Basketball": Color(red: 1, green: 0.2, blue: 0),
+   "Australian Football": Color(red: 1, green: 0, blue: 0),
+   "American Football": Color(red: 0.51, green: 0, blue: 0),
+   "Tennis": Color(red: 0.62, green: 0.87, blue: 0),
+   "Motorsport": Color(red: 1, green: 0.72, blue: 0),
+   "Olympics": Color(red: 0.29, green: 0.77, blue: 0),
+   "Stadiums & Venues": Color(red: 0.44, green: 0, blue: 0.77),
+   "F1 Constructors": Color(red: 0, green: 0.62, blue: 0.95),
+   "Coaches & Managers": Color(red: 0.95, green: 0, blue: 0.67),
+   "Commentators": Color(red: 0, green: 0.45, blue: 0),
+   "Rivalries": Color(red: 1, green: 0.72, blue: 0),
+   "Mascots": Color(red: 0, green: 0.32, blue: 0.84),
+   "Gym Machines": Color(red: 0.29, green: 0, blue: 0.77),
+   "Gym Exercises": Color(red: 1, green: 0, blue: 0.44),
    
-   "Food":Color(red: 0, green: 0.45, blue: 0),
-   "Drinks":Color(red: 0.2, green: 0, blue: 1),
-   "Fruit":Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Vegetables": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Pizza":Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Fast Food Chains": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Eggs": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Chocolate": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Cheese": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Dairy": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Pasta": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Soft Drinks": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Alcohol": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Breakfast Cereals": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Ice Cream": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Cocktails": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Sandwiches": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Desserts": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Spices": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Coffees": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Cuisines": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
+   "Food": Color(red: 0.29, green: 0.77, blue: 0),
+   "Drinks": Color(red: 0, green: 0.73, blue: 1),
+   "Fruit": Color(red: 0, green: 0.62, blue: 0.95),
+   "Vegetables": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Pizza": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Fast Food Chains": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Eggs": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Chocolate": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Cheese": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Dairy": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Pasta": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Soft Drinks": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Alcohol": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Breakfast Cereals": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Ice Cream": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Cocktails": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Sandwiches": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Desserts": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Spices": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Coffees": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Cuisines": Color(red: 0, green: 0.62, blue: 0.95),           
    
-   "Animals":Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Plants": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Mammals": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Birds": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Dogs": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Flowers": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Trees": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Fish": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Reptiles": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Cats": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Bugs": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Famous Animals": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
+   "Animals": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Plants": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Mammals": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Birds": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Dogs": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Flowers": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Trees": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Fish": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Reptiles": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Cats": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Bugs": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Famous Animals": Color(red: 0, green: 0.62, blue: 0.95),           
    
-   "Celebrities":Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Movies": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Social Media": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Books": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Authors": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Quotes": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Streaming Services":Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "TV Shows": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Gaming": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Board Games": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Card Games": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Comedians": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Memes": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
+   "Celebrities": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Movies": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Social Media": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Books": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Authors": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Quotes": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Streaming Services": Color(red: 0, green: 0.62, blue: 0.95),           
+   "TV Shows": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Gaming": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Board Games": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Card Games": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Comedians": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Memes": Color(red: 0, green: 0.62, blue: 0.95),           
    
-   "Countries":Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Politicians": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Landmarks": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Cities": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
+   "Countries": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Politicians": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Landmarks": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Cities": Color(red: 0, green: 0.62, blue: 0.95),           
    
-   "Models":Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Numbers": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Letters": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Shapes": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Statues": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Planets": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Relationships": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
-   "Emotions": Color(red: 0, green: 0.62, blue: 0.95),           // Blue
+   "Models": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Numbers": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Letters": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Shapes": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Statues": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Planets": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Relationships": Color(red: 0, green: 0.62, blue: 0.95),           
+   "Emotions": Color(red: 0, green: 0.62, blue: 0.95),           
    "Red Flags": Color(red: 0.0, green: 0.0, blue: 0.0),
    
 ]
 
 // Initial filter chips (editable order via order)
 let defaultFilterChips: [FilterChip] = [
+//    FilterChip(name: "1001", icon: "music.note", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 1),
+//    FilterChip(name: "1002", icon: "figure.archery", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 2),
+//    FilterChip(name: "1003", icon: "fork.knife", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 3),
+//    FilterChip(name: "1004", icon: "leaf.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 4),
+//    FilterChip(name: "1005", icon: "star.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 5),
+//    FilterChip(name: "1006", icon: "building.columns.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 6),
+//    FilterChip(name: "1007", icon: "atom", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 7),
+//    FilterChip(name: "1008", icon: "figure.arms.open", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 8),
+//    FilterChip(name: "1009", icon: "shield.righthalf.filled", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 9),
+//    FilterChip(name: "1010", icon: "figure.fishing", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 10),
+//    FilterChip(name: "1011", icon: "laptopcomputer.and.iphone", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 11),
+//    FilterChip(name: "1012", icon: "paintbrush.pointed.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 12),
+//    FilterChip(name: "1013", icon: "car.side.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 13),
+//    FilterChip(name: "1014", icon: "theatermask.and.paintbrush.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 14),
+//    FilterChip(name: "1015", icon: "briefcase.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 15),
+//    FilterChip(name: "1016", icon: "dice.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 16),
+//    FilterChip(name: "1017", icon: "music.note", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 17),
+//    FilterChip(name: "1018", icon: "figure.archery", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 18),
+//    FilterChip(name: "1019", icon: "fork.knife", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 19),
+//    FilterChip(name: "1020", icon: "leaf.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 20),
+//    FilterChip(name: "1021", icon: "star.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 21),
+//    FilterChip(name: "1022", icon: "building.columns.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 22),
+//    FilterChip(name: "1023", icon: "atom", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 23),
+//    FilterChip(name: "1024", icon: "figure.arms.open", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 24),
+//    FilterChip(name: "1025", icon: "shield.righthalf.filled", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 25),
+//    FilterChip(name: "1026", icon: "figure.fishing", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 26),
+//    FilterChip(name: "1027", icon: "laptopcomputer.and.iphone", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 27),
+//    FilterChip(name: "1028", icon: "paintbrush.pointed.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 28),
+//    FilterChip(name: "1029", icon: "car.side.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 29),
+//    FilterChip(name: "1030", icon: "theatermask.and.paintbrush.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 30),
+//    FilterChip(name: "1031", icon: "briefcase.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 31),
+//    FilterChip(name: "1032", icon: "dice.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 32),
+//    FilterChip(name: "1033", icon: "music.note", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 33),
+//    FilterChip(name: "1034", icon: "figure.archery", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 34),
+//    FilterChip(name: "1035", icon: "fork.knife", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 35),
+//    FilterChip(name: "1036", icon: "leaf.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 36),
+//    FilterChip(name: "1037", icon: "star.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 37),
+//    FilterChip(name: "1038", icon: "building.columns.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 38),
+//    FilterChip(name: "1039", icon: "atom", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 39),
+//    FilterChip(name: "1040", icon: "figure.arms.open", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 40),
+//    FilterChip(name: "1041", icon: "shield.righthalf.filled", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 41),
+//    FilterChip(name: "1042", icon: "figure.fishing", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 42),
+//    FilterChip(name: "1043", icon: "laptopcomputer.and.iphone", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 43),
+//    FilterChip(name: "1044", icon: "paintbrush.pointed.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 44),
+//    FilterChip(name: "1045", icon: "car.side.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 45),
+//    FilterChip(name: "1046", icon: "theatermask.and.paintbrush.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 46),
+//    FilterChip(name: "1047", icon: "briefcase.fill", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 47),
+    
+    
+    
+    
     FilterChip(
         name: "Music",
         icon: "music.note",
@@ -1592,7 +1658,7 @@ struct FilterChipButtonView: View {
             .padding(8)
             .background(isDisabled ? .gray : (filterChipIconColors[chip.name] ?? .blue))
             .cornerRadius(8)
-            .shadow(color: .gray.opacity(0.5), radius: isSelected ? 6 : 3)
+            .shadow(color: .gray.opacity(0.6), radius: 3, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
         .disabled(isDisabled)
@@ -1613,6 +1679,9 @@ struct FilterChipPickerView: View {
 
     var body: some View {
         VStack {
+            Text("Pick Categories to Filter Items (until 'Done' button is enabled)")
+                .padding()
+                .font(.system(size: 11, weight: .medium, design: .default))
             // Selected chips row
             if !chipStack.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1624,9 +1693,9 @@ struct FilterChipPickerView: View {
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                         }
                     }
-                    .padding()
+                    .padding(5)
                 }
-                .padding(.top, 15)
+                .padding(.horizontal, 5)
             }
             
             // Current chips flow
@@ -1639,7 +1708,7 @@ struct FilterChipPickerView: View {
                         .transition(.opacity)
                     }
                 }
-                .padding()
+                .padding(5)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 5)
@@ -1670,7 +1739,7 @@ struct FilterChipPickerView: View {
         }
         .animation(.default, value: chipStack)
         .animation(.default, value: currentChips)
-        .systemTrayView($addItemsOpen) {
+        .fullScreenCover(isPresented: $addItemsOpen) {
             if let last = chipStack.last, last.children.isEmpty {
                 AddItemView(filterChip: last, existingCount: selectedRankoItems.count) { newItems in
                     // newItems is now [AlgoliaRankoItem]

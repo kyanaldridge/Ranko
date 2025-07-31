@@ -54,6 +54,7 @@ struct DefaultListView: View {
 
     // Sheet states
     @State private var showTabBar = true
+    @State private var tabBarPresent = false
     @State var showEditDetailsSheet = false
     @State var showAddItemsSheet = false
     @State var showReorderSheet = false
@@ -99,7 +100,6 @@ struct DefaultListView: View {
     var body: some View {
         ZStack(alignment: .top) {
             Color.white.ignoresSafeArea()
-            
             ScrollView {
                 VStack(spacing: 12) {
                     HStack {
@@ -231,7 +231,8 @@ struct DefaultListView: View {
                                     }
                                 }
                         }
-                        .padding(.vertical, 5)
+                        .padding(.top, 5)
+                        .padding(.bottom, 70)
                     }
                     Spacer()
                 }
@@ -241,8 +242,11 @@ struct DefaultListView: View {
                 Spacer()
                 Rectangle()
                     .frame(height: 90)
-                    .foregroundColor(.gray.opacity(0.8))
+                    .foregroundColor(tabBarPresent ? .gray.opacity(0.4) : .white)
                     .blur(radius: 23)
+                    .opacity(tabBarPresent ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.4), value: tabBarPresent) // ✅ Fast fade animation
+                    .ignoresSafeArea()
             }
             .ignoresSafeArea()
             
@@ -307,12 +311,24 @@ struct DefaultListView: View {
                             switch tab {
                             case .addItems:
                                 showAddItemsSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .editDetails:
                                 showEditDetailsSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .reRank:
                                 showReorderSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .exit:
                                 showExitSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .empty:
                                 dismiss()
                             }
@@ -324,6 +340,19 @@ struct DefaultListView: View {
             .interactiveDismissDisabled(true)
             .presentationDetents([.height(80)])
             .presentationBackgroundInteraction(.enabled)
+            .onAppear {
+                tabBarPresent = false      // Start from invisible
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        tabBarPresent = true
+                    }
+                }
+            }
+            .onDisappear {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    tabBarPresent = false
+                }
+            }
         }
     }
     

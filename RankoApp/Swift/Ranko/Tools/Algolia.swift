@@ -141,7 +141,6 @@ struct AddItemView: View {
         VStack(spacing: 7) {
             // 1) SEARCH BAR AT THE TOP
             searchBar
-                .padding(.top, 8)
 
             // 2) VIEW MODE BUTTONS
             viewModeButtons
@@ -166,6 +165,7 @@ struct AddItemView: View {
             // 5) “Add Items” BUTTON at bottom
             doneButton
         }
+        .background(Color.white)
         .onAppear { loadInitialPage() }
     }
 
@@ -206,7 +206,7 @@ struct AddItemView: View {
             Button(action: { viewMode = .defaultList }) {
                 VStack(spacing: 4) {
                     Image(systemName: "rectangle.compress.vertical")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(viewMode == .defaultList ? .blue : .gray)
                         .padding(.bottom, 2)
                     if viewMode == .defaultList {
