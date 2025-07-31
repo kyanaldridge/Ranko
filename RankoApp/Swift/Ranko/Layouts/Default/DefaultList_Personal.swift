@@ -253,7 +253,19 @@ struct DefaultListPersonal: View {
         .sheet(isPresented: $showExitSheet) {
             ExitSheetView(
                 onSave: {
-                    updateListInAlgolia()
+                    updateListInAlgolia(
+                        listID: listID,
+                        newName: rankoName,
+                        newDescription: description,
+                        newCategory: category!.name,
+                        isPrivate: isPrivate
+                    ) { success in
+                        if success {
+                            print("🎉 Fields updated in Algolia")
+                        } else {
+                            print("⚠️ Failed to update fields")
+                        }
+                    }
                     updateListInFirebase()
                     dismiss()
                 },
@@ -333,10 +345,12 @@ struct DefaultListPersonal: View {
     // MARK: - Firebase Update
     private func updateListInFirebase() {
         guard let category = category else { return }
+        
         let db = Database.database().reference()
         let safeUID = (Auth.auth().currentUser?.uid ?? user_data.userID)
             .components(separatedBy: CharacterSet(charactersIn: ".#$[]")).joined()
         
+        // ✅ Prepare the top-level fields to update
         let listUpdates: [String: Any] = [
             "RankoName": rankoName,
             "RankoDescription": description,
@@ -344,21 +358,87 @@ struct DefaultListPersonal: View {
             "RankoCategory": category.name
         ]
         
-        // ✅ Update only changed fields
-        db.child("RankoData").child(listID).updateChildValues(listUpdates)
+        let listRef = db.child("RankoData").child(listID)
         
-        // ✅ Update user's reference
-        db.child("UserData").child(safeUID).child("RankoData").child(listID).setValue(category.name)
+        // ✅ Update list fields
+        listRef.updateChildValues(listUpdates) { error, _ in
+            if let err = error {
+                print("❌ Failed to update list fields: \(err.localizedDescription)")
+            } else {
+                print("✅ List fields updated successfully")
+            }
+        }
+        
+        // ✅ Prepare all RankoItems
+        var itemsUpdate: [String: Any] = [:]
+        for item in selectedRankoItems {
+            itemsUpdate[item.id] = [
+                "ItemID": item.id,
+                "ItemName": item.record.ItemName,
+                "ItemDescription": item.record.ItemDescription,
+                "ItemImage": item.record.ItemImage,
+                "ItemRank": item.rank,
+                "ItemVotes": item.votes
+            ]
+        }
+        
+        // ✅ Update RankoItems node with the new data
+        listRef.child("RankoItems").setValue(itemsUpdate) { error, _ in
+            if let err = error {
+                print("❌ Failed to update RankoItems: \(err.localizedDescription)")
+            } else {
+                print("✅ RankoItems updated successfully")
+            }
+        }
+        
+        // ✅ Update the user's reference to this list
+        db.child("UserData").child(safeUID).child("RankoData").child(listID)
+            .setValue(category.name) { error, _ in
+                if let err = error {
+                    print("❌ Failed to update user's list reference: \(err.localizedDescription)")
+                } else {
+                    print("✅ User's list reference updated")
+                }
+            }
     }
 
         // MARK: - Algolia Update
-    private func updateListInAlgolia() {
-        let response = try await client.partialUpdateObject(
-            indexName: "ALGOLIA_INDEX_NAME",
-            objectID: "uniqueID",
-            attributesToUpdate: ["attributeId": "new value"]
+    private func updateListInAlgolia(
+        listID: String,
+        newName: String,
+        newDescription: String,
+        newCategory: String,
+        isPrivate: Bool,
+        completion: @escaping (Bool) -> Void
+    ) {
+        let client = SearchClient(
+            appID: ApplicationID(rawValue: Secrets.algoliaAppID),
+            apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
         )
+        let index = client.index(withName: "RankoLists")
+
+        // ✅ Prepare partial updates
+        let updates: [(ObjectID, PartialUpdate)] = [
+            (ObjectID(rawValue: listID), .update(attribute: "RankoName", value: .string(newName))),
+            (ObjectID(rawValue: listID), .update(attribute: "RankoDescription", value: .string(newDescription))),
+            (ObjectID(rawValue: listID), .update(attribute: "RankoCategory", value: .string(newCategory))),
+            (ObjectID(rawValue: listID), .update(attribute: "RankoPrivacy", value: .bool(isPrivate)))
+        ]
+
+        // ✅ Perform batch update in Algolia
+        index.partialUpdateObjects(updates: updates) { result in
+            switch result {
+            case .success(let response):
+                print("✅ Ranko list fields updated successfully:", response)
+                completion(true)
+            case .failure(let error):
+                print("❌ Failed to update Ranko list fields:", error.localizedDescription)
+                completion(false)
+            }
+        }
     }
+    
+    
     
     
 }

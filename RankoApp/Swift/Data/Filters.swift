@@ -1575,15 +1575,22 @@ struct FilterChipButtonView: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: chip.icon)
-                    .foregroundColor(isDisabled ? .gray : (isSelected ? .white : (filterChipIconColors[chip.name] ?? .black)))
+                    .foregroundColor(isDisabled ? .white.opacity(0.8) : .white)
                     .padding(.trailing, 4)
                 Text(chip.name)
                     .font(.body)
-                    .foregroundColor(isDisabled ? .gray : (isSelected ? .white : (filterChipIconColors[chip.name] ?? .black)))
+                    .foregroundColor(isDisabled ? .white.opacity(0.8) : .white)
                     .fontWeight(.bold)
+                if isSelected {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                        .foregroundColor(.white)
+                        .fontWeight(.black)
+                        .padding(.leading, 8)
+                }
             }
             .padding(8)
-            .background(isSelected ? (filterChipIconColors[chip.name] ?? .blue) : Color.white)
+            .background(isDisabled ? .gray : (filterChipIconColors[chip.name] ?? .blue))
             .cornerRadius(8)
             .shadow(color: .gray.opacity(0.5), radius: isSelected ? 6 : 3)
         }
