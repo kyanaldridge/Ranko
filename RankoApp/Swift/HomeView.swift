@@ -43,7 +43,6 @@ let isSimulator: Bool = {
 
 // MARK: - HomeView
 struct HomeView: View {
-    // Variables
     @StateObject private var user_data = UserInformation.shared
     @State private var trayViewOpen: Bool = false
     @State private var trayDetent: PresentationDetent = .medium
