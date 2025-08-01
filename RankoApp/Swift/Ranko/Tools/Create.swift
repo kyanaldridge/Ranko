@@ -280,15 +280,15 @@ struct CreateNewRanko: View {
                 HStack(spacing: 12) {
                     Button {
                         let layout = selectedLayout
-                        // Log analytics event
-                        Analytics.logEvent("ranko_published", parameters: [
-                            "ranko_name": rankoName,
-                            "is_private": isPrivate,
-                            "category": selectedCategoryChip?.name ?? "unknown",
-                            "layout": layout!.name,
-                        ])
                         
                         if isValid {
+                            // Log analytics event
+                            Analytics.logEvent("ranko_published", parameters: [
+                                "ranko_name": rankoName,
+                                "is_private": isPrivate,
+                                "category": selectedCategoryChip?.name ?? "unknown",
+                                "layout": layout!.name,
+                            ])
                             if layout?.name == "Default List" {
                                 print("Default List Opening...")
                                 fullScreenListDestination = .defaultList
@@ -374,15 +374,15 @@ struct CreateNewRanko: View {
                 HStack(spacing: 12) {
                     Button {
                         let layout = selectedLayout
-                        // Log analytics event
-                        Analytics.logEvent("ranko_published", parameters: [
-                            "ranko_name": rankoName,
-                            "is_private": isPrivate,
-                            "category": selectedCategoryChip?.name ?? "unknown",
-                            "layout": layout!.name,
-                        ])
                         
                         if isValid {
+                            // Log analytics event
+                            Analytics.logEvent("ranko_published", parameters: [
+                                "ranko_name": rankoName,
+                                "is_private": isPrivate,
+                                "category": selectedCategoryChip?.name ?? "unknown",
+                                "layout": layout!.name,
+                            ])
                             if layout?.name == "Default List" {
                                 print("Default List Opening...")
                                 fullScreenListDestination = .defaultList
