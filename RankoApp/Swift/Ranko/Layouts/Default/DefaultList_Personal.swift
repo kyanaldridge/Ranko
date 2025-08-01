@@ -224,6 +224,9 @@ struct DefaultListPersonal: View {
             .ignoresSafeArea()
             
         }
+        .onAppear {
+            loadListFromFirebase()
+        }
         .sheet(isPresented: $showAddItemsSheet) {
             FilterChipPickerView(
                 selectedRankoItems: $selectedRankoItems
@@ -251,7 +254,7 @@ struct DefaultListPersonal: View {
             )
         }
         .sheet(isPresented: $showExitSheet) {
-            ExitSheetView(
+            DefaultListPersonalExit(
                 onSave: {
                     updateListInAlgolia(
                         listID: listID,
@@ -269,7 +272,11 @@ struct DefaultListPersonal: View {
                     updateListInFirebase()
                     dismiss()
                 },
-                onDelete: { dismiss() }
+                onLeave: {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                        dismiss()   // dismiss DefaultListView without saving
+                    }
+                }
             )
         }
         .sheet(isPresented: $showTabBar) {
@@ -314,6 +321,67 @@ struct DefaultListPersonal: View {
         }
     }
     
+    private func loadListFromFirebase() {
+        let db = Database.database().reference()
+        let listRef = db.child("RankoData").child(listID)
+
+        listRef.observeSingleEvent(of: .value,
+                                   with: { snapshot in
+            guard let data = snapshot.value as? [String: Any] else {
+                print("⚠️ No data at RankoData/\(listID)")
+                return
+            }
+
+            DispatchQueue.main.async {
+                // — map your top-level fields…
+                self.rankoName   = data["RankoName"]        as? String ?? ""
+                self.description = data["RankoDescription"] as? String ?? ""
+                self.isPrivate   = data["RankoPrivacy"]     as? Bool   ?? false
+
+                if let catName = data["RankoCategory"] as? String {
+                    let allChips = categoryChipsByCategory.values.flatMap { $0 }
+                    self.category = allChips.first {
+                        $0.name.caseInsensitiveCompare(catName) == .orderedSame
+                    }
+                }
+
+                // — map your items…
+                if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
+                    var loaded: [AlgoliaRankoItem] = []
+                    for (_, itemData) in itemsDict {
+                        guard
+                            let id    = itemData["ItemID"]          as? String,
+                            let name  = itemData["ItemName"]        as? String,
+                            let desc  = itemData["ItemDescription"] as? String,
+                            let image = itemData["ItemImage"]       as? String,
+                            let rank  = itemData["ItemRank"]        as? Int,
+                            let votes = itemData["ItemVotes"]       as? Int
+                        else { continue }
+                        
+                        let record = AlgoliaItemRecord(
+                            objectID: id,
+                            ItemName: name,
+                            ItemDescription: desc,
+                            ItemCategory: "",      // adjust if you store item categories
+                            ItemImage: image
+                        )
+
+                        let item = AlgoliaRankoItem(
+                            id: id,
+                            rank: rank,
+                            votes: votes,
+                            record: record
+                        )
+                        loaded.append(item)
+                    }
+                    self.selectedRankoItems = loaded.sorted { $0.rank < $1.rank }
+                }
+            }
+        },
+        withCancel: { error in
+            print("❌ Firebase load error:", error.localizedDescription)
+        })
+    }
     // Item Helpers
     private func delete(_ item: AlgoliaRankoItem) {
         selectedRankoItems.removeAll { $0.id == item.id }
@@ -437,12 +505,63 @@ struct DefaultListPersonal: View {
             }
         }
     }
-    
-    
-    
-    
 }
 
+
+struct DefaultListPersonalExit: View {
+    @Environment(\.dismiss) var dismiss
+    
+    var onSave: () -> Void
+    var onLeave: () -> Void   // NEW closure for delete
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Button {
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                onSave()        // run save in parent
+                dismiss()       // dismiss ExitSheetView
+            } label: {
+                Text("Publish Ranko")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .foregroundColor(.white)
+                    .fontWeight(.bold)
+            }
+            .background(Color.blue.gradient, in: RoundedRectangle(cornerRadius: 8))
+            HStack(spacing: 12) {
+                Button {
+                    print("Cancel tapped")
+                    dismiss() // just dismiss ExitSheetView
+                } label: {
+                    Text("Cancel")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundColor(.white)
+                        .fontWeight(.bold)
+                }
+                .background(Color.orange.gradient, in: RoundedRectangle(cornerRadius: 8))
+                
+                Button {
+                    print("Leave tapped")
+                    onLeave()      // trigger delete logic in parent
+                    dismiss()       // close ExitSheetView
+                } label: {
+                    Text("Leave")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundColor(.white)
+                        .fontWeight(.bold)
+                }
+                .background(Color.red.gradient, in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(.horizontal, 30)
+        .presentationBackground(Color.white)
+        .presentationDetents([.height(160)])
+        .interactiveDismissDisabled(true)
+    }
+}
 
 struct DefaultListPersonal2: View {
     @Environment(\.dismiss) private var dismiss
@@ -632,13 +751,77 @@ struct DefaultListPersonal2: View {
             Text("Any changes made will not be saved. Do you want to cancel?")
         }
         .onAppear {
-            loadList(listID: listID)
+            fetchList(listID: listID)
         }
     }
-
-    // MARK: – Load existing list
-    private func loadList(listID: String) {
+    
+    private func fetchList(listID: String) {
+        let listRef = Database.database()
+            .reference()
+            .child("RankoData")
+            .child(listID)
         
+        listRef.observeSingleEvent(of: .value) { snap in
+            guard
+                let dict = snap.value as? [String:Any],
+                (loadList(dict: dict, id: listID) != nil)
+            else { return }
+        }
+    }
+    
+    // MARK: – Load existing list
+    private func loadList(dict: [String: Any], id: String) -> RankoList? {
+        guard
+            let listName      = dict["RankoName"]        as? String,
+            let description   = dict["RankoDescription"] as? String,
+            let category      = dict["RankoCategory"]    as? String,
+            let type          = dict["RankoType"]        as? String,
+            let privacy       = dict["RankoPrivacy"]     as? Bool,
+            let dateTime      = dict["RankoDateTime"]    as? String,
+            let userCreator   = dict["RankoUserID"]      as? String,
+            let itemsDict     = dict["RankoItems"]       as? [String: Any]
+        else { return nil }
+
+        let isPrivateString = privacy ? "Private" : "Public"
+        var rankoItems: [AlgoliaRankoItem] = []
+
+        for (_, value) in itemsDict {
+            guard
+                let itemDict  = value as? [String: Any],
+                let itemID    = itemDict["ItemID"]          as? String,
+                let itemName  = itemDict["ItemName"]        as? String,
+                let itemDesc  = itemDict["ItemDescription"] as? String,
+                let itemImg   = itemDict["ItemImage"]       as? String,
+                let itemVotes = itemDict["ItemVotes"]       as? Int,
+                let itemRank  = itemDict["ItemRank"]        as? Int
+            else { continue }
+
+            let record = AlgoliaItemRecord(
+                objectID:        itemID,
+                ItemName:        itemName,
+                ItemDescription: itemDesc,
+                ItemCategory: "",
+                ItemImage:       itemImg
+            )
+            rankoItems.append(AlgoliaRankoItem(id: itemID,
+                                        rank: itemRank,
+                                        votes: itemVotes,
+                                        record: record))
+        }
+
+        rankoItems.sort { $0.rank < $1.rank }
+
+        return RankoList(
+            id:               id,
+            listName:         listName,
+            listDescription:  description,
+            type:             type,
+            category:         category,
+            isPrivate:        isPrivateString,
+            userCreator:      userCreator,
+            dateTime:         dateTime,
+            items:            rankoItems
+        )
     }
 
     // MARK: – Update existing list

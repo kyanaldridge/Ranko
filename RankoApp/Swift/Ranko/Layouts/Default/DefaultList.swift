@@ -278,7 +278,7 @@ struct DefaultListView: View {
             )
         }
         .sheet(isPresented: $showExitSheet) {
-            ExitSheetView(
+            DefaultListExit(
                 onSave: {
                     saveRankedListToAlgolia()
                     saveRankedListToFirebase()
@@ -685,7 +685,7 @@ struct DefaultListView: View {
 
 
 
-struct ExitSheetView: View {
+struct DefaultListExit: View {
     @Environment(\.dismiss) var dismiss
     
     var onSave: () -> Void
