@@ -40,6 +40,11 @@ struct ExploreView: View {
     @State private var selectedGame: MiniGameEntry? = nil
     @State private var showComingSoonBanner = false
     @State private var profileImage: UIImage?
+    
+    @State private var toastMessage: String = ""
+    @State private var showToast: Bool = false
+    @State private var toastDismissWorkItem: DispatchWorkItem?
+    @State private var toastID = UUID()
 
     // MARK: – Body
     var body: some View {
@@ -81,12 +86,26 @@ struct ExploreView: View {
                         )
                     }
                 }
+                if showToast {
+                    ComingSoonToast(
+                        isShown: $showToast,
+                        title: "🚧 Features & Mini Games Coming Soon",
+                        message: toastMessage,
+                        icon: Image(systemName: "hourglass"),
+                        alignment: .bottom
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .id(toastID)
+                    .padding(.bottom, 12)
+                    .zIndex(1)
+                }
             }
             .navigationBarHidden(true)
             .fullScreenCover(item: $selectedGame) { game in
                 destinationGameView(for: game.name)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: toastID)
         .onAppear {
             Analytics.logEvent(AnalyticsEventScreenView, parameters: [
                 AnalyticsParameterScreenName: "Explore",
@@ -100,11 +119,21 @@ struct ExploreView: View {
     private var topMenu: some View {
         FlowLayout(spacing: 8) {
             ForEach(menuItems) { item in
-                Button(action: {showComingSoon()}) {
+                Button {
+                    if showToast {
+                        withAnimation {
+                            showToast = false
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            showComingSoonToast(for: item.title)
+                        }
+                    } else {
+                        showComingSoonToast(for: item.title)
+                    }
+                } label: {
                     HStack {
                         Image(systemName: item.icon)
-                            .font(.body)
-                            .fontWeight(.bold)
+                            .font(.body).fontWeight(.bold)
                             .foregroundColor(Color(hex: 0xCD612C))
                         Text(item.title)
                             .font(.caption).fontWeight(.heavy)
@@ -135,7 +164,22 @@ struct ExploreView: View {
             
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())]) {
                 ForEach(miniGames) { game in
-                    Button(action: { selectedGame = game }) {
+                    Button {
+                        if game.name == "Guessr" || game.name == "Outlier" || game.name == "More Coming Soon" {
+                            if showToast {
+                                withAnimation {
+                                    showToast = false
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                    showComingSoonToast(for: game.name)
+                                }
+                            } else {
+                                showComingSoonToast(for: game.name)
+                            }
+                        } else {
+                            selectedGame = game
+                        }
+                    } label: {
                         VStack(spacing: 12) {
                             Image(game.image)
                                 .resizable()
@@ -160,43 +204,71 @@ struct ExploreView: View {
             .padding(.horizontal, 20)
         }
     }
+    
+    private func showComingSoonToast(for feature: String) {
+        switch feature {
+        case "Search Rankos":
+                toastMessage = "Search and filter through all public Rankos from the community – Coming Soon!"
+                toastID = UUID()
+                showToast = true
+                
+            case "Blind Ranko":
+                toastMessage = "Choose a category and rank random items one at a time without knowing what's next – Coming Soon!"
+                toastID = UUID()
+                showToast = true
+                
+            case "Store":
+                toastMessage = "A future Store may let you trade in-game currency for items, themes, and app icons – Stay tuned!"
+                toastID = UUID()
+                showToast = true
+                
+            case "Random Picker":
+                toastMessage = "Pick a category, set filters, and let Ranko choose random items for you – Coming Soon!"
+                toastID = UUID()
+                showToast = true
+                
+            case "Guessr":
+                toastMessage = "Uncover clues, guess early, and score big – the Guessr mini-game is coming soon!"
+                toastID = UUID()
+                showToast = true
+                
+            case "Outlier":
+                toastMessage = "Find the least popular answers and aim for the lowest score – Outlier is coming soon!"
+                toastID = UUID()
+                showToast = true
+                
+            case "More Coming Soon":
+                toastMessage = "More features and exciting mini-games are on the way – stay tuned!"
+                toastID = UUID()
+                showToast = true
+                
+            default:
+                toastMessage = "New Feature Coming Soon!"
+                toastID = UUID()
+                showToast = true
+            }
+        
+        // Cancel any previous dismiss
+        toastDismissWorkItem?.cancel()
+        
+        // Schedule dismiss after 4 seconds
+        let newDismissWorkItem = DispatchWorkItem {
+            withAnimation { showToast = false }
+        }
+        toastDismissWorkItem = newDismissWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: newDismissWorkItem)
+    }
 
     private func destinationGameView(for item: String) -> some View {
         switch item {
         case "Blind Sequence":
             return AnyView(BlindSequence())
         case "Guessr":
-            return AnyView(
-                ZStack {
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .ignoresSafeArea()
-                    
-                    GuessrPlaceholderView()
-                        .shadow(radius: 10)
-                }
-                )
+            return AnyView(BlindSequence())
         case "Outlier":
-            return AnyView(
-                ZStack(alignment: .bottom) {
-                    Rectangle()
-                        .fill(.black.opacity(0.5))
-                        .ignoresSafeArea()
-
-                    VStack {
-                        Spacer()
-                        CreateNewRanko()
-                            .background(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(.white)
-                            )
-                            .padding(.horizontal, 15)
-                            .padding(.bottom, 2)
-                    }
-                }
-            )
+            return AnyView(BlindSequence())
         default:
-            return AnyView(Text("Game Not Found"))
+            return AnyView(BlindSequence())
         }
     }
 
@@ -207,36 +279,59 @@ struct ExploreView: View {
             showComingSoonBanner = false
         }
     }
-    
-    struct GuessrPlaceholderView: View {
-        @Environment(\.dismiss) var dismiss
+}
 
-        var body: some View {
-            VStack(alignment: .center) {
-                HStack {
-                    Spacer()
-                    Button {
-                        dismiss()
-                        print("Editing Profile...")
-                    } label: {
-                        Image(systemName: "person.crop.badge.magnifyingglass.fill")
-                            .fontWeight(.semibold)
-                            .padding(.vertical, 2)
-                    }
-                    .foregroundColor(Color(hex: 0x7E5F46))
-                    .tint(Color(hex: 0xFEF4E7))
-                    .buttonStyle(.glassProminent)
-                }
-                Spacer()
-                HStack {
-                    Spacer()
-                    Text("Guessr Coming Soon")
-                    Spacer()
-                }
-                Spacer()
+struct ComingSoonToast: View {
+    @Binding var isShown: Bool
+    var title: String? = "Coming Soon"
+    var message: String = "New Feature Coming Soon!"
+    var icon: Image = Image(systemName: "hourglass")
+    var alignment: Alignment = .top
+
+    var body: some View {
+        VStack {
+            if isShown {
+                content
+                    .transition(.move(edge: alignmentToEdge(self.alignment)).combined(with: .opacity))
+                    .animation(.easeInOut(duration: 0.25), value: isShown)
+                Rectangle()
+                    .fill(.clear)
+                    .frame(height: 50)
             }
-            .background(RoundedRectangle(cornerRadius: 7).fill(.white))
-            .padding()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+    }
+
+    var content: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                icon
+                    .font(.system(size: 20, weight: .heavy))
+                    .foregroundColor(Color(hex: 0x857467))
+                VStack(alignment: .leading, spacing: 7) {
+                    if let title {
+                        Text(title)
+                            .font(.system(size: 14, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x857467))
+                    }
+                    Text(message.capitalized)
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(Color(hex: 0x857467))
+                }
+            }
+        }
+        .padding()
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(radius: 10)
+        .padding()
+    }
+
+    private func alignmentToEdge(_ alignment: Alignment) -> Edge {
+        switch alignment {
+        case .top, .topLeading, .topTrailing: return .top
+        case .bottom, .bottomLeading, .bottomTrailing: return .bottom
+        default: return .top
         }
     }
 }

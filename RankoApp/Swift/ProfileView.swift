@@ -2736,7 +2736,7 @@ final class CacheManager {
     }
 }
 
-struct Toast: View {
+struct MissionToast: View {
     @Binding var isShown: Bool
     var title: String? = "Mission"
     var message: String = "message"
@@ -2927,7 +2927,7 @@ struct CustomiseAppIconView: View {
 
             // ✅ Actual Toast view (conditionally shown)
             if showToast {
-                Toast(
+                MissionToast(
                     isShown: $showToast,
                     title: "🔒 Mission to Unlock",
                     message: toastMessage,

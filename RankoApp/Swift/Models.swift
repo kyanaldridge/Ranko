@@ -34,8 +34,10 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     @AppStorage("user_found_us") var userFoundUs: String = ""
     @AppStorage("user_joined") var userJoined: String = ""
     @AppStorage("log_Status") var logStatus: Bool = false
-    
     @AppStorage("user_ranko_categories") var userRankoCategories: String = ""
+    
+    // ✅ Track login service (Apple or Google)
+    @AppStorage("user_login_service") var userLoginService: String = "" // "Apple" or "Google"
     
     @Published var ProfilePicture: UIImage? = loadCachedProfileImage()
     

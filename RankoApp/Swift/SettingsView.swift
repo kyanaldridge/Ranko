@@ -145,7 +145,9 @@ struct SettingsView: View {
                                                     user_data.userJoined = "2025-06-12-12-34-56"
                                                     user_data.userProfilePicture = "ZNhZwy5NalYDRCPusrHwep63VlG2.jpg"
                                                     user_data.logStatus = true
+                                                    user_data.userLoginService = "Apple"
                                                 case "Privacy Policy & Terms Of Use":
+                                                    user_data.userLoginService = "Google"
                                                     legalView = true
                                                 default:
                                                     break
@@ -624,26 +626,260 @@ struct SubscriptionView_Previews: PreviewProvider {
 struct AccountView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
-
+    
+    @State private var showLogoutAlert = false
+    @State private var showDeleteAlert = false
+    
     var body: some View {
         ZStack {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
             
-            VStack {
+            VStack(alignment: .leading, spacing: 20) {
+                // Title
                 HStack {
                     Text("Account")
                         .font(.system(size: 32, weight: .black))
                         .foregroundColor(Color(hex: 0x857467))
-                        .padding([.top, .bottom])
-                        .padding(.leading, 25)
                     Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .foregroundColor(Color(hex: 0x857467))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, 25)
+                .padding(.top, 40)
                 
                 Divider()
+                
+                // ✅ Credentials Section
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Credentials")
+                            .foregroundColor(Color(hex: 0x857467))
+                            .font(.title2)
+                            .bold()
+                        
+                        Divider()
+                        
+                        Button {} label: {
+                            if user_data.userLoginService == "Apple" {
+                                HStack(spacing: 10) {
+                                    Spacer()
+                                    Image("apple_icon")
+                                        .renderingMode(.template)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .foregroundColor(Color(hex: 0x857467))
+                                        .frame(width: 24, height: 24)
+                                        .clipShape(Circle())
+                                    Text("Signed in with Apple")
+                                        .font(.system(size: 17, weight: .heavy, design: .default))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                }
+                                .padding(.vertical, 10)
+                            } else if user_data.userLoginService == "Google" {
+                                HStack(spacing: 10) {
+                                    Spacer()
+                                    Image("google_icon")
+                                        .renderingMode(.template)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .foregroundColor(Color(hex: 0x857467))
+                                        .frame(width: 24, height: 24)
+                                        .clipShape(Circle())
+                                    Text("Signed in with Google")
+                                        .font(.headline)
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                }
+                                .padding(.vertical, 10)
+                            } else {
+                                HStack(spacing: 10) {
+                                    Spacer()
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Text("Can't Find Login Service")
+                                        .font(.headline)
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                }
+                                .padding(.vertical, 10)
+                            }
+                        }
+                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                             startPoint: .top,
+                                             endPoint: .bottom
+                                            ))
+                        .buttonStyle(.glassProminent)
+                    }
+                    .padding(.horizontal, 25)
+                    
+                    // ✅ Log Out & Delete Account Buttons
+                    HStack(spacing: 10) {
+                        Button(role: .destructive) { showLogoutAlert = true } label: {
+                            HStack {
+                                Spacer()
+                                Text("Sign Out")
+                                    .font(.system(size: 14, weight: .heavy, design: .default))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Spacer()
+                            }
+                            .padding(.vertical, 10)
+                        }
+                        .foregroundColor(Color(hex: 0xFF9864))
+                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                             startPoint: .top,
+                                             endPoint: .bottom
+                                            ))
+                        .buttonStyle(.glassProminent)
+                        .alert(isPresented: $showLogoutAlert) {
+                            CustomDialog(
+                                title: "Sign Out?",
+                                content: "Are you sure you want to sign out?",
+                                image: .init(
+                                    content: "figure.walk.departure",
+                                    background: .red,
+                                    foreground: .white
+                                ),
+                                button1: .init(
+                                    content: "Sign Out",
+                                    background: .red,
+                                    foreground: .white,
+                                    action: { _ in
+                                        showLogoutAlert = false
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                            dismiss()
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                                logOutUser()
+                                            }
+                                        }
+                                    }
+                                ),
+                                button2: .init(
+                                    content: "Cancel",
+                                    background: .orange,
+                                    foreground: .white,
+                                    action: { _ in
+                                        showLogoutAlert = false
+                                    }
+                                )
+                            )
+                            .transition(.blurReplace.combined(with: .push(from: .bottom)))
+                        } background: {
+                            Rectangle()
+                                .fill(.primary.opacity(0.35))
+                        }
+                        
+                        Button(role: .destructive) { showDeleteAlert = true } label: {
+                            HStack {
+                                Spacer()
+                                Text("Delete Account")
+                                    .font(.system(size: 14, weight: .heavy, design: .default))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Spacer()
+                            }
+                            .padding(.vertical, 10)
+                        }
+                        .foregroundColor(Color(hex: 0xFF9864))
+                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                             startPoint: .top,
+                                             endPoint: .bottom
+                                            ))
+                        .buttonStyle(.glassProminent)
+                        .alert(isPresented: $showDeleteAlert) {
+                            CustomDialog(
+                                title: "Delete Account?",
+                                content: "Are you sure you want to delete your account? Once deleted, this action cannot be undone.",
+                                image: .init(
+                                    content: "trash.fill",
+                                    background: .red,
+                                    foreground: .white
+                                ),
+                                button1: .init(
+                                    content: "Delete Permanently",
+                                    background: .red,
+                                    foreground: .white,
+                                    action: { _ in
+                                        showDeleteAlert = false
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                            dismiss()
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                                deleteAccount()
+                                            }
+                                        }
+                                    }
+                                ),
+                                button2: .init(
+                                    content: "Cancel",
+                                    background: .orange,
+                                    foreground: .white,
+                                    action: { _ in
+                                        showDeleteAlert = false
+                                    }
+                                )
+                            )
+                            .transition(.blurReplace.combined(with: .push(from: .bottom)))
+                        } background: {
+                            Rectangle()
+                                .fill(.primary.opacity(0.35))
+                        }
+                    }
+                    .padding(.horizontal, 25)
+                }
+                
                 Spacer()
+                
             }
+        }
+    }
+    
+    // ✅ Dummy Logout Function
+    private func logOutUser() {
+        user_data.logStatus = false
+        print("User logged out.")
+        
+        try? Auth.auth().signOut()
+        user_data.userID = ""
+        user_data.username = ""
+        user_data.userDescription = ""
+        user_data.userYear = 0
+        user_data.userInterests = ""
+        user_data.userProfilePicture = "default-profilePicture.jpg"
+        user_data.userFoundUs = ""
+        user_data.userJoined = ""
+        user_data.logStatus = false
+    }
+    
+    // ✅ Dummy Delete Account Function
+    private func deleteAccount() {
+        
+        let user = Auth.auth().currentUser
+
+        user?.delete { error in
+          if let error = error {
+            print("Error Deleting Account: \(error.localizedDescription)")
+          } else {
+              print("Account deleted.")
+              user_data.userID = ""
+              user_data.username = ""
+              user_data.userDescription = ""
+              user_data.userYear = 0
+              user_data.userInterests = ""
+              user_data.userProfilePicture = "default-profilePicture.jpg"
+              user_data.userFoundUs = ""
+              user_data.userJoined = ""
+              user_data.logStatus = false
+          }
         }
     }
 }

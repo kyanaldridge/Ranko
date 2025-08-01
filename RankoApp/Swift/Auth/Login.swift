@@ -160,6 +160,7 @@ struct Login: View {
                     return
                 }
                 // On successful sign in, update the log status.
+                user_data.userLoginService = "Apple"
                 user_data.logStatus = true
                 isLoading = false
                 Analytics.logEvent(AnalyticsEventLogin, parameters: [
@@ -202,6 +203,7 @@ struct Login: View {
 
                 // Sign-in success
                 user_data.logStatus = true
+                user_data.userLoginService = "Google"
                 isLoading = false
                 print("Google sign-in success: \(user.profile?.name ?? "")")
                 Analytics.logEvent(AnalyticsEventLogin, parameters: [
