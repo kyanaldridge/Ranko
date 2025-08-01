@@ -103,7 +103,7 @@ struct DefaultListPersonal: View {
                     
                     HStack(spacing: 10) {
                         HStack {
-                            Image(systemName: isPrivate ? "lock.fill" : "globe")
+                            Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
                                 .font(.caption)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)

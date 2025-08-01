@@ -818,6 +818,9 @@ struct HomeListsDisplay: View {
                 ForEach(lists, id: \.id) { list in
                     if list.type == "group" {
                         GroupListHomeView(listData: list)
+                            .onTapGesture {
+                                selectedList = list
+                            }
                     } else {
                         DefaultListHomeView(listData: list)
                             .onTapGesture {
@@ -829,8 +832,12 @@ struct HomeListsDisplay: View {
         }
         .padding(.top, 10)
         .padding(.bottom, 60)
-        .sheet(item: $selectedList) { list in
-            DefaultListVote(listID: list.id, creatorID: list.userCreator)
+        .fullScreenCover(item: $selectedList) { list in
+            if list.type == "default" {
+                DefaultListSpectate(listID: list.id, creatorID: list.userCreator)
+            } else if list.type == "group" {
+                GroupListSpectate(listID: list.id)
+            }
         }
         .padding(.horizontal)
         .onAppear {

@@ -74,22 +74,39 @@ let filterChipIconColors: [String: Color] = [
     "1046": Color(hex: 0x8F003B),     // Claret
     "1047": Color(hex: 0x7B001E),     // Burgundy
    
-   "Music": Color(red: 1, green: 0, blue: 0),
-   "Sports": Color(red: 1, green: 0.2, blue: 0),
-   "Food & Drink": Color(red: 1, green: 0.35, blue: 0),
-   "Nature": Color(red: 1, green: 0.65, blue: 0),
-   "Entertainment": Color(red: 1, green: 0.78, blue: 0),
-   "Humanities": Color(red: 0.62, green: 0.87, blue: 0),
-   "Science": Color(red: 0.29, green: 0.77, blue: 0),
-   "People": Color(red: 0, green: 0.45, blue: 0),
-   "Brands": Color(red: 0, green: 0.73, blue: 0.56),
-   "Hobbies & Activities": Color(red: 0, green: 0.62, blue: 0.95),
-   "Technology & Math": Color(red: 0, green: 0.32, blue: 0.84),
-   "Art & Design": Color(red: 0.29, green: 0, blue: 0.77),
-   "Vehicles": Color(red: 0.44, green: 0, blue: 0.77),
-   "Culture": Color(red: 0.77, green: 0, blue: 0.76),
-   "Occupation": Color(red: 0.95, green: 0, blue: 0.67),
-   "Random": Color(red: 1, green: 0, blue: 0.44),
+    "Music": Color(hex: 0xA30000),
+    "Sports": Color(hex: 0xE60001),
+    "Food & Drink": Color(hex: 0xFB6901),
+    "Nature": Color(hex: 0xFFA600),
+    "Entertainment": Color(hex: 0xFFC700),
+    "Humanities": Color(hex: 0x77C300),
+    "Science": Color(hex: 0x4FA800),
+    "People": Color(hex: 0x148000),
+    "Brands": Color(hex: 0x00BA8F),
+    "Hobbies & Activities": Color(hex: 0x009EF2),
+    "Technology & Math": Color(hex: 0x0152D6),
+    "Art & Design": Color(hex: 0x4A00C4),
+    "Vehicles": Color(hex: 0x7000C4),
+    "Culture": Color(hex: 0xC400C2),
+    "Occupation": Color(hex: 0xF200AB),
+    "Random": Color(hex: 0xFF0070),
+    
+//    "Music": Color(hex: 0xE60001),
+//    "Sports": Color(hex: 0xE60001),
+//    "Food & Drink": Color(hex: 0xE60001),
+//    "Nature": Color(red: 1, green: 0.65, blue: 0),
+//    "Entertainment": Color(red: 1, green: 0.78, blue: 0),
+//    "Humanities": Color(red: 0.62, green: 0.87, blue: 0),
+//   "Science": Color(red: 0.29, green: 0.77, blue: 0),
+//   "People": Color(red: 0, green: 0.45, blue: 0),
+//   "Brands": Color(red: 0, green: 0.73, blue: 0.56),
+//   "Hobbies & Activities": Color(red: 0, green: 0.62, blue: 0.95),
+//   "Technology & Math": Color(red: 0, green: 0.32, blue: 0.84),
+//   "Art & Design": Color(red: 0.29, green: 0, blue: 0.77),
+//   "Vehicles": Color(red: 0.44, green: 0, blue: 0.77),
+//   "Culture": Color(red: 0.77, green: 0, blue: 0.76),
+//   "Occupation": Color(red: 0.95, green: 0, blue: 0.67),
+//   "Random": Color(red: 1, green: 0, blue: 0.44),
    
    "Artists & Bands": Color(red: 1, green: 0.35, blue: 0),
    "Songs": Color(red: 1, green: 0.72, blue: 0),
@@ -187,7 +204,7 @@ let filterChipIconColors: [String: Color] = [
 ]
 
 // Initial filter chips (editable order via order)
-let defaultFilterChips: [FilterChip] = [
+var defaultFilterChips: [FilterChip] = [
 //    FilterChip(name: "1001", icon: "music.note", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 1),
 //    FilterChip(name: "1002", icon: "figure.archery", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 2),
 //    FilterChip(name: "1003", icon: "fork.knife", synonyms: "", nameIndex: "", filter: "", children: [], available: true, order: 3),
@@ -1431,7 +1448,7 @@ let defaultFilterChips: [FilterChip] = [
         nameIndex: "Logos",
         filter: "",
         children: [],
-        available: false,
+        available: true,
         order: 7
     ),
 
@@ -1443,7 +1460,7 @@ let defaultFilterChips: [FilterChip] = [
         nameIndex: "",
         filter: "",
         children: [],
-        available: false,
+        available: true,
         order: 8
     ),
 
@@ -1507,7 +1524,7 @@ let defaultFilterChips: [FilterChip] = [
         nameIndex: "",
         filter: "",
         children: [],
-        available: false,
+        available: true,
         order: 10
     ),
 
@@ -1519,7 +1536,7 @@ let defaultFilterChips: [FilterChip] = [
         nameIndex: "",
         filter: "",
         children: [],
-        available: false,
+        available: true,
         order: 11
     ),
 
@@ -1531,7 +1548,7 @@ let defaultFilterChips: [FilterChip] = [
         nameIndex: "",
         filter: "",
         children: [],
-        available: false,
+        available: true,
         order: 12
     ),
 
@@ -1543,7 +1560,7 @@ let defaultFilterChips: [FilterChip] = [
         nameIndex: "",
         filter: "",
         children: [],
-        available: false,
+        available: true,
         order: 13
     ),
 
@@ -1804,5 +1821,141 @@ extension FilterChip {
             }
         }
         return nil
+    }
+}
+
+struct FilterChipPickerView_Previews: PreviewProvider {
+    @State static var selectedItems: [AlgoliaRankoItem] = sampleItems
+    
+    static var sampleItems: [AlgoliaRankoItem] = [
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 1,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "1",
+                ItemName: "Paris",
+                ItemDescription: "The City of Light",
+                ItemCategory: "",
+                ItemImage:"https://res.klook.com/image/upload/c_fill,w_750,h_750/q_80/w_80,x_15,y_15,g_south_west,l_Klook_water_br_trans_yhcmh3/activities/wrgwlkhnjekv8h5tjbn4.jpg"
+            )
+        ),
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 2,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "2",
+                ItemName: "New York",
+                ItemDescription: "The Big Apple",
+                ItemCategory: "",
+                ItemImage:"https://hips.hearstapps.com/hmg-prod/images/manhattan-skyline-with-empire-state-building-royalty-free-image-960609922-1557777571.jpg?crop=0.66635xw:1xh;center,top&resize=640:*"
+            )
+        ),
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 3,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "3",
+                ItemName: "Tokyo",
+                ItemDescription: "Land of the Rising Sun",
+                ItemCategory: "",
+                ItemImage:"https://static.independent.co.uk/s3fs-public/thumbnails/image/2018/04/10/13/tokyo-main.jpg?width=1200&height=1200&fit=crop"
+            )
+        ),
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 4,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "4",
+                ItemName: "Rome",
+                ItemDescription: "a city steeped in history, culture, and artistic treasures, often referred to as the Eternal City",
+                ItemCategory: "",
+                ItemImage:"https://i.guim.co.uk/img/media/03303b5f042b72c03541fcd7f3777180f61a01a5/0_2310_4912_2947/master/4912.jpg?width=1200&height=1200&quality=85&auto=format&fit=crop&s=19cf880f7508ea310bdb136057d78240"
+            )
+        ),
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 5,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "5",
+                ItemName: "Sydney",
+                ItemDescription: "Harbour City",
+                ItemCategory: "",
+                ItemImage:"https://dynamic-media-cdn.tripadvisor.com/media/photo-o/13/93/a7/be/sydney-opera-house.jpg?w=500&h=500&s=1"
+            )
+        ),
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 6,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "6",
+                ItemName: "Barcelona",
+                ItemDescription: "Gaudí’s Masterpiece City",
+                ItemCategory: "",
+                ItemImage:"https://lp-cms-production.imgix.net/2023-08/iStock-1297827939.jpg?fit=crop&ar=1%3A1&w=1200&auto=format&q=75"
+            )
+        ),
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 7,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "7",
+                ItemName: "Cape Town",
+                ItemDescription: "Mother City of South Africa",
+                ItemCategory: "",
+                ItemImage:"https://imageresizer.static9.net.au/0sx9mhfU8tYDs_T-ftiFBrWR_as=/0x0:1307x735/1200x1200/https%3A%2F%2Fprod.static9.net.au%2Ffs%2F15af5183-fb21-49d9-a22c-d9f4813ccbea"
+            )
+        ),
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 8,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "8",
+                ItemName: "Rio de Janeiro",
+                ItemDescription: "Marvelous City",
+                ItemCategory: "",
+                ItemImage:"https://whc.unesco.org/uploads/thumbs/site_1100_0004-750-750-20120625114004.jpg"
+            )
+        ),
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 9,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "9",
+                ItemName: "Reykjavik",
+                ItemDescription: "Land of Fire and Ice",
+                ItemCategory: "",
+                ItemImage:"https://media.gq-magazine.co.uk/photos/5d138e07d7a7017355bb9bf3/1:1/w_1280,h_1280,c_limit/reykjavik-gq-22jun18_istock_b.jpg"
+            )
+        ),
+        AlgoliaRankoItem(
+            id: UUID().uuidString,
+            rank: 10,
+            votes: 0,
+            record: AlgoliaItemRecord(
+                objectID: "10",
+                ItemName: "Istanbul",
+                ItemDescription: "Where East Meets West",
+                ItemCategory: "",
+                ItemImage:"https://images.contentstack.io/v3/assets/blt06f605a34f1194ff/blt289d3aab2da77bc9/6777f31f93a84b03b5a37ef2/BCC-2023-EXPLORER-Istanbul-Fun-things-to-do-in-Istanbul-HEADER_MOBILE.jpg?format=webp&auto=avif&quality=60&crop=1%3A1&width=425"
+            )
+        )
+    ]
+
+    static var previews: some View {
+        FilterChipPickerView(selectedRankoItems: $selectedItems)
+            .onAppear {
+                // Assign mock chips for preview purposes
+                defaultFilterChips = defaultFilterChips
+            }
+            .previewDisplayName("Filter Chip Picker Preview")
     }
 }

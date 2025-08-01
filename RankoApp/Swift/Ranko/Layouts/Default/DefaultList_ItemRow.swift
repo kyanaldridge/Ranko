@@ -14,13 +14,13 @@ struct DefaultListItemRow: View {
     private var badge: some View {
         Group {
             switch item.rank {
-            case 1: Image(systemName: "1.circle.fill").foregroundColor(Color(red: 1, green: 0.65, blue: 0)).font(.body).padding(3)
-            case 2: Image(systemName: "2.circle.fill").foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698)).font(.body).padding(3)
-            case 3: Image(systemName: "3.circle.fill").foregroundColor(Color(red: 0.56, green: 0.33, blue: 0)).font(.body).padding(3)
-            default: Text("\(item.rank)").font(.caption).padding(5).fontWeight(.heavy)
+            case 1: Image(systemName: "1.circle.fill").foregroundColor(Color(red: 1, green: 0.65, blue: 0)).font(.body).padding(2)
+            case 2: Image(systemName: "2.circle.fill").foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698)).font(.body).padding(2)
+            case 3: Image(systemName: "3.circle.fill").foregroundColor(Color(red: 0.56, green: 0.33, blue: 0)).font(.body).padding(2)
+            default: Image(systemName: "\(item.rank).circle.fill").foregroundColor(Color(hex: 0x925611)).font(.body).padding(2)
             }
         }
-        .background(Circle().fill(Color.white))
+        .background(Circle().fill(Color(hex: 0xfff9ee)))
         .offset(x: 7, y: 7)
     }
 
@@ -33,7 +33,7 @@ struct DefaultListItemRow: View {
                         ZStack {
                             RoundedRectangle(cornerRadius: 8)
                                 .fill(Color(UIColor.systemGray5))
-                                .frame(width: 50, height: 50)
+                                .frame(width: 65, height: 65)
                             Image(systemName: "photo")
                                 .resizable()
                                 .scaledToFit()
@@ -44,13 +44,13 @@ struct DefaultListItemRow: View {
                         image
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 50, height: 50)
+                            .frame(width: 65, height: 65)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     case .failure:
                         ZStack {
                             RoundedRectangle(cornerRadius: 8)
                                 .fill(Color(UIColor.systemGray5))
-                                .frame(width: 50, height: 50)
+                                .frame(width: 65, height: 65)
                             Image(systemName: "xmark.octagon")
                                 .resizable()
                                 .scaledToFit()
@@ -66,22 +66,23 @@ struct DefaultListItemRow: View {
 
             
 
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.itemName)
-                    .font(.subheadline)
-                    .fontWeight(.bold)
+                    .font(.system(size: 18, weight: .bold, design: .default))
+                    .foregroundColor(Color(hex: 0x6D400F))
                 Text(item.itemDescription)
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                    .font(.system(size: 10, weight: .medium, design: .default))
+                    .foregroundColor(Color(hex: 0x925611))
             }
 
             Spacer()
         }
-        .padding(8)
+        .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(.systemBackground))
-                .shadow(radius: 2)
+                .fill(Color(hex: 0xfff9ee))
+                .stroke(Color(hex: 0xFFEBC2), lineWidth: 2)
+                .shadow(color: Color(hex: 0xFFEBC2), radius: 7)
         )
         .padding(.horizontal)
     }

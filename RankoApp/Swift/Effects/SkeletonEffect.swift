@@ -10,7 +10,7 @@ import SwiftUI
 struct SkeletonView<S: Shape>: View {
     var shape: S
     var color: Color
-    init(_ shape: S, _ color: Color = .gray.opacity(0.3)) {
+    init(_ shape: S, _ color: Color = Color(hex: 0xD0A868).opacity(0.3)) {
         self.shape = shape
         self.color = color
     }
@@ -31,7 +31,7 @@ struct SkeletonView<S: Shape>: View {
                     let maxX = size.width + skeletonWidth + blurDiameter
                     
                     Rectangle()
-                        .fill(.gray)
+                        .fill(Color(hex: 0xBF9859).opacity(0.8))
                         .frame(width: skeletonWidth, height: size.height * 2)
                         .frame(height: size.height)
                         .blur(radius: blurRadius)

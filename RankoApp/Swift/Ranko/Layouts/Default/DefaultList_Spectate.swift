@@ -6,9 +6,545 @@
 //
 
 import SwiftUI
+import InstantSearchSwiftUI
+import InstantSearchCore
+import Firebase
 import FirebaseAuth
+import FirebaseStorage
+import Foundation
+import AlgoliaSearchClient
+
 
 struct DefaultListSpectate: View {
+    @Environment(\.dismiss) var dismiss
+    @StateObject private var user_data = UserInformation.shared
+
+    // Required property
+    let listID: String
+
+    // Optional editable properties with defaults
+    @State private var rankoName: String
+    @State private var description: String
+    @State private var isPrivate: Bool
+    @State private var category: CategoryChip?
+    @State private var creatorID: String
+    @State private var creatorName: String
+    @State private var creatorImage: UIImage?
+
+    // Sheets & states
+    @State private var spectateProfile: Bool = false
+    @State private var showTabBar = true
+    @State var showEditDetailsSheet = false
+    @State var showAddItemsSheet = false
+    @State var showReorderSheet = false
+    @State var showEditItemSheet = false
+    @State var showExitSheet = false
+
+    @State private var activeTab: AppTab = .addItems
+    @State private var selectedRankoItems: [AlgoliaRankoItem] = []
+    @State private var selectedItem: AlgoliaRankoItem? = nil
+    @State private var itemToEdit: AlgoliaRankoItem? = nil
+    @State private var onSave: ((AlgoliaRankoItem) -> Void)? = nil
+
+    // MARK: - Init now only requires listID
+    init(
+        listID: String,
+        creatorID: String = "",
+        creatorName: String = "",
+        creatorImage: UIImage? = nil,
+        rankoName: String = "",
+        description: String = "",
+        isPrivate: Bool = false,
+        category: CategoryChip? = CategoryChip(name: "Unknown", icon: "questionmark.circle.fill", category: "Unknown", synonym: ""),
+        selectedRankoItems: [AlgoliaRankoItem] = []
+    ) {
+        self.listID = listID
+        self.creatorID = creatorID
+        _creatorName = State(initialValue: creatorName)
+        _creatorImage = State(initialValue: creatorImage)
+        _rankoName = State(initialValue: rankoName)
+        _description = State(initialValue: description)
+        _isPrivate = State(initialValue: isPrivate)
+        _category = State(initialValue: category)
+        _selectedRankoItems = State(initialValue: selectedRankoItems)
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color.white.ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 12) {
+                    HStack {
+                        Text(rankoName)
+                            .font(.title)
+                            .fontWeight(.black)
+                            .fontDesign(.rounded)
+                            .foregroundColor(.black)
+                        Spacer()
+                    }
+                    .padding(.top, 20)
+                    .padding(.leading, 20)
+                    
+                    HStack {
+                        Text(description.isEmpty ? "No description yet…" : description)
+                            .lineLimit(3)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.gray)
+                        Spacer()
+                    }
+                    .padding(.top, 5)
+                    .padding(.leading, 20)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            HStack {
+                                Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(.vertical, 5)
+                                    .padding(.leading, 7)
+                                Text(isPrivate ? "Private" : "Public")
+                                    .foregroundColor(.white)
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .padding(.trailing, 7)
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(isPrivate ? .orange : .blue)
+                            )
+                            
+                            if let cat = category {
+                                HStack {
+                                    Image(systemName: cat.icon)
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                        .padding(.vertical, 5)
+                                        .padding(.leading, 7)
+                                    Text(cat.name)
+                                        .foregroundColor(.white)
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .padding(.trailing, 7)
+                                }
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(categoryChipIconColors[cat.name] ?? .gray)
+                                )
+                            }
+                            
+                            HStack(spacing: 7) {
+                                Group {
+                                    if let img = creatorImage {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                    } else {
+                                        SkeletonView(Circle())
+                                            .frame(width: 18, height: 18)
+                                    }
+                                }
+                                .frame(width: 18, height: 18)
+                                .clipShape(Circle())
+                                Text(creatorName)
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.black.opacity(0.9))
+                            }
+                            .onTapGesture {
+                                spectateProfile = true
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.top, 5)
+                        .padding(.leading, 20)
+                    }
+                }
+                .padding(.bottom, 5)
+                
+                Divider()
+                
+                VStack {
+                    ScrollView {
+                        ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
+                            DefaultListItemRow(item: item)
+                                .onTapGesture {
+                                    selectedItem = item
+                                }
+                                .sheet(isPresented: $showEditItemSheet) {
+                                    // Determine which item is centered
+                                    EditItemView(
+                                        item: item,
+                                        listID: listID
+                                    ) { newName, newDesc in
+                                        // build updated record & item
+                                        let rec = item.record
+                                        let updatedRecord = AlgoliaItemRecord(
+                                            objectID: rec.objectID,
+                                            ItemName: newName,
+                                            ItemDescription: newDesc,
+                                            ItemCategory: "",
+                                            ItemImage: rec.ItemImage
+                                        )
+                                        let updatedItem = AlgoliaRankoItem(
+                                            id: item.id,
+                                            rank: item.rank,
+                                            votes: item.votes,
+                                            record: updatedRecord
+                                        )
+                                        // callback to parent
+                                        onSave!(updatedItem)
+                                    }
+                                }
+                        }
+                        .padding(.vertical, 5)
+                    }
+                    Spacer()
+                }
+            }
+            
+            VStack {
+                Spacer()
+                Rectangle()
+                    .frame(height: 90)
+                    .foregroundColor(.gray.opacity(0.8))
+                    .blur(radius: 23)
+            }
+            .ignoresSafeArea()
+            
+        }
+        .onAppear {
+            loadListFromFirebase()
+        }
+        .sheet(isPresented: $showAddItemsSheet) {
+            FilterChipPickerView(
+                selectedRankoItems: $selectedRankoItems
+            )
+        }
+        .sheet(isPresented: $showEditDetailsSheet) {
+            DefaultListEditDetails(
+                rankoName: rankoName,
+                description: description,
+                isPrivate: isPrivate,
+                category: category
+            ) { newName, newDescription, newPrivate, newCategory in
+                rankoName    = newName
+                description  = newDescription
+                isPrivate    = newPrivate
+                category     = newCategory
+            }
+        }
+        .sheet(isPresented: $showReorderSheet) {
+            DefaultListReRank(
+                items: selectedRankoItems,
+                onSave: { newOrder in
+                    selectedRankoItems = newOrder
+                }
+            )
+        }
+        .sheet(isPresented: $showExitSheet) {
+            DefaultListPersonalExit(
+                onSave: {
+                    updateListInAlgolia(
+                        listID: listID,
+                        newName: rankoName,
+                        newDescription: description,
+                        newCategory: category!.name,
+                        isPrivate: isPrivate
+                    ) { success in
+                        if success {
+                            print("🎉 Fields updated in Algolia")
+                        } else {
+                            print("⚠️ Failed to update fields")
+                        }
+                    }
+                    updateListInFirebase()
+                    dismiss()
+                },
+                onLeave: {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                        dismiss()   // dismiss DefaultListView without saving
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showTabBar) {
+            VStack {
+                HStack(spacing: 0) {
+                    ForEach(AppTab.visibleCases, id: \.rawValue) { tab in
+                        VStack(spacing: 6) {
+                            Image(systemName: tab.symbolImage)
+                                .font(.title3)
+                                .symbolVariant(.fill)
+                                .frame(height: 28)
+                            
+                            Text(tab.rawValue)
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(.blue)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(.rect)
+                        .onTapGesture {
+                            activeTab = tab
+                            switch tab {
+                            case .addItems:
+                                showAddItemsSheet = true
+                            case .editDetails:
+                                showEditDetailsSheet = true
+                            case .reRank:
+                                showReorderSheet = true
+                            case .exit:
+                                showExitSheet = true
+                            case .empty:
+                                dismiss()
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .interactiveDismissDisabled(true)
+            .presentationDetents([.height(80)])
+            .presentationBackgroundInteraction(.enabled)
+        }
+        .onAppear {
+            fetchCreatorName()
+            loadListFromFirebase()
+        }
+        .sheet(item: $selectedItem) { item in
+            ItemDetailViewSpectate(
+                items: selectedRankoItems,
+                initialItem: item,
+                listID: listID
+            )
+        }
+        .sheet(isPresented: $spectateProfile) {
+            SpecProfileView(userID: creatorID)
+        }
+    }
+    
+    // MARK: — Fetchers
+    private func loadProfileImage() {
+        let ref = Database.database().reference()
+            .child("UserData")
+            .child(creatorID)
+            .child("ProfilePicture")
+        ref.getData { _, snap in
+            if let path = snap?.value as? String {
+                Storage.storage().reference().child(path)
+                    .getData(maxSize: 2*1024*1024) { data, _ in
+                        if let data = data, let ui = UIImage(data: data) {
+                            creatorImage = ui
+                        }
+                }
+            }
+        }
+    }
+    
+    private func fetchCreatorName() {
+        let ref = Database.database().reference()
+            .child("UserData")
+            .child(creatorID)
+            .child("UserName")
+        ref.observeSingleEvent(of: .value) { snap in
+            creatorName = snap.value as? String ?? "Unknown"
+        }
+        loadProfileImage()
+    }
+    
+    private func loadListFromFirebase() {
+        let db = Database.database().reference()
+        let listRef = db.child("RankoData").child(listID)
+
+        listRef.observeSingleEvent(of: .value,
+                                   with: { snapshot in
+            guard let data = snapshot.value as? [String: Any] else {
+                print("⚠️ No data at RankoData/\(listID)")
+                return
+            }
+
+            DispatchQueue.main.async {
+                // — map your top-level fields…
+                self.rankoName   = data["RankoName"]        as? String ?? ""
+                self.description = data["RankoDescription"] as? String ?? ""
+                self.isPrivate   = data["RankoPrivacy"]     as? Bool   ?? false
+                self.creatorID   = data["RankoUserID"]      as? String ?? ""
+
+                if let catName = data["RankoCategory"] as? String {
+                    let allChips = categoryChipsByCategory.values.flatMap { $0 }
+                    self.category = allChips.first {
+                        $0.name.caseInsensitiveCompare(catName) == .orderedSame
+                    }
+                }
+
+                // — map your items…
+                if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
+                    var loaded: [AlgoliaRankoItem] = []
+                    for (_, itemData) in itemsDict {
+                        guard
+                            let id    = itemData["ItemID"]          as? String,
+                            let name  = itemData["ItemName"]        as? String,
+                            let desc  = itemData["ItemDescription"] as? String,
+                            let image = itemData["ItemImage"]       as? String,
+                            let rank  = itemData["ItemRank"]        as? Int,
+                            let votes = itemData["ItemVotes"]       as? Int
+                        else { continue }
+                        
+                        let record = AlgoliaItemRecord(
+                            objectID: id,
+                            ItemName: name,
+                            ItemDescription: desc,
+                            ItemCategory: "",      // adjust if you store item categories
+                            ItemImage: image
+                        )
+
+                        let item = AlgoliaRankoItem(
+                            id: id,
+                            rank: rank,
+                            votes: votes,
+                            record: record
+                        )
+                        loaded.append(item)
+                    }
+                    self.selectedRankoItems = loaded.sorted { $0.rank < $1.rank }
+                }
+            }
+        },
+        withCancel: { error in
+            print("❌ Firebase load error:", error.localizedDescription)
+        })
+    }
+    // Item Helpers
+    private func delete(_ item: AlgoliaRankoItem) {
+        selectedRankoItems.removeAll { $0.id == item.id }
+        normalizeRanks()
+    }
+
+    private func moveToTop(_ item: AlgoliaRankoItem) {
+        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
+        let moved = selectedRankoItems.remove(at: idx)
+        selectedRankoItems.insert(moved, at: 0)
+        normalizeRanks()
+    }
+
+    private func moveToBottom(_ item: AlgoliaRankoItem) {
+        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
+        let moved = selectedRankoItems.remove(at: idx)
+        selectedRankoItems.append(moved)
+        normalizeRanks()
+    }
+
+    private func normalizeRanks() {
+        for index in selectedRankoItems.indices {
+            selectedRankoItems[index].rank = index + 1
+        }
+    }
+    
+    
+    
+    // MARK: - Firebase Update
+    private func updateListInFirebase() {
+        guard let category = category else { return }
+        
+        let db = Database.database().reference()
+        let safeUID = (Auth.auth().currentUser?.uid ?? user_data.userID)
+            .components(separatedBy: CharacterSet(charactersIn: ".#$[]")).joined()
+        
+        // ✅ Prepare the top-level fields to update
+        let listUpdates: [String: Any] = [
+            "RankoName": rankoName,
+            "RankoDescription": description,
+            "RankoPrivacy": isPrivate,
+            "RankoCategory": category.name
+        ]
+        
+        let listRef = db.child("RankoData").child(listID)
+        
+        // ✅ Update list fields
+        listRef.updateChildValues(listUpdates) { error, _ in
+            if let err = error {
+                print("❌ Failed to update list fields: \(err.localizedDescription)")
+            } else {
+                print("✅ List fields updated successfully")
+            }
+        }
+        
+        // ✅ Prepare all RankoItems
+        var itemsUpdate: [String: Any] = [:]
+        for item in selectedRankoItems {
+            itemsUpdate[item.id] = [
+                "ItemID": item.id,
+                "ItemName": item.record.ItemName,
+                "ItemDescription": item.record.ItemDescription,
+                "ItemImage": item.record.ItemImage,
+                "ItemRank": item.rank,
+                "ItemVotes": item.votes
+            ]
+        }
+        
+        // ✅ Update RankoItems node with the new data
+        listRef.child("RankoItems").setValue(itemsUpdate) { error, _ in
+            if let err = error {
+                print("❌ Failed to update RankoItems: \(err.localizedDescription)")
+            } else {
+                print("✅ RankoItems updated successfully")
+            }
+        }
+        
+        // ✅ Update the user's reference to this list
+        db.child("UserData").child(safeUID).child("RankoData").child(listID)
+            .setValue(category.name) { error, _ in
+                if let err = error {
+                    print("❌ Failed to update user's list reference: \(err.localizedDescription)")
+                } else {
+                    print("✅ User's list reference updated")
+                }
+            }
+    }
+
+        // MARK: - Algolia Update
+    private func updateListInAlgolia(
+        listID: String,
+        newName: String,
+        newDescription: String,
+        newCategory: String,
+        isPrivate: Bool,
+        completion: @escaping (Bool) -> Void
+    ) {
+        let client = SearchClient(
+            appID: ApplicationID(rawValue: Secrets.algoliaAppID),
+            apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
+        )
+        let index = client.index(withName: "RankoLists")
+
+        // ✅ Prepare partial updates
+        let updates: [(ObjectID, PartialUpdate)] = [
+            (ObjectID(rawValue: listID), .update(attribute: "RankoName", value: .string(newName))),
+            (ObjectID(rawValue: listID), .update(attribute: "RankoDescription", value: .string(newDescription))),
+            (ObjectID(rawValue: listID), .update(attribute: "RankoCategory", value: .string(newCategory))),
+            (ObjectID(rawValue: listID), .update(attribute: "RankoPrivacy", value: .bool(isPrivate)))
+        ]
+
+        // ✅ Perform batch update in Algolia
+        index.partialUpdateObjects(updates: updates) { result in
+            switch result {
+            case .success(let response):
+                print("✅ Ranko list fields updated successfully:", response)
+                completion(true)
+            case .failure(let error):
+                print("❌ Failed to update Ranko list fields:", error.localizedDescription)
+                completion(false)
+            }
+        }
+    }
+}
+
+struct DefaultListSpectate2: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.presentationMode) private var presentationMode
     
@@ -29,7 +565,7 @@ struct DefaultListSpectate: View {
     @State private var profileImage: UIImage?
     
     // MARK: - UI state
-    @State private var activeAction: DefaultListAction? = nil
+    //@State private var activeAction: DefaultListAction? = nil
     @State private var showCancelAlert = false
     @State private var selectedItem: AlgoliaRankoItem? = nil
     @State private var spectateProfile: Bool = false
@@ -86,10 +622,10 @@ struct DefaultListSpectate: View {
             }
             
             // MARK: — Bottom Bar Overlay
-            bottomBar
-                .edgesIgnoringSafeArea(.bottom)
+//            bottomBar
+//                .edgesIgnoringSafeArea(.bottom)
         }
-        .sheet(item: $activeAction, content: sheetContent)
+        //.sheet(item: $activeAction, content: sheetContent)
         .alert("Unsaved Changes", isPresented: $showCancelAlert) {
             Button("Yes", role: .destructive) {
                 presentationMode.wrappedValue.dismiss()
@@ -120,31 +656,31 @@ struct DefaultListSpectate: View {
     
     // MARK: — Fetchers
     private func loadProfileImage() {
-//        let ref = Database.database().reference()
-//            .child("UserData")
-//            .child(creatorID)
-//            .child("ProfilePicture")
-//        ref.getData { _, snap in
-//            if let path = snap?.value as? String {
-//                Storage.storage().reference().child(path)
-//                    .getData(maxSize: 2*1024*1024) { data, _ in
-//                        if let data = data, let ui = UIImage(data: data) {
-//                            profileImage = ui
-//                        }
-//                }
-//            }
-//        }
+        let ref = Database.database().reference()
+            .child("UserData")
+            .child(creatorID)
+            .child("ProfilePicture")
+        ref.getData { _, snap in
+            if let path = snap?.value as? String {
+                Storage.storage().reference().child(path)
+                    .getData(maxSize: 2*1024*1024) { data, _ in
+                        if let data = data, let ui = UIImage(data: data) {
+                            profileImage = ui
+                        }
+                }
+            }
+        }
     }
     
     private func fetchCreatorName() {
-//        let ref = Database.database().reference()
-//            .child("UserData")
-//            .child(creatorID)
-//            .child("UserName")
-//        ref.observeSingleEvent(of: .value) { snap in
-//            creatorName = snap.value as? String ?? "Unknown"
-//        }
-//        loadProfileImage()
+        let ref = Database.database().reference()
+            .child("UserData")
+            .child(creatorID)
+            .child("UserName")
+        ref.observeSingleEvent(of: .value) { snap in
+            creatorName = snap.value as? String ?? "Unknown"
+        }
+        loadProfileImage()
     }
     
     
@@ -257,108 +793,108 @@ struct DefaultListSpectate: View {
     }
     
     // MARK: — Bottom Bar Overlay
-    private var bottomBar: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                HStack(spacing: 0) {
-                    ForEach(DefaultListAction.allCases) { action in
-                        if action == .exit {
-                            Button {
-                                let generator = UINotificationFeedbackGenerator()
-                                generator.notificationOccurred(.success)
-                                dismiss()
-                            } label: {
-                                VStack(spacing: 0) {
-                                    Image(systemName: "door.left.hand.open")
-                                        .font(.system(size: 13, weight: .black, design: .default))
-                                        .frame(height: 20)
-                                        .padding(.bottom, 6)
-                                    Text("Exit")
-                                        .font(.system(size: 9, weight: .black, design: .rounded))
-                                }
-                                .foregroundColor(.black)
-                                .frame(minWidth: 20)
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 12)
-                                .background(Color.white)
-                                .cornerRadius(12)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        } else {
-                            Button {
-                                switch action {
-                                case .copy, .share:
-                                    withAnimation {
-                                        activeAction = action
-                                    }
-                                default:
-                                    break
-                                }
-                            } label: {
-                                VStack(spacing: 0) {
-                                    if let symbol = buttonSymbols[action.rawValue] {
-                                        Image(systemName: symbol)
-                                            .font(.system(size: 13, weight: .black, design: .default))
-                                            .frame(height: 20)
-                                            .padding(.bottom, 6)
-                                    }
-                                    Text(action.rawValue)
-                                        .font(.system(size: 9, weight: .black, design: .rounded))
-                                }
-                                .foregroundColor(.black)
-                                .frame(minWidth: 20)
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 12)
-                                .background(Color.white)
-                                .cornerRadius(12)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                }
-            }
-            .padding(.vertical, 2)
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 17)
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.25), radius: 8)
-            )
-        }
-    }
+//    private var bottomBar: some View {
+//        VStack(spacing: 0) {
+//            HStack(spacing: 6) {
+//                HStack(spacing: 0) {
+//                    ForEach(DefaultListAction.allCases) { action in
+//                        if action == .exit {
+//                            Button {
+//                                let generator = UINotificationFeedbackGenerator()
+//                                generator.notificationOccurred(.success)
+//                                dismiss()
+//                            } label: {
+//                                VStack(spacing: 0) {
+//                                    Image(systemName: "door.left.hand.open")
+//                                        .font(.system(size: 13, weight: .black, design: .default))
+//                                        .frame(height: 20)
+//                                        .padding(.bottom, 6)
+//                                    Text("Exit")
+//                                        .font(.system(size: 9, weight: .black, design: .rounded))
+//                                }
+//                                .foregroundColor(.black)
+//                                .frame(minWidth: 20)
+//                                .padding(.vertical, 8)
+//                                .padding(.horizontal, 12)
+//                                .background(Color.white)
+//                                .cornerRadius(12)
+//                            }
+//                            .buttonStyle(PlainButtonStyle())
+//                        } else {
+//                            Button {
+//                                switch action {
+//                                case .copy, .share:
+//                                    withAnimation {
+//                                        //activeAction = action
+//                                    }
+//                                default:
+//                                    break
+//                                }
+//                            } label: {
+//                                VStack(spacing: 0) {
+//                                    if let symbol = buttonSymbols[action.rawValue] {
+//                                        Image(systemName: symbol)
+//                                            .font(.system(size: 13, weight: .black, design: .default))
+//                                            .frame(height: 20)
+//                                            .padding(.bottom, 6)
+//                                    }
+//                                    Text(action.rawValue)
+//                                        .font(.system(size: 9, weight: .black, design: .rounded))
+//                                }
+//                                .foregroundColor(.black)
+//                                .frame(minWidth: 20)
+//                                .padding(.vertical, 8)
+//                                .padding(.horizontal, 12)
+//                                .background(Color.white)
+//                                .cornerRadius(12)
+//                            }
+//                            .buttonStyle(PlainButtonStyle())
+//                        }
+//                    }
+//                }
+//            }
+//            .padding(.vertical, 2)
+//            .padding(.horizontal, 12)
+//            .background(
+//                RoundedRectangle(cornerRadius: 17)
+//                    .fill(Color.white)
+//                    .shadow(color: Color.black.opacity(0.25), radius: 8)
+//            )
+//        }
+//    }
     
     
     // MARK: – Sheet Content Builder
-    @ViewBuilder
-    private func sheetContent(for action: DefaultListAction) -> some View {
-        switch action {
-        case .copy:
-            DefaultListView(
-                rankoName: rankoName,
-                description: rankoDescription,
-                isPrivate: isPrivate,
-                category: category,
-                selectedRankoItems: selectedRankoItems
-            ) { updatedItem in
-                // no-op in preview
-            }
-        case .share:
-            DefaultListShareImage(rankoName: rankoName, items: selectedRankoItems)
-        case .exit:
-            EmptyView()
-        }
-    }
+//    @ViewBuilder
+//    private func sheetContent(for action: DefaultListAction) -> some View {
+//        switch action {
+//        case .copy:
+//            DefaultListView(
+//                rankoName: rankoName,
+//                description: rankoDescription,
+//                isPrivate: isPrivate,
+//                category: category,
+//                selectedRankoItems: selectedRankoItems
+//            ) { updatedItem in
+//                // no-op in preview
+//            }
+//        case .share:
+//            DefaultListShareImage(rankoName: rankoName, items: selectedRankoItems)
+//        case .exit:
+//            EmptyView()
+//        }
+//    }
 }
 
 // Re-use DefaultListView’s helpers and enum:
-extension DefaultListSpectate {
-    enum DefaultListAction: String, Identifiable, CaseIterable {
-        var id: String { rawValue }
-        case copy   = "Copy"
-        case share  = "Share"
-        case exit   = "Exit"
-    }
-}
+//extension DefaultListSpectate {
+//    enum DefaultListAction: String, Identifiable, CaseIterable {
+//        var id: String { rawValue }
+//        case copy   = "Copy"
+//        case share  = "Share"
+//        case exit   = "Exit"
+//    }
+//}
 
 
 

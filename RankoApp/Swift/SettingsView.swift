@@ -893,16 +893,27 @@ struct NotificationsView: View {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
             
-            VStack {
+            VStack(alignment: .leading, spacing: 20) {
+                // Title
                 HStack {
                     Text("Notifications")
                         .font(.system(size: 32, weight: .black))
                         .foregroundColor(Color(hex: 0x857467))
-                        .padding([.top, .bottom])
-                        .padding(.leading, 25)
                     Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .foregroundColor(Color(hex: 0x857467))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, 25)
+                .padding(.top, 40)
                 
                 Divider()
                 Spacer()
@@ -920,16 +931,27 @@ struct PreferencesView: View {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
             
-            VStack {
+            VStack(alignment: .leading, spacing: 20) {
+                // Title
                 HStack {
                     Text("Preferences")
                         .font(.system(size: 32, weight: .black))
                         .foregroundColor(Color(hex: 0x857467))
-                        .padding([.top, .bottom])
-                        .padding(.leading, 25)
                     Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .foregroundColor(Color(hex: 0x857467))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, 25)
+                .padding(.top, 40)
                 
                 Divider()
                 Spacer()
@@ -947,16 +969,27 @@ struct PrivacySecurityView: View {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
             
-            VStack {
+            VStack(alignment: .leading, spacing: 20) {
+                // Title
                 HStack {
                     Text("Privacy & Security")
                         .font(.system(size: 32, weight: .black))
                         .foregroundColor(Color(hex: 0x857467))
-                        .padding([.top, .bottom])
-                        .padding(.leading, 25)
                     Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .foregroundColor(Color(hex: 0x857467))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, 25)
+                .padding(.top, 40)
                 
                 Divider()
                 Spacer()
@@ -974,16 +1007,27 @@ struct SuggestionsIdeasView: View {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
             
-            VStack {
+            VStack(alignment: .leading, spacing: 20) {
+                // Title
                 HStack {
                     Text("Suggestions")
                         .font(.system(size: 32, weight: .black))
                         .foregroundColor(Color(hex: 0x857467))
-                        .padding([.top, .bottom])
-                        .padding(.leading, 25)
                     Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .foregroundColor(Color(hex: 0x857467))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, 25)
+                .padding(.top, 40)
                 
                 Divider()
                 Spacer()
@@ -1001,16 +1045,27 @@ struct DataStorageView: View {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
             
-            VStack {
+            VStack(alignment: .leading, spacing: 20) {
+                // Title
                 HStack {
                     Text("Data & Storage")
                         .font(.system(size: 32, weight: .black))
                         .foregroundColor(Color(hex: 0x857467))
-                        .padding([.top, .bottom])
-                        .padding(.leading, 25)
                     Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .foregroundColor(Color(hex: 0x857467))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, 25)
+                .padding(.top, 40)
                 
                 Divider()
                 Spacer()
@@ -1028,16 +1083,27 @@ struct AboutView: View {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
             
-            VStack {
+            VStack(alignment: .leading, spacing: 20) {
+                // Title
                 HStack {
                     Text("About")
                         .font(.system(size: 32, weight: .black))
                         .foregroundColor(Color(hex: 0x857467))
-                        .padding([.top, .bottom])
-                        .padding(.leading, 25)
                     Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .foregroundColor(Color(hex: 0x857467))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, 25)
+                .padding(.top, 40)
                 
                 Divider()
                 Spacer()
@@ -1055,18 +1121,67 @@ struct LegalView: View {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
             
-            VStack {
+            VStack(alignment: .leading, spacing: 20) {
+                // Title
                 HStack {
                     Text("Legal")
                         .font(.system(size: 32, weight: .black))
                         .foregroundColor(Color(hex: 0x857467))
-                        .padding([.top, .bottom])
-                        .padding(.leading, 25)
                     Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .foregroundColor(Color(hex: 0x857467))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
                 }
-                .padding(.top, 20)
+                .padding(.horizontal, 25)
+                .padding(.top, 40)
                 
                 Divider()
+                
+                // MARK: - 📜 LINKS TO TERMS AND CONDITIONS - PRIVACY POLICY
+                VStack(spacing: 10) {
+                    Button { print("Viewing Terms & Conditions") } label: {
+                        HStack {
+                            Spacer()
+                            Text("Terms & Conditions")
+                                .font(.system(size: 18, weight: .heavy, design: .default))
+                                .foregroundColor(Color(hex: 0x857467))
+                            Spacer()
+                        }
+                        .padding(.vertical, 10)
+                    }
+                    .foregroundColor(Color(hex: 0xFF9864))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
+                    
+                    Button { print("Viewing Privacy Policy") } label: {
+                        HStack {
+                            Spacer()
+                            Text("Privacy Policy")
+                                .font(.system(size: 18, weight: .heavy, design: .default))
+                                .foregroundColor(Color(hex: 0x857467))
+                            Spacer()
+                        }
+                        .padding(.vertical, 10)
+                    }
+                    .foregroundColor(Color(hex: 0xFF9864))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
+                }
+                .padding(.horizontal, 25)
                 Spacer()
             }
         }

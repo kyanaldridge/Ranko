@@ -12,7 +12,7 @@ import FirebaseAnalytics
 // MARK: - Main Tab-based Navigation Layout
 struct MainTabView: View {
     
-    @State private var activeTab: TabModel = .settings
+    @State private var activeTab: TabModel = .explore
     @State private var navigationBar: Int = 1
     
     var body: some View {
