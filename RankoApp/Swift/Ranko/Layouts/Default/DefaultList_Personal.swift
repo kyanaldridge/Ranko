@@ -35,6 +35,7 @@ struct DefaultListPersonal: View {
 
     // Sheets & states
     @State private var showTabBar = true
+    @State private var tabBarPresent = false
     @State var showEditDetailsSheet = false
     @State var showAddItemsSheet = false
     @State var showReorderSheet = false
@@ -75,16 +76,13 @@ struct DefaultListPersonal: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.white.ignoresSafeArea()
-            
+            Color(hex: 0xFFF5E1).ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: 7) {
                     HStack {
                         Text(rankoName)
-                            .font(.title)
-                            .fontWeight(.black)
-                            .fontDesign(.rounded)
-                            .foregroundColor(.black)
+                            .font(.system(size: 28, weight: .black, design: .default))
+                            .foregroundColor(Color(hex: 0x6D400F))
                         Spacer()
                     }
                     .padding(.top, 20)
@@ -93,50 +91,48 @@ struct DefaultListPersonal: View {
                     HStack {
                         Text(description.isEmpty ? "No description yet…" : description)
                             .lineLimit(3)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.gray)
+                            .font(.system(size: 12, weight: .bold, design: .default))
+                            .foregroundColor(Color(hex: 0x925611))
                         Spacer()
                     }
                     .padding(.top, 5)
                     .padding(.leading, 20)
                     
-                    HStack(spacing: 10) {
-                        HStack {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 4) {
                             Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
-                                .font(.caption)
-                                .fontWeight(.bold)
+                                .font(.system(size: 12, weight: .bold, design: .default))
                                 .foregroundColor(.white)
-                                .padding(.vertical, 5)
-                                .padding(.leading, 7)
+                                .padding(.leading, 10)
                             Text(isPrivate ? "Private" : "Public")
+                                .font(.system(size: 12, weight: .bold, design: .default))
                                 .foregroundColor(.white)
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .padding(.trailing, 7)
+                                .padding(.trailing, 10)
+                                .padding(.vertical, 8)
                         }
                         .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(isPrivate ? .orange : .blue)
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(hex: 0xF2AB69))
                         )
                         
                         if let cat = category {
-                            HStack {
+                            HStack(spacing: 4) {
                                 Image(systemName: cat.icon)
                                     .font(.caption)
                                     .fontWeight(.bold)
                                     .foregroundColor(.white)
-                                    .padding(.vertical, 5)
-                                    .padding(.leading, 7)
+                                    .padding(.leading, 10)
                                 Text(cat.name)
+                                    .font(.system(size: 12, weight: .bold, design: .default))
                                     .foregroundColor(.white)
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .padding(.trailing, 7)
+                                    .padding(.trailing, 10)
+                                    .padding(.vertical, 8)
+                                
                             }
                             .background(
-                                RoundedRectangle(cornerRadius: 8)
+                                RoundedRectangle(cornerRadius: 12)
                                     .fill(categoryChipIconColors[cat.name] ?? .gray)
+                                    .opacity(0.6)
                             )
                         }
                         
@@ -146,8 +142,6 @@ struct DefaultListPersonal: View {
                     .padding(.leading, 20)
                 }
                 .padding(.bottom, 5)
-                
-                Divider()
                 
                 VStack {
                     ScrollView {
@@ -208,7 +202,8 @@ struct DefaultListPersonal: View {
                                     }
                                 }
                         }
-                        .padding(.vertical, 5)
+                        .padding(.top, 5)
+                        .padding(.bottom, 70)
                     }
                     Spacer()
                 }
@@ -218,8 +213,11 @@ struct DefaultListPersonal: View {
                 Spacer()
                 Rectangle()
                     .frame(height: 90)
-                    .foregroundColor(.gray.opacity(0.8))
+                    .foregroundColor(tabBarPresent ? Color(hex: 0xFFEBC2) : .white)
                     .blur(radius: 23)
+                    .opacity(tabBarPresent ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.4), value: tabBarPresent) // ✅ Fast fade animation
+                    .ignoresSafeArea()
             }
             .ignoresSafeArea()
             
@@ -293,7 +291,7 @@ struct DefaultListPersonal: View {
                                 .font(.caption2)
                                 .fontWeight(.semibold)
                         }
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color(hex: 0x925610))
                         .frame(maxWidth: .infinity)
                         .contentShape(.rect)
                         .onTapGesture {
@@ -301,12 +299,24 @@ struct DefaultListPersonal: View {
                             switch tab {
                             case .addItems:
                                 showAddItemsSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .editDetails:
                                 showEditDetailsSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .reRank:
                                 showReorderSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .exit:
                                 showExitSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .empty:
                                 dismiss()
                             }
@@ -317,7 +327,21 @@ struct DefaultListPersonal: View {
             }
             .interactiveDismissDisabled(true)
             .presentationDetents([.height(80)])
+            .presentationBackground((Color(hex: 0xfff9ee)))
             .presentationBackgroundInteraction(.enabled)
+            .onAppear {
+                tabBarPresent = false      // Start from invisible
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        tabBarPresent = true
+                    }
+                }
+            }
+            .onDisappear {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    tabBarPresent = false
+                }
+            }
         }
     }
     
@@ -522,7 +546,7 @@ struct DefaultListPersonalExit: View {
                 onSave()        // run save in parent
                 dismiss()       // dismiss ExitSheetView
             } label: {
-                Text("Publish Ranko")
+                Text("Save Ranko")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .foregroundColor(.white)

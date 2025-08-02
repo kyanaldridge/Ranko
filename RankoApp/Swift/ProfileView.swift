@@ -32,6 +32,9 @@ struct ProfileView: View {
     @State private var animatedTags: Set<String> = []
     
     @State private var featuredLists: [Int: RankoList] = [:]
+    @State private var featuredLoading: Bool = true
+    @State private var featuredLoadFailed: Bool = false
+    @State private var retryCount: Int = 0
     @State private var slotToSelect: Int?
     @State private var slotToUnpin: Int?
     @State private var showUnpinAlert = false
@@ -290,7 +293,6 @@ struct ProfileView: View {
                         .buttonStyle(.glassProminent)
                     }
                     .padding(.bottom, 20)
-                    
                     VStack {
                         HStack {
                             Text("Featured")
@@ -299,82 +301,117 @@ struct ProfileView: View {
                             Spacer()
                         }
                         .padding(.bottom, 5)
+
                         VStack(spacing: 13) {
-                            // Show filled slots first
                             let filledSlots = featuredLists.keys.sorted()
                             let emptySlots = (1...10).filter { !featuredLists.keys.contains($0) }
 
-                            ForEach(filledSlots, id: \.self) { slot in
+                            // ✅ If loading or failed, show placeholders
+                            if featuredLoading {
                                 HStack {
-                                    Button {
-                                        if let list = featuredLists[slot] {
-                                            // open the existing Ranko
-                                            selectedFeaturedList = list
+                                    ThreeRectanglesAnimation(rectangleWidth: 60, rectangleMaxHeight: 110, rectangleSpacing: 8, rectangleCornerRadius: 6, animationDuration: 0.6)
+                                        .frame(height: 140)
+                                        .padding()
+                                }
+                                .frame(height: 208)
+                                .background(RoundedRectangle(cornerRadius: 10)
+                                    .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                         startPoint: .top,
+                                                         endPoint: .bottom
+                                                        )
+                                          )
+                                )
+                                .padding(.bottom, 120)
+                                
+                            } else if featuredLoadFailed {
+                                // ❌ If failed after 3 attempts, show retry buttons
+                                ForEach(1...10, id: \.self) { slot in
+                                    HStack {
+                                        Button {
+                                            retryFeaturedLoading()
+                                        } label: {
+                                            HStack {
+                                                Spacer()
+                                                Image(systemName: "arrow.clockwise")
+                                                    .font(.system(size: 24, weight: .black))
+                                                    .foregroundColor(Color(hex: 0x7E5F46))
+                                                Spacer()
+                                            }
+                                            .frame(height: 52)
                                         }
-                                    } label: {
-                                        if let list = featuredLists[slot] {
-                                            if list.type == "default" {
-                                                DefaultListIndividualGallery(listData: list, type: "featured", onUnpin: {
-                                                    slotToUnpin = slot
-                                                    showUnpinAlert = true
-                                                })
-                                                .contextMenu {
-                                                    Button(action: {
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                             startPoint: .top,
+                                                             endPoint: .bottom
+                                                            )
+                                        )
+                                        .buttonStyle(.glassProminent)
+                                        .disabled(false)
+                                    }
+                                }
+                            } else {
+                                // ✅ Normal loaded state
+                                ForEach(filledSlots, id: \.self) { slot in
+                                    HStack {
+                                        Button {
+                                            if let list = featuredLists[slot] {
+                                                selectedFeaturedList = list
+                                            }
+                                        } label: {
+                                            if let list = featuredLists[slot] {
+                                                if list.type == "default" {
+                                                    DefaultListIndividualGallery(listData: list, type: "featured", onUnpin: {
                                                         slotToUnpin = slot
                                                         showUnpinAlert = true
-                                                    }) {
-                                                        Label("Unpin", systemImage: "pin.slash")
+                                                    })
+                                                    .contextMenu {
+                                                        Button(action: {
+                                                            slotToUnpin = slot
+                                                            showUnpinAlert = true
+                                                        }) {
+                                                            Label("Unpin", systemImage: "pin.slash")
+                                                        }
+                                                        .foregroundColor(Color(hex: 0xFF9864))
                                                     }
-                                                    .foregroundColor(Color(hex: 0xFF9864))
-                                                }
-                                            } else if list.type == "group" {
-                                                GroupListIndividualGallery(listData: list, type: "featured", onUnpin: {
-                                                    slotToUnpin = slot
-                                                    showUnpinAlert = true
-                                                })
-                                                .contextMenu {
-                                                    Button(action: {
+                                                } else {
+                                                    GroupListIndividualGallery(listData: list, type: "featured", onUnpin: {
                                                         slotToUnpin = slot
                                                         showUnpinAlert = true
-                                                    }) {
-                                                        Label("Unpin", systemImage: "pin.slash")
-                                                    }
-                                                    .foregroundColor(Color(hex: 0xFF9864))
+                                                    })
                                                 }
                                             }
                                         }
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                             startPoint: .top,
+                                                             endPoint: .bottom
+                                                            )
+                                        )
+                                        .buttonStyle(.glassProminent)
                                     }
-                                    .foregroundColor(Color(hex: 0xFF9864))
-                                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                                         startPoint: .top,
-                                                         endPoint: .bottom
-                                                        ))
-                                    .buttonStyle(.glassProminent)
-                                    Spacer()
                                 }
-                            }
 
-                            // Then show empty placeholder slots
-                            ForEach(emptySlots, id: \.self) { slot in
-                                HStack {
-                                    Button {
-                                        slotToSelect = slot
-                                    } label: {
-                                        HStack {
-                                            Spacer()
-                                            Image(systemName: "plus")
-                                                .font(.system(size: 24, weight: .black))
-                                                .foregroundColor(Color(hex: 0x7E5F46))
-                                            Spacer()
+                                ForEach(emptySlots, id: \.self) { slot in
+                                    HStack {
+                                        Button {
+                                            slotToSelect = slot
+                                        } label: {
+                                            HStack {
+                                                Spacer()
+                                                Image(systemName: "plus")
+                                                    .font(.system(size: 24, weight: .black))
+                                                    .foregroundColor(Color(hex: 0x7E5F46))
+                                                Spacer()
+                                            }
+                                            .frame(height: 52)
                                         }
-                                        .frame(height: 52)
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                             startPoint: .top,
+                                                             endPoint: .bottom
+                                                            ))
+                                        .buttonStyle(.glassProminent)
                                     }
-                                    .foregroundColor(Color(hex: 0xFF9864))
-                                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                                         startPoint: .top,
-                                                         endPoint: .bottom
-                                                        ))
-                                    .buttonStyle(.glassProminent)
                                 }
                             }
                         }
@@ -453,7 +490,7 @@ struct ProfileView: View {
                         }
                     }
                 }
-                .sheet(item: $selectedFeaturedList) { list in
+                .fullScreenCover(item: $selectedFeaturedList) { list in
                     if list.type == "default" {
                         DefaultListPersonal(listID: list.id){ updatedItem in }
                     } else if list.type == "group" {
@@ -468,7 +505,7 @@ struct ProfileView: View {
                         isLoadingLists = false
                     }
                     loadFollowStats()
-                    loadFeaturedSlots()
+                    tryLoadFeaturedRankos()
                 }
                 .onAppear {
                     listViewID     = UUID()
@@ -477,7 +514,7 @@ struct ProfileView: View {
                         isLoadingLists = false
                     }
                     loadFollowStats()
-                    loadFeaturedSlots()
+                    tryLoadFeaturedRankos()
                     loadProfileImage(from: user_data.userProfilePicture)
                     loadNumberOfRankos()
                     
@@ -710,39 +747,88 @@ struct ProfileView: View {
         }
     }
     
-    private func loadFeaturedSlots() {
-        guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else { print("Skipping loadFeaturedSlots: uid is empty"); return }
+    private func retryFeaturedLoading() {
+        featuredLoadFailed = false
+        featuredLoading = true
+        retryCount = 0
+        tryLoadFeaturedRankos()
+    }
+
+    private func tryLoadFeaturedRankos() {
+        guard retryCount < 3 else {
+            DispatchQueue.main.async {
+                self.featuredLoading = false
+                self.featuredLoadFailed = true
+            }
+            return
+        }
+        retryCount += 1
+
+        // Attempt Firebase fetch
+        guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
+            print("❌ No UID found, retrying...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
+            return
+        }
+
         let baseRef = Database.database()
             .reference()
             .child("UserData")
             .child(uid)
             .child("UserFeatured")
-        
-        for slot in 1...10 {
-            baseRef.child("\(slot)").getData { error, snap in
-                guard
-                    error == nil,
-                    let listID = snap?.value as? String
-                else { return }
-                fetchFeaturedList(slot: slot, listID: listID)
+
+        baseRef.getData { error, snapshot in
+            if let error = error {
+                print("❌ Firebase error: \(error.localizedDescription), retrying...")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
+                return
+            }
+
+            guard let snap = snapshot, snap.exists() else {
+                print("⚠️ No featured rankos found")
+                DispatchQueue.main.async {
+                    self.featuredLists = [:]
+                    self.featuredLoading = false
+                }
+                return
+            }
+
+            // ✅ Successfully connected
+            var tempLists: [Int: RankoList] = [:]
+            let group = DispatchGroup()
+
+            for child in snap.children.allObjects as? [DataSnapshot] ?? [] {
+                if let slot = Int(child.key), let listID = child.value as? String {
+                    group.enter()
+                    fetchFeaturedList(slot: slot, listID: listID) {
+                        if let list = $0 { tempLists[slot] = list }
+                        group.leave()
+                    }
+                }
+            }
+
+            group.notify(queue: .main) {
+                self.featuredLists = tempLists
+                self.featuredLoading = false
+                print("✅ Featured Rankos loaded successfully")
             }
         }
     }
 
-    private func fetchFeaturedList(slot: Int, listID: String) {
+    // ✅ Modified fetchFeaturedList to support completion
+    private func fetchFeaturedList(slot: Int, listID: String, completion: @escaping (RankoList?) -> Void) {
         let listRef = Database.database()
             .reference()
             .child("RankoData")
             .child(listID)
-        
+
         listRef.observeSingleEvent(of: .value) { snap in
-            guard
-                let dict = snap.value as? [String:Any],
-                let rl = parseListData(dict: dict, id: listID)
-            else { return }
-            DispatchQueue.main.async {
-                featuredLists[slot] = rl
+            guard let dict = snap.value as? [String: Any],
+                  let rl = parseListData(dict: dict, id: listID) else {
+                completion(nil)
+                return
             }
+            completion(rl)
         }
     }
     
@@ -3329,3 +3415,5 @@ struct AppIconGridItem: View {
 //        }
 //    }
 //}
+
+

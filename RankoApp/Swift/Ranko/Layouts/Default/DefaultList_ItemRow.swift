@@ -82,7 +82,7 @@ struct DefaultListItemRow: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color(hex: 0xfff9ee))
                 .stroke(Color(hex: 0xFFEBC2), lineWidth: 2)
-                .shadow(color: Color(hex: 0xFFEBC2), radius: 7)
+                .shadow(color: Color(hex: 0xFFEBC2), radius: 12)
         )
         .padding(.horizontal)
     }

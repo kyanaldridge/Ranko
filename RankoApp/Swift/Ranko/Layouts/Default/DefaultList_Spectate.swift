@@ -34,6 +34,7 @@ struct DefaultListSpectate: View {
     // Sheets & states
     @State private var spectateProfile: Bool = false
     @State private var showTabBar = true
+    @State private var tabBarPresent = false
     @State var showEditDetailsSheet = false
     @State var showAddItemsSheet = false
     @State var showReorderSheet = false
@@ -71,16 +72,13 @@ struct DefaultListSpectate: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.white.ignoresSafeArea()
-            
+            Color(hex: 0xFFF5E1).ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: 7) {
                     HStack {
                         Text(rankoName)
-                            .font(.title)
-                            .fontWeight(.black)
-                            .fontDesign(.rounded)
-                            .foregroundColor(.black)
+                            .font(.system(size: 28, weight: .black, design: .default))
+                            .foregroundColor(Color(hex: 0x6D400F))
                         Spacer()
                     }
                     .padding(.top, 20)
@@ -89,84 +87,99 @@ struct DefaultListSpectate: View {
                     HStack {
                         Text(description.isEmpty ? "No description yet…" : description)
                             .lineLimit(3)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.gray)
+                            .font(.system(size: 12, weight: .bold, design: .default))
+                            .foregroundColor(Color(hex: 0x925611))
                         Spacer()
                     }
                     .padding(.top, 5)
                     .padding(.leading, 20)
                     
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                            HStack {
+                        HStack(spacing: 8) {
+                            HStack(spacing: 4) {
                                 Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
+                                    .font(.system(size: 12, weight: .bold, design: .default))
                                     .foregroundColor(.white)
-                                    .padding(.vertical, 5)
-                                    .padding(.leading, 7)
+                                    .padding(.leading, 10)
                                 Text(isPrivate ? "Private" : "Public")
+                                    .font(.system(size: 12, weight: .bold, design: .default))
                                     .foregroundColor(.white)
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .padding(.trailing, 7)
+                                    .padding(.trailing, 10)
+                                    .padding(.vertical, 8)
                             }
                             .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(isPrivate ? .orange : .blue)
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(hex: 0xF2AB69))
                             )
                             
                             if let cat = category {
-                                HStack {
+                                HStack(spacing: 4) {
                                     Image(systemName: cat.icon)
                                         .font(.caption)
                                         .fontWeight(.bold)
                                         .foregroundColor(.white)
-                                        .padding(.vertical, 5)
-                                        .padding(.leading, 7)
+                                        .padding(.leading, 10)
                                     Text(cat.name)
+                                        .font(.system(size: 12, weight: .bold, design: .default))
                                         .foregroundColor(.white)
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .padding(.trailing, 7)
+                                        .padding(.trailing, 10)
+                                        .padding(.vertical, 8)
+                                    
                                 }
                                 .background(
-                                    RoundedRectangle(cornerRadius: 8)
+                                    RoundedRectangle(cornerRadius: 12)
                                         .fill(categoryChipIconColors[cat.name] ?? .gray)
+                                        .opacity(0.6)
                                 )
                             }
                             
                             HStack(spacing: 7) {
                                 Group {
                                     if let img = creatorImage {
-                                        Image(uiImage: img)
-                                            .resizable()
+                                        ZStack {
+                                            Circle()
+                                                .fill(Color.white)
+                                                .frame(width: 18, height: 18)
+                                            Image(uiImage: img)
+                                                .resizable()
+                                        }
+                                        .clipShape(Circle())
+                                        
                                     } else {
-                                        SkeletonView(Circle())
-                                            .frame(width: 18, height: 18)
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .fill(Color.white.opacity(0.8))
+                                                .frame(width: 18, height: 18)
+                                            HStack {
+                                                Spacer()
+                                                ThreeRectanglesAnimation(rectangleWidth: 4, rectangleMaxHeight: 12, rectangleSpacing: 1, rectangleCornerRadius: 1, animationDuration: 0.4)
+                                                    .frame(height: 18)
+                                                Spacer()
+                                            }
+                                        }
                                     }
                                 }
                                 .frame(width: 18, height: 18)
-                                .clipShape(Circle())
+                                .padding(.leading, 10)
                                 Text(creatorName)
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.black.opacity(0.9))
+                                    .font(.system(size: 12, weight: .bold, design: .default))
+                                    .foregroundColor(.white)
+                                    .padding(.trailing, 10)
+                                    .padding(.vertical, 8)
                             }
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(hex: 0xF2AB69))
+                            )
                             .onTapGesture {
                                 spectateProfile = true
                             }
-                            
-                            Spacer()
                         }
                         .padding(.top, 5)
                         .padding(.leading, 20)
                     }
                 }
                 .padding(.bottom, 5)
-                
-                Divider()
                 
                 VStack {
                     ScrollView {
@@ -201,7 +214,8 @@ struct DefaultListSpectate: View {
                                     }
                                 }
                         }
-                        .padding(.vertical, 5)
+                        .padding(.top, 5)
+                        .padding(.bottom, 70)
                     }
                     Spacer()
                 }
@@ -211,14 +225,14 @@ struct DefaultListSpectate: View {
                 Spacer()
                 Rectangle()
                     .frame(height: 90)
-                    .foregroundColor(.gray.opacity(0.8))
+                    .foregroundColor(tabBarPresent ? Color(hex: 0xFFEBC2) : .white)
                     .blur(radius: 23)
+                    .opacity(tabBarPresent ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.4), value: tabBarPresent) // ✅ Fast fade animation
+                    .ignoresSafeArea()
             }
             .ignoresSafeArea()
             
-        }
-        .onAppear {
-            loadListFromFirebase()
         }
         .sheet(isPresented: $showAddItemsSheet) {
             FilterChipPickerView(
@@ -286,7 +300,7 @@ struct DefaultListSpectate: View {
                                 .font(.caption2)
                                 .fontWeight(.semibold)
                         }
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color(hex: 0x925610))
                         .frame(maxWidth: .infinity)
                         .contentShape(.rect)
                         .onTapGesture {
@@ -294,12 +308,24 @@ struct DefaultListSpectate: View {
                             switch tab {
                             case .addItems:
                                 showAddItemsSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .editDetails:
                                 showEditDetailsSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .reRank:
                                 showReorderSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .exit:
                                 showExitSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .empty:
                                 dismiss()
                             }
@@ -310,7 +336,21 @@ struct DefaultListSpectate: View {
             }
             .interactiveDismissDisabled(true)
             .presentationDetents([.height(80)])
+            .presentationBackground((Color(hex: 0xfff9ee)))
             .presentationBackgroundInteraction(.enabled)
+            .onAppear {
+                tabBarPresent = false      // Start from invisible
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        tabBarPresent = true
+                    }
+                }
+            }
+            .onDisappear {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    tabBarPresent = false
+                }
+            }
         }
         .onAppear {
             fetchCreatorName()
@@ -333,7 +373,7 @@ struct DefaultListSpectate: View {
         let ref = Database.database().reference()
             .child("UserData")
             .child(creatorID)
-            .child("ProfilePicture")
+            .child("UserProfilePicture")
         ref.getData { _, snap in
             if let path = snap?.value as? String {
                 Storage.storage().reference().child(path)
