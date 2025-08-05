@@ -27,6 +27,7 @@ struct GroupListView: View {
     
     // Sheet states
     @State private var showTabBar = true
+    @State private var tabBarPresent = false
     @State private var showEmbeddedStickyPoolSheet = false
     @State var showEditDetailsSheet = false
     @State var showAddItemsSheet = false
@@ -83,62 +84,66 @@ struct GroupListView: View {
     
     var body: some View {
         ZStack(alignment: .top) {
-            Color.white.ignoresSafeArea()
-            
+            Color(hex: 0xFFF5E1).ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: 7) {
                     HStack {
                         Text(rankoName)
-                            .font(.title)
-                            .fontWeight(.black)
-                            .fontDesign(.rounded)
-                            .foregroundColor(.black)
+                            .font(.system(size: 28, weight: .black, design: .default))
+                            .foregroundColor(Color(hex: 0x6D400F))
                         Spacer()
                     }
                     .padding(.top, 20)
                     .padding(.leading, 20)
                     
-                    
                     HStack {
                         Text(description.isEmpty ? "No description yet…" : description)
                             .lineLimit(3)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.gray)
+                            .font(.system(size: 12, weight: .bold, design: .default))
+                            .foregroundColor(Color(hex: 0x925611))
                         Spacer()
                     }
                     .padding(.top, 5)
                     .padding(.leading, 20)
                     
-                    HStack(spacing: 10) {
-                        HStack {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 4) {
                             Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
+                                .font(.system(size: 12, weight: .bold, design: .default))
                                 .foregroundColor(.white)
-                                .padding(.vertical, 5)
-                                .padding(.leading, 7)
-                                .font(.caption)
+                                .padding(.leading, 10)
                             Text(isPrivate ? "Private" : "Public")
+                                .font(.system(size: 12, weight: .bold, design: .default))
                                 .foregroundColor(.white)
-                                .fontWeight(.bold)
-                                .padding(.trailing, 7)
-                                .font(.caption)
+                                .padding(.trailing, 10)
+                                .padding(.vertical, 8)
                         }
-                        .background(RoundedRectangle(cornerRadius: 8))
-                        .foregroundColor(isPrivate ? .orange : .blue)
-                        HStack {
-                            Image(systemName: category!.icon)
-                                .foregroundColor(.white)
-                                .padding(.vertical, 5)
-                                .padding(.leading, 7)
-                                .font(.caption)
-                            Text(category!.name)
-                                .foregroundColor(.white)
-                                .fontWeight(.bold)
-                                .padding(.trailing, 7)
-                                .font(.caption)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(hex: 0xF2AB69))
+                        )
+                        
+                        if let cat = category {
+                            HStack(spacing: 4) {
+                                Image(systemName: cat.icon)
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .padding(.leading, 10)
+                                Text(cat.name)
+                                    .font(.system(size: 12, weight: .bold, design: .default))
+                                    .foregroundColor(.white)
+                                    .padding(.trailing, 10)
+                                    .padding(.vertical, 8)
+                                
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(categoryChipIconColors[cat.name] ?? .gray)
+                                    .opacity(0.6)
+                            )
                         }
-                        .background(RoundedRectangle(cornerRadius: 8))
-                        .foregroundColor(categoryChipIconColors[category!.name])
+                        
                         Spacer()
                         
                         HStack(spacing: 3) {
@@ -146,15 +151,15 @@ struct GroupListView: View {
                             Button(action: { groupViewMode = .defaultList }) {
                                 VStack(spacing: 4) {
                                     Image(systemName: "rectangle.compress.vertical")
-                                        .font(.caption)
-                                        .foregroundColor(groupViewMode == .defaultList ? .blue : .gray)
+                                        .font(.system(size: 14, weight: .medium, design: .default))
+                                        .foregroundColor(groupViewMode == .defaultList ? Color(hex: 0x6D400F) : Color(hex: 0xEDB26E))
                                         .padding(.bottom, 2)
                                     if groupViewMode == .defaultList {
                                         // Blue glowing underline when selected
                                         Rectangle()
-                                            .fill(Color.blue)
+                                            .fill(Color(hex: 0x6D400F))
                                             .frame(width: 30, height: 2)
-                                            .shadow(color: .blue.opacity(0.6), radius: 4, x: 0, y: 0)
+                                            .shadow(color: Color(hex: 0x6D400F).opacity(0.6), radius: 4, x: 0, y: 0)
                                     } else {
                                         Color.clear.frame(width: 30, height: 2)
                                     }
@@ -166,11 +171,11 @@ struct GroupListView: View {
                                 VStack(spacing: 4) {
                                     Image(systemName: "square.grid.2x2")
                                         .font(.caption)
-                                        .foregroundColor(groupViewMode == .largeGrid ? .blue : .gray)
+                                        .foregroundColor(groupViewMode == .largeGrid ? Color(hex: 0x6D400F) : Color(hex: 0xEDB26E))
                                         .padding(.bottom, 2)
                                     if groupViewMode == .largeGrid {
                                         Rectangle()
-                                            .fill(Color.blue)
+                                            .fill(Color(hex: 0x6D400F))
                                             .frame(width: 30, height: 2)
                                             .shadow(color: .blue.opacity(0.6), radius: 4, x: 0, y: 0)
                                     } else {
@@ -184,13 +189,13 @@ struct GroupListView: View {
                                 VStack(spacing: 4) {
                                     Image(systemName: "inset.filled.topleft.topright.bottomleft.bottomright.rectangle")
                                         .font(.caption)
-                                        .foregroundColor(groupViewMode == .biggerList ? .blue : .gray)
+                                        .foregroundColor(groupViewMode == .biggerList ? Color(hex: 0x6D400F) : Color(hex: 0xEDB26E))
                                         .padding(.bottom, 2)
                                     if groupViewMode == .biggerList {
                                         Rectangle()
-                                            .fill(Color.blue)
+                                            .fill(Color(hex: 0x6D400F))
                                             .frame(width: 30, height: 2)
-                                            .shadow(color: .blue.opacity(0.6), radius: 4, x: 0, y: 0)
+                                            .shadow(color: Color(hex: 0x6D400F).opacity(0.6), radius: 4, x: 0, y: 0)
                                     } else {
                                         Color.clear.frame(width: 30, height: 2)
                                     }
@@ -232,7 +237,7 @@ struct GroupListView: View {
                                     }
                                     .padding(.vertical, 12)
                                     .frame(maxWidth: .infinity)
-                                    .background(Color.blue)
+                                    .background(Color(hex: 0x6D400F))
                                     .cornerRadius(8)
                                     .padding(.horizontal)
                                 }
@@ -269,7 +274,7 @@ struct GroupListView: View {
                                     }
                                     .padding(.vertical, 12)
                                     .frame(maxWidth: .infinity)
-                                    .background(Color.blue)
+                                    .background(Color(hex: 0x6D400F))
                                     .cornerRadius(8)
                                     .padding(.horizontal)
                                 }
@@ -307,7 +312,7 @@ struct GroupListView: View {
                                     }
                                     .padding(.vertical, 12)
                                     .frame(maxWidth: .infinity)
-                                    .background(Color.blue)
+                                    .background(Color(hex: 0x6D400F))
                                     .cornerRadius(8)
                                     .padding(.horizontal)
                                 }
@@ -328,8 +333,11 @@ struct GroupListView: View {
                 Spacer()
                 Rectangle()
                     .frame(height: 90)
-                    .foregroundColor(.gray.opacity(0.8))
+                    .foregroundColor(tabBarPresent ? Color(hex: 0xFFEBC2) : .white)
                     .blur(radius: 23)
+                    .opacity(tabBarPresent ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.4), value: tabBarPresent) // ✅ Fast fade animation
+                    .ignoresSafeArea()
             }
             .ignoresSafeArea()
             
@@ -405,7 +413,7 @@ struct GroupListView: View {
                                 .font(.caption2)
                                 .fontWeight(.semibold)
                         }
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color(hex: 0x925610))
                         .frame(maxWidth: .infinity)
                         .contentShape(.rect)
                         .onTapGesture {
@@ -413,12 +421,24 @@ struct GroupListView: View {
                             switch tab {
                             case .addItems:
                                 showAddItemsSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .editDetails:
                                 showEditDetailsSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .reRank:
                                 showReorderSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .exit:
                                 showExitSheet = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    tabBarPresent = false
+                                }
                             case .empty:
                                 dismiss()
                             }
@@ -429,7 +449,21 @@ struct GroupListView: View {
             }
             .interactiveDismissDisabled(true)
             .presentationDetents([.height(80)])
+            .presentationBackground((Color(hex: 0xfff9ee)))
             .presentationBackgroundInteraction(.enabled)
+            .onAppear {
+                tabBarPresent = false      // Start from invisible
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        tabBarPresent = true
+                    }
+                }
+            }
+            .onDisappear {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    tabBarPresent = false
+                }
+            }
         }
         .sheet(item: $selectedDetailItem) { tappedItem in
             let rowIndex = groupedItems.firstIndex { row in
@@ -694,31 +728,26 @@ struct GroupListView: View {
             HStack(alignment: .top, spacing: 8) {
                 // badge
                 VStack(alignment: .center) {
-                    Group {
-                        switch rowIndex {
-                        case 0:
-                            Image(systemName: "1.circle.fill")
-                                .foregroundColor(Color(red: 1, green: 0.65, blue: 0))
-                                .font(.body)
-                                .padding(3)
-                        case 1:
-                            Image(systemName: "2.circle.fill")
-                                .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698))
-                                .font(.body)
-                                .padding(3)
-                        case 2:
-                            Image(systemName: "3.circle.fill")
-                                .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0))
-                                .font(.body)
-                                .padding(3)
-                        default:
-                            Text("\(rowIndex + 1)")
-                                .font(.caption)
-                                .padding(5)
-                                .fontWeight(.heavy)
+                    ZStack {
+                        Image(systemName: "\(rowIndex + 1).circle")
+                            .foregroundColor(Color(hex: 0xFFFFFF)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                        
+                        Group {
+                            switch rowIndex {
+                            case 0:
+                                Image(systemName: "1.circle.fill").foregroundColor(Color(red: 1, green: 0.65, blue: 0)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            case 1:
+                                Image(systemName: "2.circle.fill")
+                                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            case 2:
+                                Image(systemName: "3.circle.fill")
+                                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            default:
+                                Image(systemName: "\(rowIndex + 1).circle.fill")
+                                    .foregroundColor(Color(hex: 0x925611)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            }
                         }
                     }
-                    .font(.title2)
                     .padding(.top, 10)
                     
                     let enumeratedItems = Array(items.enumerated())
@@ -739,9 +768,10 @@ struct GroupListView: View {
                 }
             }
             .frame(minHeight: 60)
-            .background(Color.white)
-            .cornerRadius(8)
-            .shadow(radius: 4)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: 0xFFE7B5))
+            )
             .overlay(highlightOverlay)
             .animation(.easeInOut(duration: 0.25), value: hoveredRow)
             .onDrop(of: ["public.text"], delegate:
@@ -758,8 +788,8 @@ struct GroupListView: View {
         private var highlightOverlay: some View {
             if hoveredRow == rowIndex {
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.blue, lineWidth: 2)
-                    .shadow(color: Color.blue.opacity(0.6), radius: 8)
+                    .stroke(Color(hex: 0x6D400F), lineWidth: 2)
+                    .shadow(color: Color(hex: 0x6D400F).opacity(0.6), radius: 8)
             }
         }
     }
@@ -778,15 +808,26 @@ struct GroupListView: View {
             HStack(alignment: .top, spacing: 8) {
                 // badge
                 VStack(alignment: .center) {
-                    Group {
-                        switch rowIndex {
-                        case 0: Image(systemName: "1.circle.fill").foregroundColor(Color(red: 1, green: 0.65, blue: 0)).font(.body).padding(3)
-                        case 1: Image(systemName: "2.circle.fill").foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698)).font(.body).padding(3)
-                        case 2: Image(systemName: "3.circle.fill").foregroundColor(Color(red: 0.56, green: 0.33, blue: 0)).font(.body).padding(3)
-                        default: Text("\(rowIndex + 1)").font(.caption).padding(5).fontWeight(.heavy)
+                    ZStack {
+                        Image(systemName: "\(rowIndex + 1).circle")
+                            .foregroundColor(Color(hex: 0xFFFFFF)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                        
+                        Group {
+                            switch rowIndex {
+                            case 0:
+                                Image(systemName: "1.circle.fill").foregroundColor(Color(red: 1, green: 0.65, blue: 0)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            case 1:
+                                Image(systemName: "2.circle.fill")
+                                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            case 2:
+                                Image(systemName: "3.circle.fill")
+                                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            default:
+                                Image(systemName: "\(rowIndex + 1).circle.fill")
+                                    .foregroundColor(Color(hex: 0x925611)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            }
                         }
                     }
-                    .font(.title2)
                     .padding(.top, 10)
                     
                     // items
@@ -805,9 +846,10 @@ struct GroupListView: View {
                 }
             }
             .frame(minHeight: 60)
-            .background(Color.white)
-            .cornerRadius(8)
-            .shadow(radius: 4)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: 0xFFE7B5))
+            )
             .overlay(highlightOverlay)
             .animation(.easeInOut(duration: 0.25), value: hoveredRow)
             .onDrop(of: ["public.text"], delegate:
@@ -824,8 +866,8 @@ struct GroupListView: View {
         private var highlightOverlay: some View {
             if hoveredRow == rowIndex {
                 RoundedRectangle(cornerRadius: 8)
-                  .stroke(Color.blue, lineWidth: 2)
-                  .shadow(color: Color.blue.opacity(0.6), radius: 8)
+                  .stroke(Color(hex: 0x6D400F), lineWidth: 2)
+                  .shadow(color: Color(hex: 0x6D400F).opacity(0.6), radius: 8)
             }
         }
     }
@@ -844,15 +886,27 @@ struct GroupListView: View {
             HStack(alignment: .top, spacing: 8) {
                 // badge
                 VStack(alignment: .center) {
-                    Group {
-                        switch rowIndex {
-                        case 0: Image(systemName: "1.circle.fill").foregroundColor(Color(red: 1, green: 0.65, blue: 0)).font(.body).padding(3)
-                        case 1: Image(systemName: "2.circle.fill").foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698)).font(.body).padding(3)
-                        case 2: Image(systemName: "3.circle.fill").foregroundColor(Color(red: 0.56, green: 0.33, blue: 0)).font(.body).padding(3)
-                        default: Text("\(rowIndex + 1)").font(.caption).padding(5).fontWeight(.heavy)
+                    ZStack {
+                        Image(systemName: "\(rowIndex + 1).circle")
+                            .foregroundColor(Color(hex: 0xFFFFFF)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                        
+                        Group {
+                            switch rowIndex {
+                            case 0:
+                                Image(systemName: "1.circle.fill").foregroundColor(Color(red: 1, green: 0.65, blue: 0)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            case 1:
+                                Image(systemName: "2.circle.fill")
+                                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            case 2:
+                                Image(systemName: "3.circle.fill")
+                                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            default:
+                                Image(systemName: "\(rowIndex + 1).circle.fill")
+                                    .foregroundColor(Color(hex: 0x925611)).font(.system(size: 22, weight: .bold, design: .default)).padding(3)
+                            }
                         }
                     }
-                    .font(.title2)
+                    
                     .padding(.top, 10)
                     
                     // items
@@ -870,9 +924,10 @@ struct GroupListView: View {
                 }
             }
             .frame(minHeight: 60)
-            .background(Color.white)
-            .cornerRadius(8)
-            .shadow(radius: 4)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: 0xFFE7B5))
+            )
             .overlay(highlightOverlay)
             .animation(.easeInOut(duration: 0.25), value: hoveredRow)
             .onDrop(of: ["public.text"], delegate:
@@ -889,8 +944,8 @@ struct GroupListView: View {
         private var highlightOverlay: some View {
             if hoveredRow == rowIndex {
                 RoundedRectangle(cornerRadius: 8)
-                  .stroke(Color.blue, lineWidth: 2)
-                  .shadow(color: Color.blue.opacity(0.6), radius: 8)
+                  .stroke(Color(hex: 0x6D400F), lineWidth: 2)
+                  .shadow(color: Color(hex: 0x6D400F).opacity(0.6), radius: 8)
             }
         }
     }
@@ -984,6 +1039,120 @@ enum GroupListTab: String, CaseIterable {
 }
 
 
+struct GroupSelectedItemRow: View {
+    let item: AlgoliaRankoItem
+
+    var body: some View {
+        HStack(spacing: 6) {
+            AsyncImage(url: URL(string: item.itemImage)) { phase in
+                switch phase {
+                case .empty:
+                    Color.gray.frame(width: 30, height: 30)
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 30, height: 30)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                case .failure:
+                    Color.gray.frame(width: 30, height: 30)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+
+            VStack(alignment: .leading) {
+                Text(item.itemName)
+                    .font(.system(size: 13, weight: .bold, design: .default))
+                    .foregroundColor(Color(hex: 0x6D400F))
+            }
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(hex: 0xFFF5E1))
+                .stroke(Color(hex: 0xFFEBC2), lineWidth: 2)
+                .shadow(color: Color(hex: 0xFFEBC2), radius: 12)
+        )
+    }
+}
+
+struct GroupSelectedItemRow2: View {
+    let item: AlgoliaRankoItem
+
+    var body: some View {
+        VStack(spacing: 12) {
+            AsyncImage(url: URL(string: item.itemImage)) { phase in
+                switch phase {
+                case .empty:
+                    Color.gray.frame(width: 80, height: 80)
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 80, height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                case .failure:
+                    Color.gray.frame(width: 80, height: 80)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+
+            VStack(alignment: .leading) {
+                Text(item.itemName)
+                    .font(.system(size: 13, weight: .bold, design: .default))
+                    .foregroundColor(Color(hex: 0x6D400F))
+            }
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(hex: 0xFFF5E1))
+                .stroke(Color(hex: 0xFFEBC2), lineWidth: 2)
+                .shadow(color: Color(hex: 0xFFEBC2), radius: 12)
+        )
+    }
+}
+
+
+struct GroupSelectedItemRow3: View {
+    let item: AlgoliaRankoItem
+
+    var body: some View {
+        HStack(spacing: 6) {
+            AsyncImage(url: URL(string: item.itemImage)) { phase in
+                switch phase {
+                case .empty:
+                    Color.gray.frame(width: 30, height: 30)
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 30, height: 30)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                case .failure:
+                    Color.gray.frame(width: 30, height: 30)
+                @unknown default:
+                    EmptyView()
+                }
+            }
+
+            VStack(alignment: .leading) {
+                Text(item.itemName)
+                    .font(.system(size: 13, weight: .bold, design: .default))
+                    .foregroundColor(Color(hex: 0x6D400F))
+            }
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(hex: 0xFFF5E1))
+                .stroke(Color(hex: 0xFFEBC2), lineWidth: 2)
+                .shadow(color: Color(hex: 0xFFEBC2), radius: 12)
+        )
+    }
+}
 
 // MARK: - GROUP LIST VIEW
 struct GroupListView2: View {
