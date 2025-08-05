@@ -309,11 +309,10 @@ struct ProfileView: View {
                             // ✅ If loading or failed, show placeholders
                             if featuredLoading {
                                 HStack {
-                                    ThreeRectanglesAnimation(rectangleWidth: 60, rectangleMaxHeight: 110, rectangleSpacing: 8, rectangleCornerRadius: 6, animationDuration: 0.6)
-                                        .frame(height: 140)
-                                        .padding()
+                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 60, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.3)
+                                        .frame(height: 60)
+                                        .padding(60)
                                 }
-                                .frame(height: 208)
                                 .background(RoundedRectangle(cornerRadius: 10)
                                     .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
                                                          startPoint: .top,
@@ -321,6 +320,7 @@ struct ProfileView: View {
                                                         )
                                           )
                                 )
+                                .padding(.top, 40)
                                 .padding(.bottom, 120)
                                 
                             } else if featuredLoadFailed {

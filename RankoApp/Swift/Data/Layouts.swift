@@ -39,57 +39,61 @@ let layoutTemplates: [LayoutTemplate] = [
 struct LayoutGridCell: View {
     let layout: LayoutTemplate
     let isSelected: Bool
-    
+
     var body: some View {
-        ZStack {
-            // ─────────────────────────────────────────────
-            //   your existing card
-            // ─────────────────────────────────────────────
-            VStack {
-                Image(layout.imageName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: UIScreen.main.bounds.width * 0.35)
-                    .clipped()
-                    .cornerRadius(10)
-                VStack(alignment: .center, spacing: 4) {
-                    Text(layout.name)
-                        .font(.headline)
-                    Text(layout.description)
-                        .font(.caption2)
-                        .fontWeight(.light)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+        GeometryReader { geo in
+            let cellWidth = geo.size.width
+            ZStack {
+                VStack {
+                    Image(layout.imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        // use the cell’s width instead of UIScreen.main
+                        .frame(height: cellWidth * 0.35)
+                        .clipped()
+                        .cornerRadius(10)
+                    VStack(alignment: .center, spacing: 4) {
+                        Text(layout.name)
+                            .font(.headline)
+                        Text(layout.description)
+                            .font(.caption2)
+                            .fontWeight(.light)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                    .padding(.top, 4)
                 }
-                .padding(.top, 4)
-            }
-            .padding(15)
-            .background(Color.white)
-            .cornerRadius(10)
-            .shadow(color: isSelected ? Color.blue.opacity(0.5) : Color.gray,
-                    radius: isSelected ? 6 : 4,
-                    x: 0, y: 2)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-            )
-            
-            // ─────────────────────────────────────────────
-            //   overlay when disabled
-            // ─────────────────────────────────────────────
-            if layout.disabled {
-                Color.white
-                    .opacity(0.8)
-                    .cornerRadius(10)
-                VStack(spacing: 6) {
-                    Image(systemName: "lock.fill")
-                        .font(.title2)
-                    Text("Coming Soon…")
-                        .font(.caption)
+                .padding(15)
+                .background(Color.white)
+                .cornerRadius(10)
+                .shadow(color: isSelected ? Color.blue.opacity(0.5) : Color.gray,
+                        radius: isSelected ? 6 : 4,
+                        x: 0, y: 2)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                )
+
+                // ─────────────────────────────────────────────
+                //   overlay when disabled
+                // ─────────────────────────────────────────────
+                if layout.disabled {
+                    Color.white
+                        .opacity(0.8)
+                        .cornerRadius(10)
+                    VStack(spacing: 6) {
+                        Image(systemName: "lock.fill")
+                            .font(.title2)
+                        Text("Coming Soon…")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.black)
                 }
-                .foregroundColor(.black)
             }
         }
+        // give GeometryReader an explicit frame so it
+        // doesn’t try to expand to infinite height:
+        .frame(height: UIScreen.main.bounds.width * 0.35 + 15*2 + /*text/etc height*/ 60)
     }
 }
 
