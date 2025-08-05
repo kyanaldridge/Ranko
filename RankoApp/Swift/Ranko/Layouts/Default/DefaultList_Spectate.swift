@@ -272,6 +272,7 @@ struct DefaultListSpectate: View {
                 }
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: toastID)
         .sheet(isPresented: $showTabBar) {
             VStack {
                 HStack(spacing: 0) {
@@ -325,7 +326,6 @@ struct DefaultListSpectate: View {
             .presentationDetents([.height(80)])
             .presentationBackground((Color(hex: 0xfff9ee)))
             .presentationBackgroundInteraction(.enabled)
-            .animation(.easeInOut(duration: 0.25), value: toastID)
             .onAppear {
                 tabBarPresent = false      // Start from invisible
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {

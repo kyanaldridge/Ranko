@@ -836,7 +836,7 @@ struct HomeListsDisplay: View {
             if list.type == "default" {
                 DefaultListSpectate(listID: list.id, creatorID: list.userCreator)
             } else if list.type == "group" {
-                GroupListSpectate(listID: list.id)
+                GroupListSpectate(listID: list.id, creatorID: list.userCreator)
             }
         }
         .padding(.horizontal)
