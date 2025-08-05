@@ -35,13 +35,18 @@ struct DefaultListSpectate: View {
     @State private var spectateProfile: Bool = false
     @State private var showTabBar = true
     @State private var tabBarPresent = false
-    @State var showEditDetailsSheet = false
-    @State var showAddItemsSheet = false
-    @State var showReorderSheet = false
+    @State var showSaveRankoSheet = false
+    @State var showCloneSheet = false
     @State var showEditItemSheet = false
     @State var showExitSheet = false
+    
+    @State private var toastMessage: String = ""
+    @State private var showToast: Bool = false
+    @State private var toastDismissWorkItem: DispatchWorkItem?
+    @State private var toastID = UUID()
 
-    @State private var activeTab: AppTab = .addItems
+    @State private var activeTab: DefaultListSpectateTab = .clone
+    @State private var triggerHaptic: Bool = false
     @State private var selectedRankoItems: [AlgoliaRankoItem] = []
     @State private var selectedItem: AlgoliaRankoItem? = nil
     @State private var itemToEdit: AlgoliaRankoItem? = nil
@@ -221,6 +226,20 @@ struct DefaultListSpectate: View {
                 }
             }
             
+            if showToast {
+                ComingSoonToast(
+                    isShown: $showToast,
+                    title: "🚧 Saving Rankos Feature Coming Soon",
+                    message: toastMessage,
+                    icon: Image(systemName: "hourglass"),
+                    alignment: .bottom
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .id(toastID)
+                .padding(.bottom, 12)
+                .zIndex(1)
+            }
+            
             VStack {
                 Spacer()
                 Rectangle()
@@ -234,62 +253,29 @@ struct DefaultListSpectate: View {
             .ignoresSafeArea()
             
         }
-        .sheet(isPresented: $showAddItemsSheet) {
-            FilterChipPickerView(
-                selectedRankoItems: $selectedRankoItems
-            )
-        }
-        .sheet(isPresented: $showEditDetailsSheet) {
-            DefaultListEditDetails(
+        .fullScreenCover(isPresented: $showCloneSheet) { 
+            DefaultListView(
                 rankoName: rankoName,
                 description: description,
                 isPrivate: isPrivate,
-                category: category
-            ) { newName, newDescription, newPrivate, newCategory in
-                rankoName    = newName
-                description  = newDescription
-                isPrivate    = newPrivate
-                category     = newCategory
+                category: category,
+                selectedRankoItems: selectedRankoItems
+            ) { updatedItem in
+                // no-op in preview
             }
         }
-        .sheet(isPresented: $showReorderSheet) {
-            DefaultListReRank(
-                items: selectedRankoItems,
-                onSave: { newOrder in
-                    selectedRankoItems = newOrder
-                }
-            )
-        }
-        .sheet(isPresented: $showExitSheet) {
-            DefaultListPersonalExit(
-                onSave: {
-                    updateListInAlgolia(
-                        listID: listID,
-                        newName: rankoName,
-                        newDescription: description,
-                        newCategory: category!.name,
-                        isPrivate: isPrivate
-                    ) { success in
-                        if success {
-                            print("🎉 Fields updated in Algolia")
-                        } else {
-                            print("⚠️ Failed to update fields")
-                        }
-                    }
-                    updateListInFirebase()
+        .onChange(of: showCloneSheet) { _, isPresented in
+            // when it flips from true → false…
+            if !isPresented {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     dismiss()
-                },
-                onLeave: {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                        dismiss()   // dismiss DefaultListView without saving
-                    }
                 }
-            )
+            }
         }
         .sheet(isPresented: $showTabBar) {
             VStack {
                 HStack(spacing: 0) {
-                    ForEach(AppTab.visibleCases, id: \.rawValue) { tab in
+                    ForEach(DefaultListSpectateTab.visibleCases, id: \.rawValue) { tab in
                         VStack(spacing: 6) {
                             Image(systemName: tab.symbolImage)
                                 .font(.title3)
@@ -306,26 +292,27 @@ struct DefaultListSpectate: View {
                         .onTapGesture {
                             activeTab = tab
                             switch tab {
-                            case .addItems:
-                                showAddItemsSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
+                            case .save:
+                                if showToast {
+                                    withAnimation {
+                                        showToast = false
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                        showComingSoonToast(for: "Save Rankos")
+                                    }
+                                } else {
+                                    showComingSoonToast(for: "Save Rankos")
                                 }
-                            case .editDetails:
-                                showEditDetailsSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
-                            case .reRank:
-                                showReorderSheet = true
+                            case .clone:
+                                showCloneSheet = true
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     tabBarPresent = false
                                 }
                             case .exit:
-                                showExitSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
+                                let haptic = UIImpactFeedbackGenerator(style: .medium)
+                                haptic.prepare()
+                                haptic.impactOccurred()
+                                dismiss()
                             case .empty:
                                 dismiss()
                             }
@@ -338,6 +325,7 @@ struct DefaultListSpectate: View {
             .presentationDetents([.height(80)])
             .presentationBackground((Color(hex: 0xfff9ee)))
             .presentationBackgroundInteraction(.enabled)
+            .animation(.easeInOut(duration: 0.25), value: toastID)
             .onAppear {
                 tabBarPresent = false      // Start from invisible
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
@@ -366,6 +354,30 @@ struct DefaultListSpectate: View {
         .sheet(isPresented: $spectateProfile) {
             SpecProfileView(userID: creatorID)
         }
+    }
+    
+    private func showComingSoonToast(for feature: String) {
+        switch feature {
+        case "Save Rankos":
+                toastMessage = "Save Community or Friends Rankos Straight To Your Profile - Coming Soon!"
+                toastID = UUID()
+                showToast = true
+                
+            default:
+                toastMessage = "New Feature Coming Soon!"
+                toastID = UUID()
+                showToast = true
+            }
+        
+        // Cancel any previous dismiss
+        toastDismissWorkItem?.cancel()
+        
+        // Schedule dismiss after 4 seconds
+        let newDismissWorkItem = DispatchWorkItem {
+            withAnimation { showToast = false }
+        }
+        toastDismissWorkItem = newDismissWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: newDismissWorkItem)
     }
     
     // MARK: — Fetchers
@@ -581,6 +593,30 @@ struct DefaultListSpectate: View {
                 completion(false)
             }
         }
+    }
+}
+
+enum DefaultListSpectateTab: String, CaseIterable {
+    case save = "Save Ranko"
+    case clone = "Clone"
+    case exit = "Exit"
+    case empty = "Empty"
+    
+    var symbolImage: String {
+        switch self {
+        case .save:
+            return "bookmark.fill"
+        case .clone:
+            return "square.fill.on.square.fill"
+        case .exit:
+            return "door.left.hand.closed"
+        case .empty:
+            return ""
+        }
+    }
+    
+    static var visibleCases: [DefaultListSpectateTab] {
+        return [.save, .clone, .exit]
     }
 }
 

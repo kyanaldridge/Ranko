@@ -86,6 +86,11 @@ struct LayoutGridCell: View {
     }
 }
 
+#Preview {
+    @Previewable @State var selectedLayout: LayoutTemplate? = nil
+    return LayoutPickerView(selectedLayout: $selectedLayout, isPresented: .constant(true))
+}
+
 // MARK: - Layout Picker View
 
 struct LayoutPickerView: View {
@@ -301,3 +306,5 @@ struct LayoutPickerView: View {
         .padding(0)
     }
 }
+
+

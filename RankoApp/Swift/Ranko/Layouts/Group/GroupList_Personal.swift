@@ -42,7 +42,7 @@ struct GroupListPersonal: View {
     // MARK: - OTHER VARIABLES (INC. TOAST)
     @State private var hoveredRow: Int? = nil
     
-    @State private var activeTab: AppTab = .addItems
+    @State private var activeTab: GroupListPersonalTab = .addItems
     
     private enum GroupViewMode: String, CaseIterable {
         case biggerList, defaultList, largeGrid
@@ -409,7 +409,7 @@ struct GroupListPersonal: View {
         .sheet(isPresented: $showTabBar) {
             VStack {
                 HStack(spacing: 0) {
-                    ForEach(AppTab.visibleCases, id: \.rawValue) { tab in
+                    ForEach(GroupListPersonalTab.visibleCases, id: \.rawValue) { tab in
                         VStack(spacing: 6) {
                             Image(systemName: tab.symbolImage)
                                 .font(.title3)
@@ -986,6 +986,34 @@ struct GroupListPersonal: View {
         }
     }
 }
+
+enum GroupListPersonalTab: String, CaseIterable {
+    case addItems = "Add Items"
+    case editDetails = "Edit Details"
+    case reRank = "Re-Rank"
+    case exit = "Exit"
+    case empty = "Empty"
+    
+    var symbolImage: String {
+        switch self {
+        case .addItems:
+            return "circle.grid.2x2"
+        case .editDetails:
+            return "square.text.square"
+        case .reRank:
+            return "rectangle.stack"
+        case .exit:
+            return "door.left.hand.closed"
+        case .empty:
+            return ""
+        }
+    }
+    
+    static var visibleCases: [GroupListPersonalTab] {
+        return [.addItems, .editDetails, .reRank, .exit]
+    }
+}
+
 
 struct GroupListPersonal2: View {
     @Environment(\.dismiss) private var dismiss

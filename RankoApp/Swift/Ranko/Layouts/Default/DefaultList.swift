@@ -61,7 +61,7 @@ struct DefaultListView: View {
     @State var showEditItemSheet = false
     @State var showExitSheet = false
     
-    @State private var activeTab: AppTab = .addItems
+    @State private var activeTab: DefaultListTab = .addItems
     
     // Item states
     @State private var selectedRankoItems: [AlgoliaRankoItem]
@@ -288,7 +288,7 @@ struct DefaultListView: View {
         .sheet(isPresented: $showTabBar) {
             VStack {
                 HStack(spacing: 0) {
-                    ForEach(AppTab.visibleCases, id: \.rawValue) { tab in
+                    ForEach(DefaultListTab.visibleCases, id: \.rawValue) { tab in
                         VStack(spacing: 6) {
                             Image(systemName: tab.symbolImage)
                                 .font(.title3)
@@ -767,7 +767,7 @@ struct DefaultListView2: View {
     @State private var itemToEdit: AlgoliaRankoItem? = nil
 
     // Add activeTab state here:
-    @State private var activeTab: AppTab = .addItems
+    @State private var activeTab: DefaultListTab = .addItems
 
     // ──────────────────────────────────────────────────────────────────────────
     // MARK: – Press-and-Hold / Ring State for “Publish”
@@ -1596,7 +1596,7 @@ struct DefaultListView2: View {
 }
 
 /// Tab Enum
-enum AppTab: String, CaseIterable {
+enum DefaultListTab: String, CaseIterable {
     case addItems = "Add Items"
     case editDetails = "Edit Details"
     case reRank = "Re-Rank"
@@ -1618,7 +1618,7 @@ enum AppTab: String, CaseIterable {
         }
     }
     
-    static var visibleCases: [AppTab] {
+    static var visibleCases: [DefaultListTab] {
         return [.addItems, .editDetails, .reRank, .exit]
     }
 }
@@ -1631,9 +1631,9 @@ struct BottomBarView: View {
     @Binding var selectedCategoryChip: CategoryChip?
     @Binding var selectedRankoItems: [AlgoliaRankoItem]
     
-    @State private var activeTabInternal: AppTab = .addItems
+    @State private var activeTabInternal: DefaultListTab = .addItems
     @Binding var currentDetent: PresentationDetent
-    @Binding var activeTab: AppTab
+    @Binding var activeTab: DefaultListTab
     
     // 👇 Changed these:
     var onSaveEditDetails: (String, String, Bool, CategoryChip?) -> Void
@@ -1741,7 +1741,7 @@ struct BottomBarView: View {
     
     /// Individual Tab View
     @ViewBuilder
-    func IndividualTabView(_ tab: AppTab) -> some View {
+    func IndividualTabView(_ tab: DefaultListTab) -> some View {
         ScrollView(.vertical) {
             VStack {
                 HStack {
@@ -1799,7 +1799,7 @@ struct BottomBarView: View {
 
             Spacer()
 
-            ForEach(AppTab.visibleCases, id: \.rawValue) { tab in
+            ForEach(DefaultListTab.visibleCases, id: \.rawValue) { tab in
                 Group {
                     if activeTab == .empty {
                         VStack(spacing: 4) {
@@ -1942,6 +1942,13 @@ fileprivate struct TabViewHelper: UIViewRepresentable {
     }
 }
 
+private struct SheetHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct DefaultListEditDetails: View {
     @Environment(\.dismiss) private var dismiss
     
@@ -1959,14 +1966,7 @@ struct DefaultListEditDetails: View {
         !rankoName.isEmpty && selectedCategoryChip != nil
     }
     
-    private let originalRankoName: String = ""
-    private let originalDescription: String = ""
-    private let originalIsPrivate: Bool = false
-    private let originalCategory: CategoryChip? = nil
-    
     private let onSave: (String, String, Bool, CategoryChip?) -> Void
-    
-    // Custom initializer to seed @State and capture originals + onSave and onRequestClose
     
     init(
         rankoName: String,
@@ -1983,80 +1983,100 @@ struct DefaultListEditDetails: View {
         _selectedCategoryChip = State(initialValue: category)
     }
     
-    
     var body: some View {
         VStack(spacing: 16) {
-            // MARK: – Ranko Name Field
+            // Header
+            Text("Edit Details")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(Color(hex: 0x6D400F))
+                .padding(.top, 50)
+            
+            // Ranko Name Field
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Ranko Name").foregroundColor(.secondary)
-                    Text("*").foregroundColor(.red)
+                    Text("Ranko Name")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Color(hex: 0x925611))
+                    Text("*")
+                        .foregroundColor(.red)
+                        .font(.system(size: 11, weight: .bold))
                 }
-                .font(.caption2).bold()
                 HStack {
-                    Image(systemName: "trophy.fill").foregroundColor(.gray)
-                    TextField("", text: $rankoName)
-                        .placeholder("Top 15 Countries", when: rankoName.isEmpty)
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(rankoName.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
+                    TextField("", text: $rankoName, prompt: Text("Top 15 Countries").foregroundColor(Color(hex: 0xEDB26E)))
                         .onChange(of: rankoName) {
                             if rankoName.count > 50 {
                                 rankoName = String(rankoName.prefix(50))
                             }
                         }
-                        .font(.caption)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(rankoName.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
                     Spacer()
                     Text("\(rankoName.count)/50")
-                        .font(.caption2).foregroundColor(.secondary)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(rankoName.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
                 }
                 .padding(8)
-                .background(RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white))
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(hex: 0xFFFBF2))
+                        .stroke(Color(hex: 0x925611).opacity(0.4), lineWidth: 1)
+                )
             }
             .modifier(ShakeEffect(animatableData: rankoNameShake))
             
-            // MARK: – Description Field (optional)
+            // Description Field
             VStack(alignment: .leading, spacing: 4) {
                 Text("Description, if any")
-                    .font(.caption2).foregroundColor(.secondary).bold()
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Color(hex: 0x925611))
                 HStack {
                     Image(systemName: "pencil.and.list.clipboard")
-                        .foregroundColor(.gray)
-                    TextField("", text: $description)
-                        .placeholder("Description", when: description.isEmpty)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(description.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
+                    TextField("", text: $description, prompt: Text("my favourite countries to visit").foregroundColor(Color(hex: 0xEDB26E)))
                         .onChange(of: description) {
                             if description.count > 100 {
                                 description = String(description.prefix(100))
                             }
                         }
-                        .font(.caption)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(description.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
                     Spacer()
                     Text("\(description.count)/100")
-                        .font(.caption2).foregroundColor(.secondary)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(description.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
                 }
                 .padding(8)
-                .background(RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white))
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(hex: 0xFFFBF2))
+                        .stroke(Color(hex: 0x925611).opacity(0.4), lineWidth: 1)
+                )
             }
             
-            // MARK: – Category & Privacy Toggle
+            // Category & Privacy Toggle
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("Category").foregroundColor(.secondary)
+                        Text("Category")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(Color(hex: 0x925611))
                         Text("*").foregroundColor(.red)
                     }
-                    .font(.caption2).bold()
                     Button {
                         showCategoryPicker = true
                     } label: {
                         HStack {
-                            if let categoryChip = selectedCategoryChip {
-                                Image(systemName: categoryChip.icon)
-                                Text(categoryChip.name).bold()
+                            if let chip = selectedCategoryChip {
+                                Image(systemName: chip.icon)
+                                Text(chip.name).bold()
                             } else {
                                 Image(systemName: "square.grid.2x2.fill")
-                                Text("Select Category").bold()
+                                Text("Select Category")
+                                    .bold()
                                     .foregroundColor(.gray)
                             }
                             Spacer()
@@ -2064,61 +2084,70 @@ struct DefaultListEditDetails: View {
                         }
                         .padding(8)
                         .foregroundColor(.white)
-                        .background(RoundedRectangle(cornerRadius: 8)
-                            .fill((categoryChipIconColors[selectedCategoryChip?.name ?? ""] ?? .gray)))
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(
+                                    (categoryChipIconColors[selectedCategoryChip?.name ?? ""] ?? .gray)
+                                )
+                        )
                     }
                     .modifier(ShakeEffect(animatableData: categoryShake))
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(2)
-
+                
                 VStack(alignment: .center, spacing: 4) {
                     Text("Private")
-                        .foregroundColor(.secondary)
-                        .font(.caption2).bold()
-                    Toggle(isOn: $isPrivate) {}
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Color(hex: 0x925611))
+                    Toggle("", isOn: $isPrivate)
                         .tint(.orange)
                         .padding(.top, 6)
-                        .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
                 .layoutPriority(1)
             }
-            .frame(maxWidth: .infinity)
             .padding(.bottom, 10)
             
+            // Action Buttons
             HStack(spacing: 12) {
-                
                 Button {
-                    print("Cancel tapped")
                     dismiss()
                 } label: {
                     Text("Cancel")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundColor(.white)
-                        .fontWeight(.bold)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color(hex: 0xFFFFFF))
                 }
-                .background(Color.red.gradient, in: RoundedRectangle(cornerRadius: 8))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .foregroundColor(.white)
+                .background(Color(hex: 0xA26A2A), in: RoundedRectangle(cornerRadius: 8))
                 
                 Button {
                     if isValid {
                         onSave(rankoName, description, isPrivate, selectedCategoryChip)
                         dismiss()
+                    } else {
+                        if rankoName.isEmpty {
+                            withAnimation { rankoNameShake += 1 }
+                        }
+                        if selectedCategoryChip == nil {
+                            withAnimation { categoryShake += 1 }
+                        }
                     }
                 } label: {
                     Text("Save Changes")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundColor(.white)
-                        .fontWeight(.bold)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Color(hex: 0xFFFFFF))
                 }
-                .background(Color.orange.gradient, in: RoundedRectangle(cornerRadius: 8))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color(hex: 0x6D400F), in: RoundedRectangle(cornerRadius: 8))
                 .opacity(isValid ? 1 : 0.6)
             }
+            
+            Spacer(minLength: 0)
         }
-        .ignoresSafeArea()
-        .padding(16)
+        .padding(.horizontal, 28)
+        // Category picker sheet
         .sheet(isPresented: $showCategoryPicker) {
             CategoryPickerView(
                 categoryChipsByCategory: categoryChipsByCategory,
@@ -2126,16 +2155,11 @@ struct DefaultListEditDetails: View {
                 isPresented: $showCategoryPicker
             )
         }
-        .presentationDetents([.fraction(0.4), .medium])
+        // Use exact height (clamped to a minimum) for our sheet
+        .presentationDetents([.height(350)])
         .presentationDragIndicator(.hidden)
+        .presentationBackground(Color(hex: 0xFFF5E1))
         .interactiveDismissDisabled(true)
-    }
-    
-    private func revertEdits() {
-        rankoName = originalRankoName
-        description = originalDescription
-        isPrivate = originalIsPrivate
-        selectedCategoryChip = originalCategory
     }
 }
 

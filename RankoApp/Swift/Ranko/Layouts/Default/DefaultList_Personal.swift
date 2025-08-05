@@ -42,7 +42,7 @@ struct DefaultListPersonal: View {
     @State var showEditItemSheet = false
     @State var showExitSheet = false
 
-    @State private var activeTab: AppTab = .addItems
+    @State private var activeTab: DefaultListPersonalTab = .addItems
     @State private var selectedRankoItems: [AlgoliaRankoItem] = []
     @State private var selectedItem: AlgoliaRankoItem? = nil
     @State private var itemToEdit: AlgoliaRankoItem? = nil
@@ -280,7 +280,7 @@ struct DefaultListPersonal: View {
         .sheet(isPresented: $showTabBar) {
             VStack {
                 HStack(spacing: 0) {
-                    ForEach(AppTab.visibleCases, id: \.rawValue) { tab in
+                    ForEach(DefaultListPersonalTab.visibleCases, id: \.rawValue) { tab in
                         VStack(spacing: 6) {
                             Image(systemName: tab.symbolImage)
                                 .font(.title3)
@@ -531,6 +531,32 @@ struct DefaultListPersonal: View {
     }
 }
 
+enum DefaultListPersonalTab: String, CaseIterable {
+    case addItems = "Add Items"
+    case editDetails = "Edit Details"
+    case reRank = "Re-Rank"
+    case exit = "Exit"
+    case empty = "Empty"
+    
+    var symbolImage: String {
+        switch self {
+        case .addItems:
+            return "circle.grid.2x2"
+        case .editDetails:
+            return "square.text.square"
+        case .reRank:
+            return "rectangle.stack"
+        case .exit:
+            return "door.left.hand.closed"
+        case .empty:
+            return ""
+        }
+    }
+    
+    static var visibleCases: [DefaultListPersonalTab] {
+        return [.addItems, .editDetails, .reRank, .exit]
+    }
+}
 
 struct DefaultListPersonalExit: View {
     @Environment(\.dismiss) var dismiss
