@@ -422,7 +422,6 @@ struct MorphingSymbolView: View {
             ImageView()
                 .tag(0)
         }
-        .frame(width: config.frame.width, height: config.frame.height)
         .onChange(of: symbol) { _, newValue in
             trigger.toggle()
             nextSymbol = newValue
@@ -440,7 +439,6 @@ struct MorphingSymbolView: View {
             Image(systemName: displayingSymbol.isEmpty ? symbol : displayingSymbol)
                 .font(config.font)
                 .blur(radius: radius)
-                .frame(width: config.frame.width, height: config.frame.height)
                 .onChange(of: radius) { _, newValue in
                     if newValue.rounded() == config.radius {
                         withAnimation(config.symbolAnimation) {
@@ -456,7 +454,6 @@ struct MorphingSymbolView: View {
     
     struct Config {
         var font: Font
-        var frame: CGSize
         var radius: CGFloat
         var foregroundColor: Color
         var keyFrameDuration: CGFloat = 0.4

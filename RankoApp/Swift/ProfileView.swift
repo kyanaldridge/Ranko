@@ -27,6 +27,8 @@ struct ProfileView: View {
     @State private var followingCount: Int = 0
     @State private var showSearchRankos = false
     @State private var showEditProfile = false
+    @State private var showUserFollowers = false
+    @State private var showUserFollowing = false
     @State private var listViewID = UUID()
     @State private var isLoadingLists = true
     @State private var animatedTags: Set<String> = []
@@ -42,7 +44,6 @@ struct ProfileView: View {
     
     @State private var selectedItem: PhotosPickerItem?
     @State private var selectedImage: UIImage?
-    @State private var showSheet = false
     @State private var showUserFinder = false
     @State private var appIconCustomiserView: Bool = false
     @State private var lists: [RankoList] = []
@@ -246,6 +247,9 @@ struct ProfileView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(Color(hex: 0xFFFADB))
                             }
+                            .onTapGesture {
+                                showUserFollowers = true
+                            }
                             
                             VStack {
                                 Text("\(followingCount)")
@@ -257,6 +261,9 @@ struct ProfileView: View {
                                 Text("Following")
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(Color(hex: 0xFFFADB))
+                            }
+                            .onTapGesture {
+                                showUserFollowing = true
                             }
                         }
                         .padding(.top, 8)
@@ -429,6 +436,12 @@ struct ProfileView: View {
                             )
                     )
                 }
+                .sheet(isPresented: $showUserFollowers) {
+                    SearchFollowersView(userID: user_data.userID)
+                }
+                .sheet(isPresented: $showUserFollowing) {
+                    SearchFollowingView(userID: user_data.userID)
+                }
                 .sheet(isPresented: $showSearchRankos) {
                     SearchRankosView()
                 }
@@ -517,109 +530,6 @@ struct ProfileView: View {
                     tryLoadFeaturedRankos()
                     loadProfileImage(from: user_data.userProfilePicture)
                     loadNumberOfRankos()
-                    
-                    
-
-                    
-//                    AlgoliaRankoView.shared.fetchRankoListIDs(limit: 20) { result in
-//                        switch result {
-//                        case .success:
-//                            // Firebase call
-//                            let itemDataRef = Database.database().reference().child("ItemData")
-//                            itemDataRef.getData { error, snapshot in
-//                                if error != nil {
-//                                    DispatchQueue.main.async {
-//                                        print("❌ There was an error contacting the server, please refresh and try again")
-//                                    }
-//                                    return
-//                                }
-//                                
-//                                var itemDict: [String: [String: Any]] = [:]
-//                                
-//                                for child in snapshot?.children.allObjects as? [DataSnapshot] ?? [] {
-//                                    if let value = child.value as? [String: Any] {
-//                                        itemDict[child.key] = value
-//                                    }
-//                                }
-//                                
-//                                if itemDict.isEmpty {
-//                                    DispatchQueue.main.async {
-//                                        print("⚠️ No items found in Firebase.")
-//                                    }
-//                                    return
-//                                }
-//                                
-//                                // 🧠 Now fetch full list data again via Algolia JSON
-//                                let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-//                                                          apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
-//                                let index = client.index(withName: "RankoLists")
-//                                var query = Query("").set(\.hitsPerPage, to: 20)
-//                                query.filters = "RankoUserID:\(user_data.userID)"
-//                                
-//                                index.search(query: query) { (result: Result<SearchResponse, Error>) in
-//                                    DispatchQueue.main.async {
-//                                        switch result {
-//                                        case .success(let response):
-//                                            let lists: [RankoList] = response.hits.compactMap { hit in
-//                                                do {
-//                                                    let data = try JSONEncoder().encode(hit.object)
-//                                                    let record = try JSONDecoder().decode(RankoListRecord.self, from: data)
-//                                                    
-//                                                    let id = record.objectID
-//                                                    let items: [AlgoliaRankoItem] = (record.RankoItems ?? [:]).compactMap { (itemID, values) in
-//                                                        guard let firebaseItem = itemDict[itemID],
-//                                                              let itemName = firebaseItem["ItemName"] as? String,
-//                                                              let itemImage = firebaseItem["ItemImage"] as? String,
-//                                                              let itemDescription = firebaseItem["ItemDescription"] as? String else {
-//                                                            return nil
-//                                                        }
-//                                                        
-//                                                        let rank = values["Rank"] ?? 0
-//                                                        let votes = values["Votes"] ?? 0
-//                                                        
-//                                                        let record = AlgoliaItemRecord(
-//                                                            objectID: itemID,
-//                                                            ItemName: itemName,
-//                                                            ItemDescription: itemDescription,
-//                                                            ItemCategory: "",
-//                                                            ItemImage: itemImage
-//                                                        )
-//                                                        
-//                                                        return AlgoliaRankoItem(id: itemID, rank: rank, votes: votes, record: record)
-//                                                    }
-//                                                    
-//                                                    return RankoList(
-//                                                        id: id,
-//                                                        listName: record.RankoName,
-//                                                        listDescription: record.RankoDescription,
-//                                                        type: record.RankoType,
-//                                                        category: record.RankoCategory,
-//                                                        isPrivate: record.RankoPrivacy ? "Private" : "Public",
-//                                                        userCreator: record.RankoUserID,
-//                                                        dateTime: record.RankoDateTime,
-//                                                        items: items
-//                                                    )
-//                                                    
-//                                                } catch {
-//                                                    print("❌ decode error:", error)
-//                                                    return nil
-//                                                }
-//                                            }
-//                                            
-//                                            self.lists = lists
-//                                            
-//                                        case .failure(let error):
-//                                            print("❌ Algolia list error: \(error.localizedDescription)")
-//                                        }
-//                                    }
-//                                }
-//                            }
-//                        case .failure(_):
-//                            DispatchQueue.main.async {
-//                                print("❌ There was an error contacting the server, please refresh and try again")
-//                            }
-//                        }
-//                    }
                     
                     let tags = user_data.userInterests
                         .split(separator: ",")
@@ -963,26 +873,6 @@ struct FacetCategory: Identifiable {
     let id = UUID()
     let facetName: String
     let facetCount: Int
-}
-
-struct HomeCategoryBadge2: View {
-    let text: String
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: FilterChip.icon(named: text, in: defaultFilterChips) ?? "circle.fill")
-                .foregroundColor(categoryChipIconColors[text])
-            Text(text)
-                .bold()
-                .foregroundColor(categoryChipIconColors[text])
-        }
-        .font(.caption)
-        .padding(6)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(categoryChipIconColors[text]!)
-                .opacity(0.2)
-        )
-    }
 }
 
 struct SearchRankosView: View {
@@ -1740,7 +1630,7 @@ struct SearchUsersView: View {
             .ignoresSafeArea()
         }
         .sheet(item: $selectedUser) { user in
-            SpecProfileView(userID: user.id)
+            ProfileSpectateView(userID: user.id)
         }
         .onAppear {
             performSearch()
@@ -1840,6 +1730,8 @@ struct UserGalleryView: View {
 
             Spacer()
         }
+        .padding(.leading, 15)
+        .padding(.vertical, 10)
         .onAppear {
             loadProfileImage(from: user.userProfilePicture)
         }
@@ -2159,47 +2051,425 @@ struct EditProfileView: View {
     }
 }
 
+struct SearchFollowersView: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var user_data = UserInformation.shared
 
-
-struct SpecProfileView: View {
-    @AppStorage("app_colour") private var appColourString: String = ".orange"
+    @State private var users: [RankoUser] = []
+    @State private var isLoading: Bool = false
+    @State private var errorMessage: String? = nil
+    @State private var searchText: String = ""
+    @State private var selectedUser: RankoUser?
+    @State private var filteredUsers: [RankoUser] = []
     
     let userID: String
     
-    @State private var specUsername: String = ""
-    @State private var specUserDescription: String = ""
-    @State private var specUserInterests: String = ""
-    @State private var specUserProfilePicture: String = ""
+    var body: some View {
+        GeometryReader { geo in
+            VStack(alignment: .leading, spacing: 10) {
+                // Search Bar (optional filtering)
+                HStack {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
+                            .padding(6)
+                        TextField("Search Followers", text: $searchText)
+                            .font(.system(size: 16, weight: .heavy))
+                            .foregroundColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.6) : Color(hex: 0x7E5F46).opacity(0.9))
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
+                        Spacer()
+                        if !searchText.isEmpty {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 16, weight: .heavy))
+                                .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
+                                .onTapGesture {searchText = ""}
+                        }
+                    }
+                    .padding(18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
+                                                 startPoint: .top,
+                                                 endPoint: .bottom
+                                                ))
+                            .shadow(color: Color(hex: 0xDBC252).opacity(0.8), radius: 5, x: 0, y: 3)
+                            .padding(8)
+                    )
+                    .cornerRadius(12)
+                    .padding(.leading, 10)
+                    .padding(.top, 15)
 
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .fontWeight(.heavy)
+                    }
+                    .foregroundColor(Color(hex: 0x7E5F46))
+                    .tint(Color(hex: 0xFEF4E7))
+                    .padding(.trailing, 20)
+                    .padding(.top, 15)
+                    .buttonStyle(.glassProminent)
+                }
+                
+                ScrollView {
+                    if isLoading {
+                        ProgressView("Loading Followers…")
+                            .frame(maxWidth: .infinity)
+                    }
+                    
+                    if let error = errorMessage {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .padding()
+                    }
+                    
+                    LazyVStack(spacing: 8) {
+                        ForEach(filteredUsers) { user in
+                            Button {
+                                selectedUser = user
+                            } label: {
+                                UserGalleryView(user: user)
+                                
+                            }
+                            .foregroundColor(Color(hex: 0xFF9864))
+                            .tint(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .buttonStyle(.glassProminent)
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.bottom, 30)
+                    .frame(minHeight: geo.size.height)
+                    Spacer()
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 25)
+                    .fill(
+                        LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
+                                       startPoint: .top,
+                                       endPoint: .bottom
+                                      )
+                    )
+            )
+            .ignoresSafeArea()
+        }
+        .sheet(item: $selectedUser) { user in
+            ProfileSpectateView(userID: user.id)
+        }
+        .onAppear {
+            loadFollowers()
+        }
+        .onChange(of: searchText) { _, newValue in
+            // if the search field is empty, show all; otherwise filter by username
+            if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                filteredUsers = users
+            } else {
+                let lc = newValue.lowercased()
+                filteredUsers = users.filter {
+                    $0.userName.lowercased().contains(lc)
+                }
+            }
+        }
+    }
+
+    private func loadFollowers() {
+        isLoading = true
+        errorMessage = nil
+        
+        let followersRef = Database.database()
+            .reference()
+            .child("UserData")
+            .child(userID)
+            .child("UserFollowers")
+        
+        // 1️⃣ Fetch the map of timestamp→followerID
+        followersRef.observeSingleEvent(of: .value) { snap in
+            guard let map = snap.value as? [String: String] else {
+                self.errorMessage = "No followers found."
+                self.isLoading = false
+                return
+            }
+            let followerIDs = Array(map.keys)
+            fetchFollowerProfiles(ids: followerIDs)
+        }
+    }
+    
+    private func fetchFollowerProfiles(ids: [String]) {
+        let usersRef = Database.database()
+            .reference()
+            .child("UserData")
+        
+        // 2️⃣ Read all user‐records once, then pick out the followers
+        usersRef.observeSingleEvent(of: .value) { snap in
+            guard let all = snap.value as? [String: Any] else {
+                self.errorMessage = "Could not load user data."
+                self.isLoading = false
+                return
+            }
+            
+            var loaded: [RankoUser] = []
+            for id in ids {
+                if let dict = all[id] as? [String: Any],
+                   let name = dict["UserName"] as? String,
+                   let desc = dict["UserDescription"] as? String,
+                   let pic  = dict["UserProfilePicture"] as? String {
+                    loaded.append(.init(
+                        id: id,
+                        userName: name,
+                        userDescription: desc,
+                        userProfilePicture: pic
+                    ))
+                }
+            }
+            
+            DispatchQueue.main.async {
+                self.users = loaded
+                self.filteredUsers = loaded
+                self.isLoading = false
+            }
+        }
+    }
+}
+
+struct SearchFollowingView: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var user_data = UserInformation.shared
+
+    @State private var users: [RankoUser] = []
+    @State private var isLoading: Bool = false
+    @State private var errorMessage: String? = nil
+    @State private var searchText: String = ""
+    @State private var selectedUser: RankoUser?
+    @State private var filteredUsers: [RankoUser] = []
+    
+    let userID: String
+    
+    var body: some View {
+        GeometryReader { geo in
+            VStack(alignment: .leading, spacing: 10) {
+                // Search Bar (optional filtering)
+                HStack {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
+                            .padding(6)
+                        TextField("Search Followers", text: $searchText)
+                            .font(.system(size: 16, weight: .heavy))
+                            .foregroundColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.6) : Color(hex: 0x7E5F46).opacity(0.9))
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
+                        Spacer()
+                        if !searchText.isEmpty {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 16, weight: .heavy))
+                                .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
+                                .onTapGesture {searchText = ""}
+                        }
+                    }
+                    .padding(18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
+                                                 startPoint: .top,
+                                                 endPoint: .bottom
+                                                ))
+                            .shadow(color: Color(hex: 0xDBC252).opacity(0.8), radius: 5, x: 0, y: 3)
+                            .padding(8)
+                    )
+                    .cornerRadius(12)
+                    .padding(.leading, 10)
+                    .padding(.top, 15)
+
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .fontWeight(.heavy)
+                    }
+                    .foregroundColor(Color(hex: 0x7E5F46))
+                    .tint(Color(hex: 0xFEF4E7))
+                    .padding(.trailing, 20)
+                    .padding(.top, 15)
+                    .buttonStyle(.glassProminent)
+                }
+                
+                ScrollView {
+                    if isLoading {
+                        ProgressView("Loading Following…")
+                            .frame(maxWidth: .infinity)
+                    }
+                    
+                    if let error = errorMessage {
+                        Text(error)
+                            .foregroundColor(.red)
+                            .padding()
+                    }
+                    
+                    LazyVStack(spacing: 8) {
+                        ForEach(filteredUsers) { user in
+                            Button {
+                                selectedUser = user
+                            } label: {
+                                UserGalleryView(user: user)
+                                
+                            }
+                            .foregroundColor(Color(hex: 0xFF9864))
+                            .tint(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .buttonStyle(.glassProminent)
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.bottom, 30)
+                    .frame(minHeight: geo.size.height)
+                    Spacer()
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 25)
+                    .fill(
+                        LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
+                                       startPoint: .top,
+                                       endPoint: .bottom
+                                      )
+                    )
+            )
+            .ignoresSafeArea()
+        }
+        .sheet(item: $selectedUser) { user in
+            ProfileSpectateView(userID: user.id)
+        }
+        .onAppear {
+            loadFollowing()
+        }
+        .onChange(of: searchText) { _, newValue in
+            // if the search field is empty, show all; otherwise filter by username
+            if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                filteredUsers = users
+            } else {
+                let lc = newValue.lowercased()
+                filteredUsers = users.filter {
+                    $0.userName.lowercased().contains(lc)
+                }
+            }
+        }
+    }
+
+    private func loadFollowing() {
+        isLoading = true
+        errorMessage = nil
+        
+        let followingRef = Database.database()
+            .reference()
+            .child("UserData")
+            .child(userID)
+            .child("UserFollowing")
+        
+        // 1️⃣ Fetch the map of timestamp→followerID
+        followingRef.observeSingleEvent(of: .value) { snap in
+            guard let map = snap.value as? [String: String] else {
+                self.errorMessage = "No following found."
+                self.isLoading = false
+                return
+            }
+            let followingIDs = Array(map.keys)
+            fetchFollowingProfiles(ids: followingIDs)
+        }
+    }
+    
+    private func fetchFollowingProfiles(ids: [String]) {
+        let usersRef = Database.database()
+            .reference()
+            .child("UserData")
+        
+        // 2️⃣ Read all user‐records once, then pick out the followers
+        usersRef.observeSingleEvent(of: .value) { snap in
+            guard let all = snap.value as? [String: Any] else {
+                self.errorMessage = "Could not load user data."
+                self.isLoading = false
+                return
+            }
+            
+            var loaded: [RankoUser] = []
+            for id in ids {
+                if let dict = all[id] as? [String: Any],
+                   let name = dict["UserName"] as? String,
+                   let desc = dict["UserDescription"] as? String,
+                   let pic  = dict["UserProfilePicture"] as? String {
+                    loaded.append(.init(
+                        id: id,
+                        userName: name,
+                        userDescription: desc,
+                        userProfilePicture: pic
+                    ))
+                }
+            }
+            
+            DispatchQueue.main.async {
+                self.users = loaded
+                self.filteredUsers = loaded
+                self.isLoading = false
+            }
+        }
+    }
+}
+
+
+
+struct ProfileSpectateView: View {
+    @Environment(\.dismiss) var dismiss
+    @StateObject private var user_data = UserInformation.shared
+    
+    let userID: String
+        
+    @State private var username: String = ""
+    @State private var userDescription: String = ""
+    @State private var userInterests: String = ""
+    @State private var userProfileImagePath: String = ""
     @State private var profileImage: UIImage?
     @State private var rankoCount: Int = 0
     @State private var followersCount: Int = 0
     @State private var followingCount: Int = 0
+    @State private var isCheckingFollowStatus = true
+    @State private var showUnfollowConfirmation = false
+    @State private var showSearchRankos = false
+    @State private var showUserFollowers = false
+    @State private var showUserFollowing = false
+    @State private var followUser = false
     @State private var listViewID = UUID()
     @State private var isLoadingLists = true
-
-    @State private var selectedType: String = types.first!
-    @Namespace private var animation
-    @Environment(\.colorScheme) private var scheme
+    @State private var animatedTags: Set<String> = []
     
     @State private var featuredLists: [Int: RankoList] = [:]
+    @State private var featuredLoading: Bool = true
+    @State private var featuredLoadFailed: Bool = false
+    @State private var retryCount: Int = 0
     @State private var selectedFeaturedList: RankoList?
-
-    var currentTint: Color {
-        switch appColourString {
-        case ".blue":   return .blue
-        case ".red":    return .red
-        case ".green":  return .green
-        case ".orange": return .orange
-        case ".purple": return .purple
-        case ".pink":   return .pink
-        case ".yellow": return .yellow
-        case ".gray":   return .gray
-        case ".black":  return .black
-        case ".teal":   return .teal
-        default:         return .blue
-        }
-    }
+    
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var selectedImage: UIImage?
+    @State private var lists: [RankoList] = []
+    
+    @State private var topCategories: [String] = []
     
     static let interestIconMapping: [String: String] = [
         "Sport": "figure.gymnastics",
@@ -2269,12 +2539,30 @@ struct SpecProfileView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.gray
-                    .opacity(0.15)
+                LinearGradient(gradient: Gradient(colors: [Color(hex: 0xDBC252),  Color(hex: 0xFF9864)]),
+                               startPoint: .top,
+                               endPoint: .center)
                     .ignoresSafeArea()
                 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 16) {
+                        HStack {
+                            Spacer()
+                            Button {
+                                dismiss()
+                                print("Dismissing Spectate Profile...")
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 20, weight: .heavy, design: .default))
+                                    .padding(.vertical, 2)
+                            }
+                            .foregroundColor(Color(hex: 0x7E5F46))
+                            .tint(Color(hex: 0xFEF4E7))
+                            .buttonStyle(.glassProminent)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                        
                         // MARK: – Profile Picture
                         Group {
                             if let image = profileImage {
@@ -2286,47 +2574,63 @@ struct SpecProfileView: View {
                                 SkeletonView(Circle())
                             }
                         }
-                        .frame(width: 120, height: 120)
+                        .frame(width: 100, height: 100)
+                        .overlay(Circle()
+                            .stroke(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFECC5), Color(hex: 0xFECF88)]),
+                                                   startPoint: .top,
+                                                   endPoint: .bottom), lineWidth: 3
+                            )
+                        )
                         .clipShape(Circle())
-                        .shadow(radius: 5)
-                        .onAppear { loadProfileImage(from: userID) }
-                        .padding(.top, 50)
+                        .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 2))
+                        .shadow(radius: 3)
                         
                         // Name
-                        Text(specUsername)
-                            .font(.title)
-                            .fontWeight(.bold)
+                        Text(username)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(Color(hex: 0xFFFADB))
                         
                         // user_data.userDescription
-                        if !specUserDescription.isEmpty {
-                            Text(specUserDescription)
-                                .font(.footnote)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.gray)
+                        if !userDescription.isEmpty {
+                            Text(userDescription)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(Color(hex: 0xFFFADB))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
                         }
                         
                         // user_data.userInterests as buttons
-                        if !specUserInterests.isEmpty {
-                            let tags = specUserInterests
+                        if !userInterests.isEmpty {
+                            let tags = userInterests
                                 .split(separator: ",")
                                 .map { $0.trimmingCharacters(in: .whitespaces) }
-                            
-                            HStack(spacing: 8) {
+
+                            HStack(spacing: 6) {
                                 ForEach(tags, id: \.self) { tag in
-                                    let icon = SpecProfileView.interestIconMapping[tag] ?? "tag.fill"
-                                    Button(action: {}) {
-                                        Label(tag, systemImage: icon)
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                            .padding(.vertical, 6)
-                                            .padding(.horizontal, 12)
-                                            .background(currentTint)
-                                            .foregroundColor(.white)
-                                            .clipShape(Capsule())
+                                    let icon = ProfileSpectateView.interestIconMapping[tag] ?? "tag.fill"
+
+                                    Button(action: { print("\(tag) clicked") }) {
+                                        HStack(spacing: 4) {
+                                            ZStack {
+                                                Image(systemName: icon)
+                                                    .font(.system(size: 12, weight: .heavy))
+                                                    .foregroundColor(.clear)
+                                                if animatedTags.contains(tag) {
+                                                    Image(systemName: icon)
+                                                        .font(.system(size: 12, weight: .heavy))
+                                                        .transition(.symbolEffect(.drawOn.individually))
+                                                        .padding(1)
+                                                }
+                                            }
+                                            Text(tag)
+                                                .font(.system(size: 10, weight: .heavy))
+                                        }
+                                        .cornerRadius(8)
                                     }
-                                    .buttonStyle(PlainButtonStyle())
+                                    .foregroundColor(Color(hex: 0x7E5F46))
+                                    .tint(Color(hex: 0xFEF4E7))
+                                    .buttonStyle(.glassProminent)
+                                    .geometryGroup()
                                 }
                             }
                             .padding(.horizontal)
@@ -2336,71 +2640,238 @@ struct SpecProfileView: View {
                         HStack(spacing: 40) {
                             VStack {
                                 Text("\(rankoCount)")
-                                    .font(.headline)
-                                    .fontWeight(.semibold)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(Color(hex: 0xFFFADB))
+                                Text("s")
+                                    .font(.system(size: 4, weight: .bold))
+                                    .foregroundColor(.clear)
                                 Text("Rankos")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(Color(hex: 0xFFFADB))
                             }
                             
                             VStack {
                                 Text("\(followersCount)")
-                                    .font(.headline)
-                                    .fontWeight(.semibold)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(Color(hex: 0xFFFADB))
+                                Text("s")
+                                    .font(.system(size: 4, weight: .bold))
+                                    .foregroundColor(.clear)
                                 Text("Followers")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(Color(hex: 0xFFFADB))
+                            }
+                            .onTapGesture {
+                                showUserFollowers = true
                             }
                             
                             VStack {
                                 Text("\(followingCount)")
-                                    .font(.headline)
-                                    .fontWeight(.semibold)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(Color(hex: 0xFFFADB))
+                                Text("s")
+                                    .font(.system(size: 4, weight: .bold))
+                                    .foregroundColor(.clear)
                                 Text("Following")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(Color(hex: 0xFFFADB))
+                            }
+                            .onTapGesture {
+                                showUserFollowing = true
                             }
                         }
                         .padding(.top, 8)
+                        .padding(.bottom)
                     }
+                    .padding(.top, 0)
                     
-                    // Tab selector
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                            ForEach(SpecProfileView.types, id: \.self) { type in
-                                Text(type)
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .padding(.horizontal, 15)
-                                    .foregroundStyle(
-                                        selectedType == type
-                                            ? .white
-                                            : .gray
-                                    )
-                                    .frame(height: 30)
-                                    .background {
-                                        if selectedType == type {
-                                            Capsule()
-                                                .fill(currentTint)
-                                                .matchedGeometryEffect(id: "ACTIVETAB", in: animation)
-                                        }
-                                    }
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        withAnimation(.snappy) {
-                                            selectedType = type
-                                        }
-                                    }
+                    HStack {
+                        Button(action: {showSearchRankos = true}) {
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 17, weight: .heavy))
+                                Text("Search Rankos")
+                                    .font(.system(size: 14, weight: .heavy))
+                            }
+                            .padding(.vertical, 3)
+                            .padding(.horizontal, 8)
+                        }
+                        .foregroundColor(Color(hex: 0x7E5F46))
+                        .tint(Color(hex: 0xFEF4E7))
+                        .buttonStyle(.glassProminent)
+                        if isCheckingFollowStatus {
+                            ProgressView()
+                                .frame(width: 100, height: 30)
+                        } else {
+                            Button {
+                                if followUser {
+                                    showUnfollowConfirmation = true
+                                } else {
+                                    followUserAction()
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: followUser ? "checkmark" : "person.crop.circle")
+                                        .font(.system(size: 17, weight: .heavy))
+                                        .animation(.smooth(duration: 0.3, extraBounce: 0), value: followUser)
+                                    Text(followUser ? "Following" : "Follow")
+                                        .font(.system(size: 14, weight: .heavy))
+                                        .animation(.smooth(duration: 0.3, extraBounce: 0), value: followUser)
+                                }
+                                .padding(.vertical, 3)
+                                .padding(.horizontal, 8)
+                            }
+                            .foregroundColor(Color(hex: 0x7E5F46))
+                            .tint(Color(hex: 0xFEF4E7))
+                            .buttonStyle(.glassProminent)
+                            .alert("Are you sure you want to unfollow this user?", isPresented: $showUnfollowConfirmation) {
+                                Button("Unfollow", role: .destructive) {
+                                    unfollowUserAction()
+                                }
+                                Button("Cancel", role: .cancel) { }
                             }
                         }
-                        .padding(.horizontal)
-                        .padding(.top, 15)
+                    }
+                    .padding(.bottom, 20)
+                    VStack {
+                        HStack {
+                            Text("Featured")
+                                .font(.system(size: 20, weight: .black))
+                                .foregroundColor(Color(hex: 0x7E5F46))
+                            Spacer()
+                        }
+                        .padding(.bottom, 5)
+
+                        VStack(spacing: 13) {
+                            let filledSlots = featuredLists.keys.sorted()
+                            let emptySlots = (1...10).filter { !featuredLists.keys.contains($0) }
+
+                            // ✅ If loading or failed, show placeholders
+                            if featuredLoading {
+                                HStack {
+                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 60, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.3)
+                                        .frame(height: 60)
+                                        .padding(60)
+                                }
+                                .background(RoundedRectangle(cornerRadius: 10)
+                                    .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                         startPoint: .top,
+                                                         endPoint: .bottom
+                                                        )
+                                          )
+                                )
+                                .padding(.top, 40)
+                                .padding(.bottom, 120)
+                                
+                            } else if featuredLoadFailed {
+                                // ❌ If failed after 3 attempts, show retry buttons
+                                ForEach(1...10, id: \.self) { slot in
+                                    HStack {
+                                        Button {
+                                            retryFeaturedLoading()
+                                        } label: {
+                                            HStack {
+                                                Spacer()
+                                                Image(systemName: "arrow.clockwise")
+                                                    .font(.system(size: 24, weight: .black))
+                                                    .foregroundColor(Color(hex: 0x7E5F46))
+                                                Spacer()
+                                            }
+                                            .frame(height: 52)
+                                        }
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                             startPoint: .top,
+                                                             endPoint: .bottom
+                                                            )
+                                        )
+                                        .buttonStyle(.glassProminent)
+                                        .disabled(false)
+                                    }
+                                }
+                            } else {
+                                // ✅ Normal loaded state
+                                ForEach(filledSlots, id: \.self) { slot in
+                                    HStack {
+                                        Button {
+                                            if let list = featuredLists[slot] {
+                                                selectedFeaturedList = list
+                                            }
+                                        } label: {
+                                            if let list = featuredLists[slot] {
+                                                if list.type == "default" {
+                                                    DefaultListIndividualGallery(listData: list, type: "featured", onUnpin: {
+                                                    })
+                                                } else {
+                                                    GroupListIndividualGallery(listData: list, type: "featured", onUnpin: {
+                                                    })
+                                                }
+                                            }
+                                        }
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                             startPoint: .top,
+                                                             endPoint: .bottom
+                                                            )
+                                        )
+                                        .buttonStyle(.glassProminent)
+                                    }
+                                }
+
+                                ForEach(emptySlots, id: \.self) { slot in
+                                    HStack {
+                                        Button {
+                                        } label: {
+                                            HStack {
+                                                Spacer()
+                                                Image(systemName: "xmark")
+                                                    .font(.system(size: 24, weight: .black))
+                                                    .foregroundColor(Color(hex: 0x7E5F46))
+                                                Spacer()
+                                            }
+                                            .frame(height: 52)
+                                        }
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                             startPoint: .top,
+                                                             endPoint: .bottom
+                                                            ))
+                                        .buttonStyle(.glassProminent)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(20)
+                    .padding(.bottom, 60)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 25)
+                            .fill(
+                                LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
+                                               startPoint: .top,
+                                               endPoint: .bottom
+                                              )
+                            )
+                    )
+                }
+                .ignoresSafeArea()
+                .sheet(isPresented: $showSearchRankos) {
+                    SearchRankosView()
+                }
+                .fullScreenCover(item: $selectedFeaturedList) { list in
+                    if list.type == "default" {
+                        DefaultListSpectate(listID: list.id, creatorID: list.userCreator)
+                    } else if list.type == "group" {
+                        GroupListSpectate(listID: list.id, creatorID: list.userCreator)
                     }
                     
-                    // Content based on selected tab
-                    // Pull the switch into its own @ViewBuilder
-                    tabContent
-                        .padding(.bottom, 100)
+                }
+                .sheet(isPresented: $showUserFollowers) {
+                    SearchFollowersView(userID: userID)
+                }
+                .sheet(isPresented: $showUserFollowing) {
+                    SearchFollowingView(userID: userID)
                 }
                 .refreshable {
                     listViewID     = UUID()
@@ -2408,7 +2879,8 @@ struct SpecProfileView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                         isLoadingLists = false
                     }
-                    loadFeaturedSlots()
+                    loadFollowStats()
+                    tryLoadFeaturedRankos()
                 }
                 .onAppear {
                     listViewID     = UUID()
@@ -2416,96 +2888,302 @@ struct SpecProfileView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                         isLoadingLists = false
                     }
-                    loadFeaturedSlots()
-                    loadUserData()
+                    loadFollowStats()
+                    tryLoadFeaturedRankos()
+                    loadNumberOfRankos()
+                    loadProfileData()
+                    
+                    checkFollowStatus()
                     
                     Analytics.logEvent(AnalyticsEventScreenView, parameters: [
-                        AnalyticsParameterScreenName: "SpectatingProfile",
-                        AnalyticsParameterScreenClass: "SpectatingProfileView"
+                        AnalyticsParameterScreenName: "ProfileSpectate",
+                        AnalyticsParameterScreenClass: "ProfileSpectateView"
                     ])
                 }
             }
+            
         }
     }
     
-    private func loadProfileImage(from path: String) {
-        Storage.storage().reference().child("profilePictures").child(path)
-            .getData(maxSize: Int64(2 * 1024 * 1024)) { data, _ in
-                if let data = data, let ui = UIImage(data: data) {
-                    profileImage = ui
+    private func checkFollowStatus() {
+            isCheckingFollowStatus = true
+            let db = Database.database().reference()
+            db.child("UserData")
+              .child(userID)
+              .child("UserFollowers")
+              .child(user_data.userID)
+              .observeSingleEvent(of: .value) { snap in
+                  DispatchQueue.main.async {
+                      followUser = snap.exists()
+                      isCheckingFollowStatus = false
+                  }
+              }
+        }
+        
+        private func followUserAction() {
+            let now = Date()
+            let aedtFormatter = DateFormatter()
+            aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
+            aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
+            aedtFormatter.dateFormat = "yyyyMMddHHmmss"
+            let rankoDateTime = aedtFormatter.string(from: now)
+            
+            let db = Database.database().reference()
+            let followerPath = db.child("UserData")
+                                .child(userID)
+                                .child("UserFollowers")
+                                .child(user_data.userID)
+            let followingPath = db.child("UserData")
+                                .child(user_data.userID)
+                                .child("UserFollowing")
+                                .child(userID)
+            
+            // write both sides
+            followerPath.setValue(rankoDateTime)
+            followingPath.setValue(rankoDateTime)
+            
+            followUser = true
+            // optionally refresh counts
+            loadFollowStats()
+        }
+        
+        private func unfollowUserAction() {
+            let db = Database.database().reference()
+            let followerPath = db.child("UserData")
+                                .child(userID)
+                                .child("UserFollowers")
+                                .child(user_data.userID)
+            let followingPath = db.child("UserData")
+                                .child(user_data.userID)
+                                .child("UserFollowing")
+                                .child(userID)
+            
+            followerPath.removeValue()
+            followingPath.removeValue()
+            
+            followUser = false
+            loadFollowStats()
+        }
+    
+    private func loadNumberOfRankos() {
+        guard !userID.isEmpty else { print("Skipping loadNumberOfRankos: userID is empty"); return }
+        
+        let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
+                                  apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
+        let index = client.index(withName: "RankoLists")
+        var query = Query("").set(\.hitsPerPage, to: 0) // 0 results, just want count
+        query.filters = "RankoUserID:\(userID)"
+
+        index.search(query: query) { (result: Result<SearchResponse, Error>) in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let response):
+                    let totalResults = response.nbHits
+                    rankoCount = totalResults!
+                    print("✅ Total Algolia Results: \(String(describing: totalResults))")
+                    let db = Database.database().reference()
+                    let dbRef = db.child("UserData").child(userID).child("UserRankoCount")
+                    dbRef.setValue(totalResults!)
+                case .failure(let error):
+                    print("❌ Error fetching Algolia results: \(error)")
                 }
             }
+        }
     }
     
-    // MARK: – Load user’s basic data from Firebase
-    private func loadUserData() {
-        guard !userID.isEmpty else { print("Skipping loadUserData: userID is empty"); return }
-        let userRef = Database.database().reference()
+    private func loadProfileData() {
+        let dbRef = Database.database()
+            .reference()
             .child("UserData")
             .child(userID)
-        
-        userRef.getData { error, snapshot in
-            guard error == nil,
-                  let dict = snapshot?.value as? [String: Any]
-            else { return }
-            
-            // Adjust these keys to match your database
-            if let name = dict["UserName"] as? String {
-                specUsername = name
+
+        dbRef.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ loadProfileData: no user data at path")
+                return
             }
-            if let bioText = dict["UserDescription"] as? String {
-                specUserDescription = bioText
+
+            // Extract fields
+            let name  = value["UserName"]            as? String ?? ""
+            let desc  = value["UserDescription"]     as? String ?? ""
+            let interestsArray = value["UserInterests"] as? [String]
+            let interests = interestsArray?
+                                .joined(separator: ",")
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                            ?? (value["UserInterests"] as? String ?? "")
+            let picPath = value["UserProfilePicture"] as? String ?? ""
+
+            DispatchQueue.main.async {
+                // Update all UI state
+                self.username             = name
+                self.userDescription      = desc
+                self.userInterests        = interests
+                self.userProfileImagePath = picPath
+
+                // Animate tags
+                let tags = interests
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                for (idx, tag) in tags.enumerated() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2 * Double(idx)) {
+                        _ = withAnimation(.easeOut(duration: 0.4)) {
+                            animatedTags.insert(String(tag))
+                        }
+                    }
+                }
+
+                // Now that path is set, fetch the image
+                loadProfileImage(from: picPath)
             }
-            if let tags = dict["UserInterests"] as? String {
-                specUserInterests = tags
-            }
-            
-            // If you also store counts under the same node, pull them here
-            if let rankos = dict["UserRankoCount"] as? Int {
-                rankoCount = rankos
-            }
-            if let followers = dict["UserFollowerCount"] as? Int {
-                followersCount = followers
-            }
-            if let following = dict["UserFollowingCount"] as? Int {
-                followingCount = following
+        } withCancel: { error in
+            print("❌ loadProfileData cancelled:", error.localizedDescription)
+        }
+    }
+
+    // MARK: – Download the picture from Storage
+    private func loadProfileImage(from path: String) {
+        guard !path.isEmpty else {
+            print("⚠️ loadProfileImage: empty path, skipping")
+            return
+        }
+
+        let storageRef = Storage.storage()
+            .reference()
+            .child("profilePictures")
+            .child(path)
+
+        storageRef.getData(maxSize: 2 * 1024 * 1024) { data, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("❌ loadProfileImage failed:", error.localizedDescription)
+                    return
+                }
+                guard let data = data, let ui = UIImage(data: data) else {
+                    print("⚠️ loadProfileImage: no data or decode failure")
+                    return
+                }
+                self.profileImage = ui
             }
         }
     }
     
-    private func loadFeaturedSlots() {
-        guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else { print("Skipping loadFeaturedSlots: uid is empty"); return }
+    private func loadFollowStats() {
+        guard !userID.isEmpty else { print("Skipping loadFollowStats: userID is empty"); return }
+        
+        let db = Database.database().reference()
+        let group = DispatchGroup()
+
+        group.enter()
+        db.child("UserData").child(userID).child("UserFollowers")
+            .observeSingleEvent(of: .value) { snapshot in
+                DispatchQueue.main.async {
+                    self.followersCount = Int(snapshot.childrenCount)
+                    let db = Database.database().reference()
+                    let dbRef = db.child("UserData").child(userID).child("UserFollowerCount")
+                    dbRef.setValue(followersCount)
+                }
+                group.leave()
+            }
+
+        group.enter()
+        db.child("UserData").child(userID).child("UserFollowing")
+            .observeSingleEvent(of: .value) { snapshot in
+                DispatchQueue.main.async {
+                    self.followingCount = Int(snapshot.childrenCount)
+                    let db = Database.database().reference()
+                    let dbRef = db.child("UserData").child(userID).child("UserFollowingCount")
+                    dbRef.setValue(followingCount)
+                }
+                group.leave()
+            }
+
+        group.notify(queue: .main) {
+            print("✅ Finished loading follow stats")
+        }
+    }
+    
+    private func retryFeaturedLoading() {
+        featuredLoadFailed = false
+        featuredLoading = true
+        retryCount = 0
+        tryLoadFeaturedRankos()
+    }
+
+    private func tryLoadFeaturedRankos() {
+        guard retryCount < 3 else {
+            DispatchQueue.main.async {
+                self.featuredLoading = false
+                self.featuredLoadFailed = true
+            }
+            return
+        }
+        retryCount += 1
+
+        // Attempt Firebase fetch
+        guard !userID.isEmpty else {
+            print("❌ No UID found, retrying...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
+            return
+        }
+
         let baseRef = Database.database()
             .reference()
             .child("UserData")
-            .child(uid)
+            .child(userID)
             .child("UserFeatured")
-        
-        for slot in 1...10 {
-            baseRef.child("\(slot)").getData { error, snap in
-                guard
-                    error == nil,
-                    let listID = snap?.value as? String
-                else { return }
-                fetchFeaturedList(slot: slot, listID: listID)
+
+        baseRef.getData { error, snapshot in
+            if let error = error {
+                print("❌ Firebase error: \(error.localizedDescription), retrying...")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
+                return
+            }
+
+            guard let snap = snapshot, snap.exists() else {
+                print("⚠️ No featured rankos found")
+                DispatchQueue.main.async {
+                    self.featuredLists = [:]
+                    self.featuredLoading = false
+                }
+                return
+            }
+
+            // ✅ Successfully connected
+            var tempLists: [Int: RankoList] = [:]
+            let group = DispatchGroup()
+
+            for child in snap.children.allObjects as? [DataSnapshot] ?? [] {
+                if let slot = Int(child.key), let listID = child.value as? String {
+                    group.enter()
+                    fetchFeaturedList(slot: slot, listID: listID) {
+                        if let list = $0 { tempLists[slot] = list }
+                        group.leave()
+                    }
+                }
+            }
+
+            group.notify(queue: .main) {
+                self.featuredLists = tempLists
+                self.featuredLoading = false
+                print("✅ Featured Rankos loaded successfully")
             }
         }
     }
 
-    private func fetchFeaturedList(slot: Int, listID: String) {
+    // ✅ Modified fetchFeaturedList to support completion
+    private func fetchFeaturedList(slot: Int, listID: String, completion: @escaping (RankoList?) -> Void) {
         let listRef = Database.database()
             .reference()
-            .child("RankoListData")
+            .child("RankoData")
             .child(listID)
-        
+
         listRef.observeSingleEvent(of: .value) { snap in
-            guard
-                let dict = snap.value as? [String:Any],
-                let rl = parseListData(dict: dict, id: listID)
-            else { return }
-            DispatchQueue.main.async {
-                featuredLists[slot] = rl
+            guard let dict = snap.value as? [String: Any],
+                  let rl = parseListData(dict: dict, id: listID) else {
+                completion(nil)
+                return
             }
+            completion(rl)
         }
     }
     
@@ -2562,86 +3240,6 @@ struct SpecProfileView: View {
             items:            rankoItems
         )
     }
-
-    // MARK: – Tab content builder
-    @ViewBuilder
-    private var tabContent: some View {
-        switch selectedType {
-        case "Featured":
-            VStack(spacing: 3) {
-                ForEach(1...10, id: \.self) { slot in
-                    HStack {
-                        Button {
-                            if let list = featuredLists[slot] {
-                                // open the existing Ranko
-                                selectedFeaturedList = list
-                            }
-                        } label: {
-                            if let list = featuredLists[slot] {
-                                if list.type == "default" {
-                                    DefaultListIndividualGallery(listData: list, type: "", onUnpin: {})
-                                } else if list.type == "group" {
-                                    GroupListIndividualGallery(listData: list, type: "", onUnpin: {})
-                                }
-                                
-                            } else {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(Color.white)
-                                        .shadow(radius: 2)
-                                    Image(systemName: "plus")
-                                        .font(.title2)
-                                        .foregroundColor(.gray)
-                                }
-                                .frame(height: 100)
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        
-                        Spacer()
-                    }
-                }
-            }
-            .padding()
-                // 1) Sheet for viewing an existing featured Ranko
-            .sheet(item: $selectedFeaturedList) { list in
-                if list.type == "default" {
-                    DefaultListSpectate(listID: list.id)
-                } else if list.type == "group" {
-                    GroupListSpectate(listID: list.id)
-                }
-                
-            }
-
-            
-        case "Rankos":
-            if isLoadingLists {
-                VStack(spacing: 16) {
-                    ForEach(0..<4, id: \.self) { _ in HomeListSkeletonViewRow() }
-                }
-                .padding(.vertical, 10)
-            } else {
-//                UserListGallery_Spectate(onSelect: { list in
-//                    self.selectedFeaturedList = list
-//                }, userID: userID)
-//                    .id(listViewID)
-//                    .padding(.top, 16)
-            }
-        case "Statistics":
-            Text("Coming Soon...")
-            
-        case "Games":
-            Text("Coming Soon...")
-            
-        default:
-            Text("Coming Soon...")
-        }
-    }
-}
-
-
-extension SpecProfileView {
-    static let types: [String] = ["Featured", "Rankos", "Statistics", "Games"]
 }
 
 struct FlexibleView: Layout {

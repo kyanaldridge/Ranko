@@ -445,18 +445,6 @@ struct DefaultListView: View {
         group.notify(queue: .main) {
             print("🎉 Upload to Algolia completed")
         }
-        
-        let nullFields: [String: Any?] = [
-            "RankoID": listUUID,
-            "RankoLikes": nil,
-            "RankoComments": nil,
-            "RankoVoters": nil
-        ]
-
-        let finalData = nullFields.mapValues { $0 ?? NSNull() }
-        
-        let db = Database.database().reference()
-        db.child("RankoLists").child(listUUID).setValue(finalData)
     }
 
     func saveRankedListToFirebase() {
@@ -498,12 +486,6 @@ struct DefaultListView: View {
         aedtFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
         let rankoDateTime = aedtFormatter.string(from: now)
 
-        let localFormatter = DateFormatter()
-        localFormatter.locale = Locale(identifier: "en_US_POSIX")
-        localFormatter.timeZone = .current
-        localFormatter.dateFormat = "yyyyMMddHHmmss"
-        let rankoLocalDateTime = localFormatter.string(from: now)
-
         // 4) Top-level list payload with both fields
         let listDataForFirebase: [String: Any] = [
             "RankoID":              listUUID,
@@ -514,8 +496,7 @@ struct DefaultListView: View {
             "RankoCategory":        category.name,
             "RankoUserID":          safeUID,
             "RankoItems":           rankoItemsDict,
-            "RankoDateTime":        rankoDateTime,        // AEDT
-            "RankoLocalDateTime":   rankoLocalDateTime   // device’s local
+            "RankoDateTime":        rankoDateTime,
         ]
 
         // 5) Write the main list node

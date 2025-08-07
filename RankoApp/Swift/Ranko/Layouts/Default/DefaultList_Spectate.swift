@@ -352,7 +352,7 @@ struct DefaultListSpectate: View {
             )
         }
         .sheet(isPresented: $spectateProfile) {
-            SpecProfileView(userID: creatorID)
+            ProfileSpectateView(userID: creatorID)
         }
     }
     
@@ -722,7 +722,7 @@ struct DefaultListSpectate2: View {
             )
         }
         .sheet(isPresented: $spectateProfile) {
-            SpecProfileView(userID: creatorID)
+            ProfileSpectateView(userID: creatorID)
         }
     }
     

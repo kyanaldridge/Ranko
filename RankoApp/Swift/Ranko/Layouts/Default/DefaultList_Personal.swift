@@ -349,8 +349,7 @@ struct DefaultListPersonal: View {
         let db = Database.database().reference()
         let listRef = db.child("RankoData").child(listID)
 
-        listRef.observeSingleEvent(of: .value,
-                                   with: { snapshot in
+        listRef.observeSingleEvent(of: .value, with: { snapshot in
             guard let data = snapshot.value as? [String: Any] else {
                 print("⚠️ No data at RankoData/\(listID)")
                 return

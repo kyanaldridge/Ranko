@@ -52,6 +52,11 @@ struct HomeView: View {
     @State private var listViewID = UUID()
     @State private var isLoadingLists = true
     
+    @State private var showToast = false
+    @State private var toastMessage = ""
+    @State private var toastID = UUID()
+    @State private var toastDismissWorkItem: DispatchWorkItem?
+    
     private let isSimulator: Bool = {
         var isSim = false
         #if targetEnvironment(simulator)
@@ -139,8 +144,13 @@ struct HomeView: View {
                                             )
                                     )
                                 } else {
-                                    HomeListsDisplay()
+                                    HomeListsDisplay(
+                                      showToast: $showToast,
+                                      toastMessage: $toastMessage,
+                                      showToastHelper: showComingSoonToast
+                                    )
                                         .padding(.top)
+                                        .padding(.bottom)
                                         .background(
                                             RoundedRectangle(cornerRadius: 25)
                                                 .fill(
@@ -157,7 +167,21 @@ struct HomeView: View {
                         }
                     }
                 }
+                if showToast {
+                    ComingSoonToast(
+                        isShown: $showToast,
+                        title: "💬 Comments Coming Soon",
+                        message: toastMessage,
+                        icon: Image(systemName: "hourglass"),
+                        alignment: .bottom
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .id(toastID)
+                    .padding(.bottom, 12)
+                    .zIndex(1)
+                }
             }
+            .animation(.easeInOut(duration: 0.25), value: toastID)
             .navigationBarHidden(true)
         }
         
@@ -202,6 +226,19 @@ struct HomeView: View {
                 .presentationDragIndicator(.visible)
                 .interactiveDismissDisabled(true)
         }
+    }
+    
+    private func showComingSoonToast(_ msg: String) {
+        toastMessage = msg
+        toastID = UUID()
+        showToast = true
+        
+        toastDismissWorkItem?.cancel()
+        let work = DispatchWorkItem {
+            withAnimation { showToast = false }
+        }
+        toastDismissWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: work)
     }
 
     private func loadProfileImage(from path: String) {
@@ -320,6 +357,7 @@ struct DefaultListHomeView: View {
     @State private var animateHeart = false
     @State private var spectateProfile: Bool = false
     @State private var openShareView: Bool = false
+    var onCommentTap: (String) -> Void
     
     private var sortedItems: [AlgoliaRankoItem] {
         listData.items.sorted { $0.rank < $1.rank }
@@ -382,10 +420,10 @@ struct DefaultListHomeView: View {
             fetchComments()
         }
         .sheet(isPresented: $spectateProfile) {
-            SpecProfileView(userID: (listData.userCreator))
+            ProfileSpectateView(userID: (listData.userCreator))
         }
         .sheet(isPresented: $openShareView) {
-            SpecProfileView(userID: (listData.userCreator))
+            ProfileSpectateView(userID: (listData.userCreator))
         }
     }
     
@@ -427,9 +465,6 @@ struct DefaultListHomeView: View {
                         Text(creatorName)
                             .font(.system(size: 13, weight: .heavy))
                             .foregroundColor(Color(hex: 0x7E5F46))
-                            .onTapGesture {
-                                spectateProfile.toggle()
-                            }
                         Text("•")
                             .font(.system(size: 8, weight: .semibold))
                             .foregroundColor(Color(hex: 0xA3A3A3))
@@ -444,6 +479,9 @@ struct DefaultListHomeView: View {
                 }
                 Spacer()
             }
+        }
+        .onTapGesture {
+            spectateProfile.toggle()
         }
     }
     
@@ -553,7 +591,10 @@ struct DefaultListHomeView: View {
                     .foregroundColor(Color(hex: 0x7E5F46))
             }
             
-            HStack(spacing: 4) {
+            Button {
+                // pass a custom message or a static one:
+                onCommentTap("Interacting on Friends & Community Rankos Are Coming Soon!")
+            } label: {
                 Image(systemName: "bubble.right")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(Color(hex: 0x7E5F46))
@@ -593,29 +634,55 @@ struct DefaultListHomeView: View {
         }
         isLikeDisabled = true
 
-        let db = Database.database().reference()
-        let likeRef = db.child("RankoData")
-            .child(listData.id)
-            .child("RankoLikes")
-            .child(safeUID)
+        let ts = currentAEDTString()
+        let dbRef = Database.database().reference()
+        let likePath = "RankoData/\(listData.id)/RankoLikes/\(safeUID)"
+        let likeRef = dbRef.child(likePath)
 
-        likeRef.getData { error, snapshot in
-            if snapshot?.exists() == true {
-                // 👎 Unlike
-                likeRef.removeValue { _, _ in
-                    likes.removeValue(forKey: safeUID)
-                }
-            } else {
-                // 👍 Like
-                let ts = currentAEDTString()
-                likeRef.setValue(ts) { _, _ in
-                    likes[safeUID] = ts
-                }
-            }
+        // 1) Optimistically update local state
+        let currentlyLiked = hasLiked
+        if currentlyLiked {
+            likes.removeValue(forKey: safeUID)
+        } else {
+            likes[safeUID] = ts
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+        // 2) Read once to confirm server state
+        likeRef.observeSingleEvent(of: .value) { snapshot in
+            if snapshot.exists() {
+                // 👎 Unlike on server
+                likeRef.removeValue { error, _ in
+                    if let error = error {
+                        // 3a) Roll back if failure
+                        likes[safeUID] = ts
+                        print("Error removing like:", error)
+                        showInlineToast("Couldn’t remove like.")
+                    }
+                    isLikeDisabled = false
+                }
+            } else {
+                // 👍 Like on server
+                likeRef.setValue(ts) { error, _ in
+                    if let error = error {
+                        // 3b) Roll back if failure
+                        likes.removeValue(forKey: safeUID)
+                        print("Error adding like:", error)
+                        showInlineToast("Couldn’t add like.")
+                    }
+                    isLikeDisabled = false
+                }
+            }
+        } withCancel: { error in
+            // Handle read error
+            print("Read error:", error)
+            // Roll back optimistic change
+            if currentlyLiked {
+                likes[safeUID] = ts
+            } else {
+                likes.removeValue(forKey: safeUID)
+            }
             isLikeDisabled = false
+            showInlineToast("Network error.")
         }
     }
     
@@ -803,6 +870,10 @@ struct HomeListsDisplay: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var selectedList: RankoList? = nil
+    @Binding var showToast: Bool
+    @Binding var toastMessage: String
+    
+    var showToastHelper: (String) -> Void
     
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 16) {
@@ -817,15 +888,20 @@ struct HomeListsDisplay: View {
             } else {
                 ForEach(lists, id: \.id) { list in
                     if list.type == "group" {
-                        GroupListHomeView(listData: list)
+                        GroupListHomeView(listData: list, showToastHelper: { msg in
+                            showToastHelper(msg)
+                        })
                             .onTapGesture {
                                 selectedList = list
                             }
                     } else {
-                        DefaultListHomeView(listData: list)
-                            .onTapGesture {
-                                selectedList = list
-                            }
+                        DefaultListHomeView(listData: list, onCommentTap: { msg in
+                            showToastHelper(msg)
+                        }
+                    )
+                        .onTapGesture {
+                            selectedList = list
+                        }
                     }
                 }
             }
@@ -834,7 +910,7 @@ struct HomeListsDisplay: View {
         .padding(.bottom, 60)
         .fullScreenCover(item: $selectedList) { list in
             if list.type == "default" {
-                DefaultListSpectate(listID: list.id, creatorID: list.userCreator)
+                DefaultListVote(listID: list.id, creatorID: list.userCreator)
             } else if list.type == "group" {
                 GroupListSpectate(listID: list.id, creatorID: list.userCreator)
             }
@@ -919,6 +995,7 @@ struct HomeListsDisplay: View {
 
 struct GroupListHomeView: View {
     let listData: RankoList
+    var showToastHelper: (String) -> Void
 
     private var adjustedItems: [AlgoliaRankoItem] {
         listData.items.map { item in
@@ -942,7 +1019,9 @@ struct GroupListHomeView: View {
             userCreator: listData.userCreator,
             dateTime: listData.dateTime,
             items: adjustedItems
-        ))
+        ), onCommentTap: { msg in
+            showToastHelper(msg)
+          })
     }
 }
 
@@ -1055,128 +1134,6 @@ struct HomeListSkeletonViewRow: View {
         .cornerRadius(25)
         .shadow(color: Color(hex: 0xD0BD91).opacity(0.6), radius: 6, x: 0, y: -3)
     }
-}
-
-
-#Preview {
-    VStack {
-        Spacer()
-        DefaultListHomeView(
-            listData: RankoList(
-                id: "rrsrywey55eyhhf",
-                listName: "Top 10 Albums of the 1970s to 2010s",
-                listDescription: "my fav albums",
-                type: "default",
-                category: "Albums",
-                isPrivate: "false",
-                userCreator: "ey54y54y3y",
-                dateTime: "20230718094500",
-                items: [
-                AlgoliaRankoItem(id: "", rank: 10, votes: 23, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "Madvillainy",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://upload.wikimedia.org/wikipedia/en/5/5e/Madvillainy_cover.png"
-                                    )
-                                ),
-                AlgoliaRankoItem(id: "", rank: 9, votes: 19, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "Wish You Were Here",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://www.emp.co.uk/dw/image/v2/BBQV_PRD/on/demandware.static/-/Sites-master-emp/default/dw74154f22/images/4/0/6/0/406025.jpg?sw=1000&sh=800&sm=fit&sfrm=png"
-                                    )
-                                ),
-                AlgoliaRankoItem(id: "", rank: 8, votes: 26, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "In Rainbows",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://m.media-amazon.com/images/I/A1MwaIeBpwL._UF894,1000_QL80_.jpg"
-                                    )
-                                ),
-                AlgoliaRankoItem(id: "", rank: 7, votes: 26, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "OK Computer",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://upload.wikimedia.org/wikipedia/en/thumb/b/ba/Radioheadokcomputer.png/250px-Radioheadokcomputer.png"
-                                    )
-                                ),
-                AlgoliaRankoItem(id: "", rank: 6, votes: 26, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "To Pimp a Butterfly",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://upload.wikimedia.org/wikipedia/en/f/f6/Kendrick_Lamar_-_To_Pimp_a_Butterfly.png"
-                                    )
-                                ),
-                AlgoliaRankoItem(id: "", rank: 5, votes: 23, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "Madvillainy",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://upload.wikimedia.org/wikipedia/en/5/5e/Madvillainy_cover.png"
-                                    )
-                                ),
-                AlgoliaRankoItem(id: "", rank: 4, votes: 19, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "Wish You Were Here",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://www.emp.co.uk/dw/image/v2/BBQV_PRD/on/demandware.static/-/Sites-master-emp/default/dw74154f22/images/4/0/6/0/406025.jpg?sw=1000&sh=800&sm=fit&sfrm=png"
-                                    )
-                                ),
-                AlgoliaRankoItem(id: "", rank: 3, votes: 26, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "In Rainbows",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://m.media-amazon.com/images/I/A1MwaIeBpwL._UF894,1000_QL80_.jpg"
-                                    )
-                                ),
-                AlgoliaRankoItem(id: "", rank: 2, votes: 26, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "OK Computer",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://upload.wikimedia.org/wikipedia/en/thumb/b/ba/Radioheadokcomputer.png/250px-Radioheadokcomputer.png"
-                                    )
-                                ),
-                AlgoliaRankoItem(id: "", rank: 1, votes: 26, record:
-                                    AlgoliaItemRecord(
-                                        objectID: "",
-                                        ItemName: "To Pimp a Butterfly",
-                                        ItemDescription: "",
-                                        ItemCategory: "",
-                                        ItemImage: "https://upload.wikimedia.org/wikipedia/en/f/f6/Kendrick_Lamar_-_To_Pimp_a_Butterfly.png"
-                                    )
-                                )
-                ]
-            )
-        )
-        Spacer()
-    }
-    .background(
-        RoundedRectangle(cornerRadius: 25)
-            .fill(
-                LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                               startPoint: .top,
-                               endPoint: .bottom
-                              )
-            )
-    )
-    .ignoresSafeArea()
 }
 
 #Preview {

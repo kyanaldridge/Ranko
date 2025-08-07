@@ -1195,7 +1195,7 @@ struct GroupListSpectate3: View {
             didLoad = true
         }
         .sheet(isPresented: $spectateProfile) {
-            SpecProfileView(userID: creatorID)
+            ProfileSpectateView(userID: creatorID)
         }
         .sheet(item: $activeAction, content: sheetContent)
         .sheet(item: $selectedDetailItem) { tappedItem in

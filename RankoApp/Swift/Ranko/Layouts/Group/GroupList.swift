@@ -575,18 +575,6 @@ struct GroupListView: View {
         group.notify(queue: .main) {
             print("🎉 Upload to Algolia completed")
         }
-        
-        let nullFields: [String: Any?] = [
-            "RankoID": rankoID,
-            "RankoLikes": nil,
-            "RankoComments": nil,
-            "RankoVoters": nil
-        ]
-
-        let finalData = nullFields.mapValues { $0 ?? NSNull() }
-        
-        let db = Database.database().reference()
-        db.child("RankoLists").child(rankoID).setValue(finalData)
     }
 
     func saveRankedListToFirebase() {
