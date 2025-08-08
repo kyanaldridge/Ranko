@@ -102,10 +102,10 @@ struct AddItemView: View {
     let filterChip: FilterChip
     let existingCount: Int
 
-    @State private var algoliaAddRecords: AlgoliaAddRecords<AlgoliaItemRecord>
-    @State private var pageHits: [AlgoliaItemRecord] = []
+    @State private var algoliaAddRecords: AlgoliaAddRecords<RankoRecord>
+    @State private var pageHits: [RankoRecord] = []
     @State private var searchQuery = ""
-    @State private var selectedItems: [AlgoliaRankoItem] = []
+    @State private var selectedItems: [RankoItem] = []
     @State private var timedOut = false
     @Namespace private var underlineNamespace
 
@@ -124,10 +124,10 @@ struct AddItemView: View {
     }
     @AppStorage("view_mode") private var viewMode: ViewMode = .defaultList
 
-    var onSelectionComplete: ([AlgoliaRankoItem]) -> Void
+    var onSelectionComplete: ([RankoItem]) -> Void
     @Environment(\.dismiss) private var dismiss
 
-    init(filterChip: FilterChip, existingCount: Int, onSelectionComplete: @escaping ([AlgoliaRankoItem]) -> Void) {
+    init(filterChip: FilterChip, existingCount: Int, onSelectionComplete: @escaping ([RankoItem]) -> Void) {
         self.filterChip = filterChip
         self.existingCount = existingCount
         self._algoliaAddRecords = State(wrappedValue: AlgoliaAddRecords(
@@ -384,7 +384,7 @@ struct AddItemView: View {
 
     // MARK: - Default List Row
     @ViewBuilder
-    private func defaultListRow(_ item: AlgoliaItemRecord) -> some View {
+    private func defaultListRow(_ item: RankoRecord) -> some View {
         HStack(spacing: 12) {
             AsyncImage(url: URL(string: item.ItemImage)) { phase in
                 switch phase {
@@ -436,7 +436,7 @@ struct AddItemView: View {
 
     // MARK: - Large Grid Item
     @ViewBuilder
-    private func largeGridItem(_ item: AlgoliaItemRecord) -> some View {
+    private func largeGridItem(_ item: RankoRecord) -> some View {
         let isSelected = selectedItems.contains { $0.record.objectID == item.objectID }
         
         VStack(alignment: .leading, spacing: 6) {
@@ -497,7 +497,7 @@ struct AddItemView: View {
 
     // MARK: - Compact List Row
     @ViewBuilder
-    private func compactListRow(_ item: AlgoliaItemRecord) -> some View {
+    private func compactListRow(_ item: RankoRecord) -> some View {
         HStack(spacing: 8) {
             AsyncImage(url: URL(string: item.ItemImage)) { phase in
                 switch phase {
@@ -650,7 +650,7 @@ struct AddItemView: View {
     }
 
     // MARK: - Toggle Selection Logic (unchanged)
-    private func toggleSelection(for record: AlgoliaItemRecord) {
+    private func toggleSelection(for record: RankoRecord) {
         if let idx = selectedItems.firstIndex(where: { $0.record.objectID == record.objectID }) {
             // Remove and re-rank remaining
             selectedItems.remove(at: idx)
@@ -660,7 +660,7 @@ struct AddItemView: View {
         } else {
             // Add at end
             let newRank = existingCount + selectedItems.count + 1
-            let newItem = AlgoliaRankoItem(
+            let newItem = RankoItem(
                 id: randomString(length: 12),
                 rank: newRank,
                 votes: 0,

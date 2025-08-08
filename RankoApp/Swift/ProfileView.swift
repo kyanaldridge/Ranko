@@ -18,10 +18,12 @@ import SwiftData
 
 struct ProfileView: View {
     @StateObject private var user_data = UserInformation.shared
-    @AppStorage("app_colour") private var appColourString: String = ".orange"
+    @Namespace private var transition
 
-    @State private var showPicker = false
+    @State private var showEditor = false
+    @State private var loadingProfileImage = false
     @State private var profileImage: UIImage?
+    
     @State private var rankoCount: Int = 0
     @State private var followersCount: Int = 0
     @State private var followingCount: Int = 0
@@ -49,22 +51,6 @@ struct ProfileView: View {
     @State private var lists: [RankoList] = []
     
     @State private var topCategories: [String] = []
-
-    var currentTint: Color {
-        switch appColourString {
-        case ".blue":   return .blue
-        case ".red":    return .red
-        case ".green":  return .green
-        case ".orange": return .orange
-        case ".purple": return .purple
-        case ".pink":   return .pink
-        case ".yellow": return .yellow
-        case ".gray":   return .gray
-        case ".black":  return .black
-        case ".teal":   return .teal
-        default:         return .blue
-        }
-    }
     
     static let interestIconMapping: [String: String] = [
         "Sport": "figure.gymnastics",
@@ -144,7 +130,7 @@ struct ProfileView: View {
                         HStack {
                             Button {
                                 showUserFinder = true
-                                print("Editing Profile...")
+                                print("Finding Users...")
                             } label: {
                                 Image(systemName: "person.crop.badge.magnifyingglass.fill")
                                     .fontWeight(.semibold)
@@ -153,6 +139,9 @@ struct ProfileView: View {
                             .foregroundColor(Color(hex: 0x7E5F46))
                             .tint(Color(hex: 0xFEF4E7))
                             .buttonStyle(.glassProminent)
+                            .matchedTransitionSource(
+                                id: "userFinder", in: transition
+                            )
                             Spacer()
                             Button {
                                 showEditProfile = true
@@ -165,11 +154,21 @@ struct ProfileView: View {
                             .foregroundColor(Color(hex: 0x7E5F46))
                             .tint(Color(hex: 0xFEF4E7))
                             .buttonStyle(.glassProminent)
+                            .matchedTransitionSource(
+                                id: "editProfile", in: transition
+                            )
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, -70)
                         // Profile Picture
                         ProfileIconView(size: CGFloat(100))
+                            .contextMenu {
+                                Button(role: .confirm) {
+                                    showEditor = true
+                                } label: {
+                                    Label("Change Profile Picture", systemImage: "person.crop.square")
+                                }
+                            }
                         
                         // Name
                         Text(user_data.username)
@@ -285,6 +284,9 @@ struct ProfileView: View {
                         .foregroundColor(Color(hex: 0x7E5F46))
                         .tint(Color(hex: 0xFEF4E7))
                         .buttonStyle(.glassProminent)
+                        .matchedTransitionSource(
+                            id: "searchRankos", in: transition
+                        )
                         Button(action: {appIconCustomiserView = true}) {
                             HStack {
                                 Image(systemName: "swirl.circle.righthalf.filled.inverse")
@@ -298,6 +300,9 @@ struct ProfileView: View {
                         .foregroundColor(Color(hex: 0x7E5F46))
                         .tint(Color(hex: 0xFEF4E7))
                         .buttonStyle(.glassProminent)
+                        .matchedTransitionSource(
+                            id: "customiseApp", in: transition
+                        )
                     }
                     .padding(.bottom, 20)
                     VStack {
@@ -436,6 +441,38 @@ struct ProfileView: View {
                             )
                     )
                 }
+                .fullScreenCover(isPresented: $showEditor) {
+                    ProfilePictureEditor(
+                        originalImage: user_data.ProfilePicture,
+                        onSave: { newImg in
+                            loadingProfileImage = true
+                            profileImage = newImg
+                            showEditor = false
+                            uploadImageToFirebase(newImg!)
+                            
+                            let db = Database.database().reference()
+                            let group = DispatchGroup()
+                            
+                            let now = Date()
+                            let aedtFormatter = DateFormatter()
+                            aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
+                            aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
+                            aedtFormatter.dateFormat = "yyyyMMddHHmmss"
+                            let userProfilePictureModified = aedtFormatter.string(from: now)
+                            
+                            group.enter()
+                            db.child("UserData")
+                                .child(user_data.userID)
+                                .child("UserProfilePictureModified")
+                                .setValue(userProfilePictureModified) { _, _ in
+                                    group.leave()
+                                }
+                        },
+                        onCancel: {
+                            showEditor = false
+                        }
+                    )
+                }
                 .sheet(isPresented: $showUserFollowers) {
                     SearchFollowersView(userID: user_data.userID)
                 }
@@ -444,12 +481,21 @@ struct ProfileView: View {
                 }
                 .sheet(isPresented: $showSearchRankos) {
                     SearchRankosView()
+                        .navigationTransition(
+                            .zoom(sourceID: "searchRankos", in: transition)
+                        )
                 }
                 .sheet(isPresented: $showUserFinder) {
                     SearchUsersView()
+                        .navigationTransition(
+                            .zoom(sourceID: "userFinder", in: transition)
+                        )
                 }
                 .sheet(isPresented: $appIconCustomiserView) {
                     CustomiseAppIconView()
+                        .navigationTransition(
+                            .zoom(sourceID: "customiseApp", in: transition)
+                        )
                 }
                 .sheet(isPresented: $showEditProfile) {
                     EditProfileView(
@@ -479,6 +525,9 @@ struct ProfileView: View {
                             }
                         }
                     )
+                    .navigationTransition(
+                        .zoom(sourceID: "editProfile", in: transition)
+                    )
                 }
                 .sheet(item: $slotToSelect) { slot in
                     SelectFeaturedRankosView { selected in
@@ -505,9 +554,31 @@ struct ProfileView: View {
                 }
                 .fullScreenCover(item: $selectedFeaturedList) { list in
                     if list.type == "default" {
-                        DefaultListPersonal(listID: list.id){ updatedItem in }
+                        DefaultListPersonal(
+                          listID: list.id,
+                          onDelete: {
+                              listViewID     = UUID()
+                              isLoadingLists = true
+                              DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                  isLoadingLists = false
+                                  retryFeaturedLoading()
+                                  loadFollowStats()
+                              }
+                          }
+                        )
                     } else if list.type == "group" {
-                        GroupListPersonal(listID: list.id)
+                        GroupListPersonal(
+                          listID: list.id,
+                          onDelete: {
+                              listViewID     = UUID()
+                              isLoadingLists = true
+                              DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                  isLoadingLists = false
+                                  retryFeaturedLoading()
+                                  loadFollowStats()
+                              }
+                          }
+                        )
                     }
                     
                 }
@@ -573,7 +644,7 @@ struct ProfileView: View {
                                   apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
         let index = client.index(withName: "RankoLists")
         var query = Query("").set(\.hitsPerPage, to: 0) // 0 results, just want count
-        query.filters = "RankoUserID:\(user_data.userID)"
+        query.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
 
         index.search(query: query) { (result: Result<SearchResponse, Error>) in
             DispatchQueue.main.async {
@@ -604,7 +675,7 @@ struct ProfileView: View {
     private func uploadImageToFirebase(_ image: UIImage) {
         guard let data = image.jpegData(compressionQuality: 0.8) else { return }
         let filePath = "\(user_data.userID).jpg"
-        let ref = Storage.storage().reference().child("profilePictures\(filePath)")
+        let ref = Storage.storage().reference().child("profilePictures").child(filePath)
         let metadata = StorageMetadata(); metadata.contentType = "image/jpeg"
         
         ref.putData(data, metadata: metadata) { _, error in
@@ -613,6 +684,9 @@ struct ProfileView: View {
                 return
             }
             saveProfilePicturePathToDatabase(filePath)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                loadProfileImage(from: user_data.userProfilePicture)
+            }
         }
     }
     
@@ -620,6 +694,8 @@ struct ProfileView: View {
         let dbRef = Database.database().reference()
             .child("UserData").child(user_data.userID).child("UserProfilePicture")
         dbRef.setValue(filePath)
+        
+        profileImage = loadImageFromDisk()
     }
     
     private func loadFollowStats() {
@@ -755,7 +831,7 @@ struct ProfileView: View {
         else { return nil }
 
         let isPrivateString = privacy ? "Private" : "Public"
-        var rankoItems: [AlgoliaRankoItem] = []
+        var rankoItems: [RankoItem] = []
 
         for (_, value) in itemsDict {
             guard
@@ -768,14 +844,14 @@ struct ProfileView: View {
                 let itemRank  = itemDict["ItemRank"]        as? Int
             else { continue }
 
-            let record = AlgoliaItemRecord(
+            let record = RankoRecord(
                 objectID:        itemID,
                 ItemName:        itemName,
                 ItemDescription: itemDesc,
                 ItemCategory: "",
                 ItemImage:       itemImg
             )
-            rankoItems.append(AlgoliaRankoItem(id: itemID,
+            rankoItems.append(RankoItem(id: itemID,
                                         rank: itemRank,
                                         votes: itemVotes,
                                         record: record))
@@ -835,6 +911,18 @@ struct ProfileView: View {
             }
         }
     }
+
+    private func loadImageFromDisk() -> UIImage? {
+        let path = URL(string: user_data.userProfilePicture)!
+        if FileManager.default.fileExists(atPath: path.path) {
+            if let data = try? Data(contentsOf: path),
+               let image = UIImage(data: data) {
+                print("📂 Loaded profile image from disk.")
+                return image
+            }
+        }
+        return nil
+    }
 }
 
 // MARK: - AlgoliaRankoView
@@ -855,7 +943,7 @@ class AlgoliaRankoView {
         let userID = user_data.userID
         var query = Query("")
         query.hitsPerPage = limit
-        query.filters = "RankoUserID:\(userID)" // Only public lists
+        query.filters = "RankoUserID:\(userID) AND RankoStatus:active" // Only public lists
         
         index.search(query: query) { result in
             switch result {
@@ -1063,11 +1151,11 @@ struct SearchRankosView: View {
             )
             .ignoresSafeArea()
         }
-        .sheet(item: $selectedList) { list in
+        .fullScreenCover(item: $selectedList) { list in
             if list.type == "default" {
-                DefaultListPersonal(listID: list.id){ updatedItem in }
+                DefaultListPersonal(listID: list.id, onDelete: { dismiss() })
             } else if list.type == "group" {
-                GroupListPersonal(listID: list.id)
+                GroupListPersonal(listID: list.id, onDelete: { dismiss() })
             }
         }
         .onAppear {
@@ -1086,7 +1174,7 @@ struct SearchRankosView: View {
         facetQuery.facets = ["RankoCategory"]
         facetQuery.hitsPerPage = 0
         facetQuery.maxFacetHits = 50
-        facetQuery.filters = "RankoUserID:\(user_data.userID)"
+        facetQuery.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
 
         index.search(query: facetQuery) { result in
             switch result {
@@ -1112,7 +1200,7 @@ struct SearchRankosView: View {
                                   apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
         let index = client.index(withName: "RankoLists")
         var query = Query("").set(\.hitsPerPage, to: 20)
-        query.filters = "RankoUserID:\(user_data.userID)"
+        query.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
 
         index.search(query: query) { result in
             switch result {
@@ -1152,7 +1240,7 @@ struct SearchRankosView: View {
                     continue
                 }
 
-                let items: [AlgoliaRankoItem] = itemsDict.compactMap { itemID, item in
+                let items: [RankoItem] = itemsDict.compactMap { itemID, item in
                     guard let itemName = item["ItemName"] as? String,
                           let itemDesc = item["ItemDescription"] as? String,
                           let itemImage = item["ItemImage"] as? String else {
@@ -1162,7 +1250,7 @@ struct SearchRankosView: View {
                     let rank = item["ItemRank"] as? Int ?? 0
                     let votes = item["ItemVotes"] as? Int ?? 0
 
-                    let record = AlgoliaItemRecord(
+                    let record = RankoRecord(
                         objectID: itemID,
                         ItemName: itemName,
                         ItemDescription: itemDesc,
@@ -1170,7 +1258,7 @@ struct SearchRankosView: View {
                         ItemImage: itemImage
                     )
 
-                    return AlgoliaRankoItem(id: itemID, rank: rank, votes: votes, record: record)
+                    return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
                 }
 
                 let rankoList = RankoList(
@@ -1386,13 +1474,6 @@ struct SelectFeaturedRankosView: View {
             )
             .ignoresSafeArea()
         }
-        .sheet(item: $selectedList) { list in
-            if list.type == "default" {
-                DefaultListPersonal(listID: list.id){ updatedItem in }
-            } else if list.type == "group" {
-                GroupListPersonal(listID: list.id)
-            }
-        }
         .onAppear {
             fetchFacetData()
             loadAllData()
@@ -1409,7 +1490,7 @@ struct SelectFeaturedRankosView: View {
         facetQuery.facets = ["RankoCategory"]
         facetQuery.hitsPerPage = 0
         facetQuery.maxFacetHits = 50
-        facetQuery.filters = "RankoUserID:\(user_data.userID) AND RankoPrivacy:false"
+        facetQuery.filters = "RankoUserID:\(user_data.userID) AND RankoPrivacy:false AND RankoStatus:active"
 
         index.search(query: facetQuery) { result in
             switch result {
@@ -1435,7 +1516,7 @@ struct SelectFeaturedRankosView: View {
                                   apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
         let index = client.index(withName: "RankoLists")
         var query = Query("").set(\.hitsPerPage, to: 20)
-        query.filters = "RankoUserID:\(user_data.userID) AND RankoPrivacy:false"
+        query.filters = "RankoUserID:\(user_data.userID) AND RankoPrivacy:false AND RankoStatus:active"
 
         index.search(query: query) { result in
             switch result {
@@ -1475,7 +1556,7 @@ struct SelectFeaturedRankosView: View {
                     continue
                 }
 
-                let items: [AlgoliaRankoItem] = itemsDict.compactMap { itemID, item in
+                let items: [RankoItem] = itemsDict.compactMap { itemID, item in
                     guard let itemName = item["ItemName"] as? String,
                           let itemDesc = item["ItemDescription"] as? String,
                           let itemImage = item["ItemImage"] as? String else {
@@ -1485,7 +1566,7 @@ struct SelectFeaturedRankosView: View {
                     let rank = item["ItemRank"] as? Int ?? 0
                     let votes = item["ItemVotes"] as? Int ?? 0
 
-                    let record = AlgoliaItemRecord(
+                    let record = RankoRecord(
                         objectID: itemID,
                         ItemName: itemName,
                         ItemDescription: itemDesc,
@@ -1493,7 +1574,7 @@ struct SelectFeaturedRankosView: View {
                         ItemImage: itemImage
                     )
 
-                    return AlgoliaRankoItem(id: itemID, rank: rank, votes: votes, record: record)
+                    return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
                 }
 
                 let rankoList = RankoList(
@@ -2972,7 +3053,7 @@ struct ProfileSpectateView: View {
                                   apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
         let index = client.index(withName: "RankoLists")
         var query = Query("").set(\.hitsPerPage, to: 0) // 0 results, just want count
-        query.filters = "RankoUserID:\(userID)"
+        query.filters = "RankoUserID:\(userID) AND RankoStatus:active"
 
         index.search(query: query) { (result: Result<SearchResponse, Error>) in
             DispatchQueue.main.async {
@@ -3200,7 +3281,7 @@ struct ProfileSpectateView: View {
         else { return nil }
 
         let isPrivateString = privacy ? "Private" : "Public"
-        var rankoItems: [AlgoliaRankoItem] = []
+        var rankoItems: [RankoItem] = []
 
         for (_, value) in itemsDict {
             guard
@@ -3213,14 +3294,14 @@ struct ProfileSpectateView: View {
                 let itemRank  = itemDict["ItemRank"]        as? Int
             else { continue }
 
-            let record = AlgoliaItemRecord(
+            let record = RankoRecord(
                 objectID:        itemID,
                 ItemName:        itemName,
                 ItemDescription: itemDesc,
                 ItemCategory: "",
                 ItemImage:       itemImg
             )
-            rankoItems.append(AlgoliaRankoItem(id: itemID,
+            rankoItems.append(RankoItem(id: itemID,
                                         rank: itemRank,
                                         votes: itemVotes,
                                         record: record))

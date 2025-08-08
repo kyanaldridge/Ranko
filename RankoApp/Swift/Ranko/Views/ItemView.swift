@@ -10,14 +10,14 @@ import UIKit
 
 // MARK: - Detail sheet for a single item
 struct ItemDetailView: View {
-    let items: [AlgoliaRankoItem]
-    let initialItem: AlgoliaRankoItem  // the item to center on initially
+    let items: [RankoItem]
+    let initialItem: RankoItem  // the item to center on initially
     let listID: String
-    let onSave: (AlgoliaRankoItem) -> Void
+    let onSave: (RankoItem) -> Void
     
     // Infinite carousel state
     @State private var scrollPosition: Int?
-    @State private var itemsArray: [[AlgoliaRankoItem]] = []
+    @State private var itemsArray: [[RankoItem]] = []
     @State private var autoScrollEnabled = false
     @State private var showEditSheet = false
     @State private var backgroundColor: Color = .white
@@ -244,14 +244,14 @@ struct ItemDetailView: View {
                 ) { newName, newDesc in
                     // build updated record & item
                     let rec = currentItem.record
-                    let updatedRecord = AlgoliaItemRecord(
+                    let updatedRecord = RankoRecord(
                         objectID: rec.objectID,
                         ItemName: newName,
                         ItemDescription: newDesc,
                         ItemCategory: "",
                         ItemImage: rec.ItemImage
                     )
-                    let updatedItem = AlgoliaRankoItem(
+                    let updatedItem = RankoItem(
                         id: currentItem.id,
                         rank: currentItem.rank,
                         votes: currentItem.votes,
@@ -269,7 +269,7 @@ struct ItemDetailView: View {
     }
     
     @ViewBuilder
-    private func tabContent(for item: AlgoliaRankoItem) -> some View {
+    private func tabContent(for item: RankoItem) -> some View {
         switch selectedType {
         case "Description":
             Text(item.record.ItemDescription)
@@ -434,7 +434,7 @@ extension Image {
 
 struct EditItemView: View {
     @Environment(\.presentationMode) private var presentationMode
-    let item: AlgoliaRankoItem
+    let item: RankoItem
     let listID: String
     let onSave: (String, String) -> Void
 
@@ -446,7 +446,7 @@ struct EditItemView: View {
     @State private var showToast: Bool = false
     @State private var toastMessage: String = ""
 
-    init(item: AlgoliaRankoItem, listID: String, onSave: @escaping (String, String) -> Void) {
+    init(item: RankoItem, listID: String, onSave: @escaping (String, String) -> Void) {
         self.item = item
         self.listID = listID
         self.onSave = onSave
@@ -727,7 +727,7 @@ struct EditItemView: View {
 
 // MARK: - Detail sheet for a single item
 struct SpecItemDetailView: View {
-    let item: AlgoliaRankoItem
+    let item: RankoItem
 
     var body: some View {
         VStack(spacing: 16) {
@@ -768,14 +768,14 @@ struct SpecItemDetailView: View {
 // MARK: - Preview Provider (unchanged)
 struct ItemView_Previews: PreviewProvider {
     static var previews: some View {
-        let sampleRecord = AlgoliaItemRecord(
+        let sampleRecord = RankoRecord(
             objectID: "IYEGY7767sSS",
             ItemName: "Apple",
             ItemDescription: "a red fruit",
             ItemCategory: "",
             ItemImage: "https://img.freepik.com/free-psd/close-up-delicious-apple_23-2151868338.jpg"
         )
-        let sampleItem = AlgoliaRankoItem(
+        let sampleItem = RankoItem(
             id: "IYEGY7767sSS",
             rank: 3,
             votes: 42,
@@ -797,7 +797,7 @@ struct ItemView_Previews: PreviewProvider {
 // MARK: - Preview Provider (unchanged)
 struct SpectateItemView_Previews: PreviewProvider {
     static var previews: some View {
-        SpecItemDetailView(item: AlgoliaRankoItem(id: "IYEGY7767sSS", rank: 3, votes: 42, record: AlgoliaItemRecord(objectID: "IYEGY7767sSS", ItemName: "Apple", ItemDescription: "a red fruit", ItemCategory: "", ItemImage: "https://img.freepik.com/free-psd/close-up-delicious-apple_23-2151868338.jpg")))
+        SpecItemDetailView(item: RankoItem(id: "IYEGY7767sSS", rank: 3, votes: 42, record: RankoRecord(objectID: "IYEGY7767sSS", ItemName: "Apple", ItemDescription: "a red fruit", ItemCategory: "", ItemImage: "https://img.freepik.com/free-psd/close-up-delicious-apple_23-2151868338.jpg")))
     }
 }
 
@@ -1180,13 +1180,13 @@ struct ProminentColorsView: View {
 struct ItemDetailViewSpectate: View {
     @Environment(\.dismiss) var dismiss
     
-    let items: [AlgoliaRankoItem]
-    let initialItem: AlgoliaRankoItem  // the item to center on initially
+    let items: [RankoItem]
+    let initialItem: RankoItem  // the item to center on initially
     let listID: String
     
     // Infinite carousel state
     @State private var scrollPosition: Int?
-    @State private var itemsArray: [[AlgoliaRankoItem]] = []
+    @State private var itemsArray: [[RankoItem]] = []
     @State private var autoScrollEnabled = false
     @State private var showEditSheet = false
     @State private var backgroundColor: Color = .white
@@ -1388,7 +1388,7 @@ struct ItemDetailViewSpectate: View {
     }
     
     @ViewBuilder
-    private func tabContent(for item: AlgoliaRankoItem) -> some View {
+    private func tabContent(for item: RankoItem) -> some View {
         switch selectedType {
         case "Description":
             Text(item.record.ItemDescription)
@@ -1532,16 +1532,16 @@ struct ItemDetailViewSpectate: View {
 }
 
 struct GroupItemDetailView: View {
-    let items: [AlgoliaRankoItem]
+    let items: [RankoItem]
     let rowIndex: Int
     let numberOfRows: Int
-    let initialItem: AlgoliaRankoItem
+    let initialItem: RankoItem
     let listID: String
-    let onSave: (AlgoliaRankoItem) -> Void
+    let onSave: (RankoItem) -> Void
     
     // Infinite carousel state
     @State private var scrollPosition: Int?
-    @State private var itemsArray: [[AlgoliaRankoItem]] = []
+    @State private var itemsArray: [[RankoItem]] = []
     @State private var autoScrollEnabled = false
     @State private var showEditSheet = false
     @State private var backgroundColor: Color = .white
@@ -1777,14 +1777,14 @@ struct GroupItemDetailView: View {
                 ) { newName, newDesc in
                     // build updated record & item
                     let rec = currentItem.record
-                    let updatedRecord = AlgoliaItemRecord(
+                    let updatedRecord = RankoRecord(
                         objectID: rec.objectID,
                         ItemName: newName,
                         ItemDescription: newDesc,
                         ItemCategory: "",
                         ItemImage: rec.ItemImage
                     )
-                    let updatedItem = AlgoliaRankoItem(
+                    let updatedItem = RankoItem(
                         id: currentItem.id,
                         rank: currentItem.rank,
                         votes: currentItem.votes,
@@ -1799,7 +1799,7 @@ struct GroupItemDetailView: View {
     }
     
     @ViewBuilder
-    private func tabContent(for item: AlgoliaRankoItem) -> some View {
+    private func tabContent(for item: RankoItem) -> some View {
         switch selectedType {
         case "Description":
             Text(item.record.ItemDescription)
@@ -1943,16 +1943,16 @@ struct GroupItemDetailView: View {
 }
 
 struct GroupItemDetailViewSpectate: View {
-    let items: [AlgoliaRankoItem]
+    let items: [RankoItem]
     let rowIndex: Int
     let numberOfRows: Int
-    let initialItem: AlgoliaRankoItem
+    let initialItem: RankoItem
     let listID: String
-    let onSave: (AlgoliaRankoItem) -> Void
+    let onSave: (RankoItem) -> Void
     
     // Infinite carousel state
     @State private var scrollPosition: Int?
-    @State private var itemsArray: [[AlgoliaRankoItem]] = []
+    @State private var itemsArray: [[RankoItem]] = []
     @State private var autoScrollEnabled = false
     @State private var showEditSheet = false
     @State private var backgroundColor: Color = .white
@@ -2175,7 +2175,7 @@ struct GroupItemDetailViewSpectate: View {
     }
     
     @ViewBuilder
-    private func tabContent(for item: AlgoliaRankoItem) -> some View {
+    private func tabContent(for item: RankoItem) -> some View {
         switch selectedType {
         case "Description":
             Text(item.record.ItemDescription)

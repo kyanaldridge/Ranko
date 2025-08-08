@@ -89,7 +89,7 @@ struct GroupListGallery: View {
             return nil
         }
         
-        let items: [AlgoliaRankoItem] = itemsDict.compactMap { _, value in
+        let items: [RankoItem] = itemsDict.compactMap { _, value in
             guard
                 let d     = value as? [String: Any],
                 let iID   = d["ItemID"]     as? String,
@@ -112,12 +112,12 @@ struct GroupListGallery: View {
             }
             print("DEBUG: parseListData itemID:\(iID) rank:\(rank) imgURL:\(img)")
             
-            let record = AlgoliaItemRecord(objectID: iID,
+            let record = RankoRecord(objectID: iID,
                                      ItemName: name,
                                      ItemDescription: "",
                                      ItemCategory: "",
                                      ItemImage: img)
-            return AlgoliaRankoItem(id: iID, rank: rank, votes: votes, record: record)
+            return RankoItem(id: iID, rank: rank, votes: votes, record: record)
         }
         print("DEBUG: parseListData returning \(items.count) items for list \(id)")
         
@@ -147,7 +147,7 @@ struct GroupListIndividualGallery: View {
     let type: String
     let onUnpin: (() -> Void)?
     
-    private var sortedItems: [AlgoliaRankoItem] {
+    private var sortedItems: [RankoItem] {
         listData.items.sorted { $0.rank < $1.rank }
     }
 
@@ -284,6 +284,6 @@ struct GroupListIndividualGallery: View {
 
 
 #Preview {
-    GroupSelectedItemRow(item: AlgoliaRankoItem(id: "AU73T2-73GW6A-9873HG-JW4Q32", rank: 1, votes: 43, record: AlgoliaItemRecord(objectID: "1234567890", ItemName: "Test Item", ItemDescription: "This is a test item", ItemCategory: "", ItemImage: "https://i.ytimg.com/vi/JrEVa5_k-_8/maxresdefault.jpg")))
+    GroupSelectedItemRow(item: RankoItem(id: "AU73T2-73GW6A-9873HG-JW4Q32", rank: 1, votes: 43, record: RankoRecord(objectID: "1234567890", ItemName: "Test Item", ItemDescription: "This is a test item", ItemCategory: "", ItemImage: "https://i.ytimg.com/vi/JrEVa5_k-_8/maxresdefault.jpg")))
 }
 

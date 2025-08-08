@@ -359,16 +359,16 @@ struct DefaultListHomeView: View {
     @State private var openShareView: Bool = false
     var onCommentTap: (String) -> Void
     
-    private var sortedItems: [AlgoliaRankoItem] {
+    private var sortedItems: [RankoItem] {
         listData.items.sorted { $0.rank < $1.rank }
     }
-    private var firstBlock: [AlgoliaRankoItem] {
+    private var firstBlock: [RankoItem] {
         Array(sortedItems.prefix(5))
     }
-    private var remainder: [AlgoliaRankoItem] {
+    private var remainder: [RankoItem] {
         Array(sortedItems.dropFirst(5))
     }
-    private var secondBlock: [AlgoliaRankoItem] {
+    private var secondBlock: [RankoItem] {
         Array(remainder.prefix(4))
     }
     
@@ -557,7 +557,7 @@ struct DefaultListHomeView: View {
         }
     }
     
-    private func itemRow(_ item: AlgoliaRankoItem) -> some View {
+    private func itemRow(_ item: RankoItem) -> some View {
         HStack(spacing: 8) {
             ZStack(alignment: .bottomTrailing) {
                 AsyncImage(url: URL(string: item.itemImage)) { phase in
@@ -831,7 +831,7 @@ struct DefaultListHomeView: View {
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "en_US_POSIX")
         fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
-        fmt.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+        fmt.dateFormat = "yyyyMMddHHmmss"
         return fmt.string(from: now)
     }
     
@@ -866,7 +866,7 @@ struct DefaultListHomeView: View {
 
 struct HomeListsDisplay: View {
     @State private var lists: [RankoList] = []
-    @State private var allItems: [AlgoliaRankoItem] = []
+    @State private var allItems: [RankoItem] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var selectedList: RankoList? = nil
@@ -949,7 +949,7 @@ struct HomeListsDisplay: View {
                     continue
                 }
 
-                let items: [AlgoliaRankoItem] = itemsDict.compactMap { itemID, item in
+                let items: [RankoItem] = itemsDict.compactMap { itemID, item in
                     guard let itemName = item["ItemName"] as? String,
                           let itemDesc = item["ItemDescription"] as? String,
                           let itemImage = item["ItemImage"] as? String else {
@@ -959,7 +959,7 @@ struct HomeListsDisplay: View {
                     let rank = item["ItemRank"] as? Int ?? 0
                     let votes = item["ItemVotes"] as? Int ?? 0
 
-                    let record = AlgoliaItemRecord(
+                    let record = RankoRecord(
                         objectID: itemID,
                         ItemName: itemName,
                         ItemDescription: itemDesc,
@@ -967,7 +967,7 @@ struct HomeListsDisplay: View {
                         ItemImage: itemImage
                     )
 
-                    return AlgoliaRankoItem(id: itemID, rank: rank, votes: votes, record: record)
+                    return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
                 }
 
                 let rankoList = RankoList(
@@ -997,7 +997,7 @@ struct GroupListHomeView: View {
     let listData: RankoList
     var showToastHelper: (String) -> Void
 
-    private var adjustedItems: [AlgoliaRankoItem] {
+    private var adjustedItems: [RankoItem] {
         listData.items.map { item in
             var newItem = item
             // Adjust rank: e.g., 1003 → 1, 4005 → 4

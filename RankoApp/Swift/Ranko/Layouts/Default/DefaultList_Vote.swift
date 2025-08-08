@@ -47,10 +47,10 @@ struct DefaultListVote: View {
 
     @State private var activeTab: DefaultListVoteTab = .clone
     @State private var triggerHaptic: Bool = false
-    @State private var selectedRankoItems: [AlgoliaRankoItem] = []
-    @State private var selectedItem: AlgoliaRankoItem? = nil
-    @State private var itemToEdit: AlgoliaRankoItem? = nil
-    @State private var onSave: ((AlgoliaRankoItem) -> Void)? = nil
+    @State private var selectedRankoItems: [RankoItem] = []
+    @State private var selectedItem: RankoItem? = nil
+    @State private var itemToEdit: RankoItem? = nil
+    @State private var onSave: ((RankoItem) -> Void)? = nil
 
     // MARK: - Init now only requires listID
     init(
@@ -62,7 +62,7 @@ struct DefaultListVote: View {
         description: String = "",
         isPrivate: Bool = false,
         category: CategoryChip? = CategoryChip(name: "Unknown", icon: "questionmark.circle.fill", category: "Unknown", synonym: ""),
-        selectedRankoItems: [AlgoliaRankoItem] = []
+        selectedRankoItems: [RankoItem] = []
     ) {
         self.listID = listID
         self.creatorID = creatorID
@@ -203,14 +203,14 @@ struct DefaultListVote: View {
                                     ) { newName, newDesc in
                                         // build updated record & item
                                         let rec = item.record
-                                        let updatedRecord = AlgoliaItemRecord(
+                                        let updatedRecord = RankoRecord(
                                             objectID: rec.objectID,
                                             ItemName: newName,
                                             ItemDescription: newDesc,
                                             ItemCategory: "",
                                             ItemImage: rec.ItemImage
                                         )
-                                        let updatedItem = AlgoliaRankoItem(
+                                        let updatedItem = RankoItem(
                                             id: item.id,
                                             rank: item.rank,
                                             votes: item.votes,
@@ -391,7 +391,7 @@ struct DefaultListVote: View {
         }
     }
     
-    private func sortByVotesThenRank(_ a: AlgoliaRankoItem, _ b: AlgoliaRankoItem) -> Bool {
+    private func sortByVotesThenRank(_ a: RankoItem, _ b: RankoItem) -> Bool {
         if a.votes != b.votes {
             return a.votes > b.votes  // More votes first
         } else {
@@ -494,7 +494,7 @@ struct DefaultListVote: View {
 
                 // — map your items…
                 if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
-                    var loaded: [AlgoliaRankoItem] = []
+                    var loaded: [RankoItem] = []
                     for (_, itemData) in itemsDict {
                         guard
                             let id    = itemData["ItemID"]          as? String,
@@ -505,7 +505,7 @@ struct DefaultListVote: View {
                             let votes = itemData["ItemVotes"]       as? Int
                         else { continue }
                         
-                        let record = AlgoliaItemRecord(
+                        let record = RankoRecord(
                             objectID: id,
                             ItemName: name,
                             ItemDescription: desc,
@@ -513,7 +513,7 @@ struct DefaultListVote: View {
                             ItemImage: image
                         )
 
-                        let item = AlgoliaRankoItem(
+                        let item = RankoItem(
                             id: id,
                             rank: rank,
                             votes: votes,
@@ -530,19 +530,19 @@ struct DefaultListVote: View {
         })
     }
     // Item Helpers
-    private func delete(_ item: AlgoliaRankoItem) {
+    private func delete(_ item: RankoItem) {
         selectedRankoItems.removeAll { $0.id == item.id }
         normalizeRanks()
     }
 
-    private func moveToTop(_ item: AlgoliaRankoItem) {
+    private func moveToTop(_ item: RankoItem) {
         guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
         let moved = selectedRankoItems.remove(at: idx)
         selectedRankoItems.insert(moved, at: 0)
         normalizeRanks()
     }
 
-    private func moveToBottom(_ item: AlgoliaRankoItem) {
+    private func moveToBottom(_ item: RankoItem) {
         guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
         let moved = selectedRankoItems.remove(at: idx)
         selectedRankoItems.append(moved)
@@ -587,7 +587,7 @@ struct VoteNowView: View {
     let totalVotesAllowed: Int = 15
     let hasVoted: Bool
     let listID: String
-    let items: [AlgoliaRankoItem]                 // full item data
+    let items: [RankoItem]                 // full item data
     var onComplete: () -> Void            // callback after submit
     var onCancel: () -> Void
 
@@ -603,7 +603,7 @@ struct VoteNowView: View {
     }
 
     // MARK: - Initializer
-    init(hasVoted: Bool, listID: String, items: [AlgoliaRankoItem], onComplete: @escaping () -> Void, onCancel: @escaping () -> Void) {
+    init(hasVoted: Bool, listID: String, items: [RankoItem], onComplete: @escaping () -> Void, onCancel: @escaping () -> Void) {
         self.hasVoted = hasVoted
         self.listID = listID
         self.items = items
@@ -820,7 +820,7 @@ struct VoteNowView: View {
 
 // MARK: – Row Subview for a Selected Item
 struct VotedItemRow: View {
-    let item: AlgoliaRankoItem
+    let item: RankoItem
     let position: Int   // 1-based vote ranking
 
     private var badge: some View {
@@ -912,9 +912,9 @@ struct VotedItemRow: View {
 //    @State private var creatorName: String = ""
 //    @State private var rankoType: String        = ""
 //    @State private var category: CategoryChip?  = nil
-//    @State private var selectedRankoItems: [AlgoliaRankoItem] = []
+//    @State private var selectedRankoItems: [RankoItem] = []
 //    @State private var profileImage: UIImage?
-//    @State private var selectedItem: AlgoliaRankoItem? = nil
+//    @State private var selectedItem: RankoItem? = nil
 //    @State private var spectateProfile: Bool = false
 //
 //    // MARK: – UI state
@@ -1032,7 +1032,7 @@ struct VotedItemRow: View {
 //        let ref = Database.database().reference().child("ItemData")
 //
 //        ref.observeSingleEvent(of: .value) { snapshot,snapShot  in
-//            var loadedItems: [AlgoliaRankoItem] = []
+//            var loadedItems: [RankoItem] = []
 //
 //            for itemID in itemIDs {
 //                if let itemSnap = snapshot.childSnapshot(forPath: itemID).value as? [String: Any],
@@ -1044,7 +1044,7 @@ struct VotedItemRow: View {
 //                    let rank = meta["Rank"] ?? 9999
 //                    let votes = meta["Votes"] ?? 0
 //
-//                    let record = AlgoliaItemRecord(
+//                    let record = RankoRecord(
 //                        objectID: itemID,
 //                        ItemName: name,
 //                        ItemDescription: desc,
@@ -1052,7 +1052,7 @@ struct VotedItemRow: View {
 //                        ItemImage: image
 //                    )
 //
-//                    let item = AlgoliaRankoItem(
+//                    let item = RankoItem(
 //                        id: itemID,
 //                        rank: rank,
 //                        votes: votes,
@@ -1211,7 +1211,7 @@ struct VotedItemRow: View {
 //        }
 //    }
 //
-//    private func sortByVotesThenRank(_ a: AlgoliaRankoItem, _ b: AlgoliaRankoItem) -> Bool {
+//    private func sortByVotesThenRank(_ a: RankoItem, _ b: RankoItem) -> Bool {
 //        if a.votes != b.votes {
 //            return a.votes > b.votes  // More votes first
 //        } else {

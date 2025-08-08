@@ -328,23 +328,6 @@ struct CustomTabBar: View {
     }
 }
 
-
-struct CreateRankoView: View {
-    @State private var listCreatorSheet: Bool = false
-    
-    var body: some View {
-        HomeView()
-            .sheet(isPresented: $listCreatorSheet) {
-                CreateNewRanko()
-                    .presentationDetents([.medium, .large]) // ✅ Detents must be attached here
-                    .presentationDragIndicator(.visible)
-            }
-            .onAppear {
-                listCreatorSheet = true
-            }
-    }
-}
-
 /// Tab identifiers and titles.
 enum TabModel: String, CaseIterable {
     case home = "house.fill"

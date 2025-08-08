@@ -9,7 +9,7 @@ import SwiftUI
 
 struct DefaultListShareImage: View {
     let rankoName: String
-    let items: [AlgoliaRankoItem]
+    let items: [RankoItem]
 
     @State private var snapshotImage: UIImage?
     @State private var imageCache: [String: UIImage] = [:]
@@ -17,7 +17,7 @@ struct DefaultListShareImage: View {
     @Environment(\.dismiss) private var dismiss
 
     /// Top 10 sorted
-    private var top10: [AlgoliaRankoItem] {
+    private var top10: [RankoItem] {
         Array(items.sorted { $0.rank < $1.rank }.prefix(12))
     }
 
@@ -93,13 +93,13 @@ struct DefaultListShareImage: View {
 /// A card that shows Top 3 on a podium + 4–10 in a grid below
 struct PodiumRankoCard: View {
     let title: String
-    let items: [AlgoliaRankoItem]        // expects up to 10
+    let items: [RankoItem]        // expects up to 10
     let imageCache: [String: UIImage]
 
-    private var podiumItems: [AlgoliaRankoItem] {
+    private var podiumItems: [RankoItem] {
         items.filter { $0.rank <= 3 }.sorted { $0.rank < $1.rank }
     }
-    private var nextItems: [AlgoliaRankoItem] {
+    private var nextItems: [RankoItem] {
         items.filter { $0.rank > 3 }.sorted { $0.rank < $1.rank }
     }
 

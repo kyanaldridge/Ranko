@@ -9,7 +9,7 @@ import SwiftUI
 
 // MARK: – Row Subview for a Selected Item
 struct GroupListItemRow: View {
-    let item: AlgoliaRankoItem
+    let item: RankoItem
 
     private var badge: some View {
         Group {

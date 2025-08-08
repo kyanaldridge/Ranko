@@ -33,16 +33,20 @@ struct GroupListPersonal: View {
     @State var showReorderSheet = false
     @State var showEditItemSheet = false
     @State var showExitSheet = false
+    @State var showDeleteAlert = false
     
     // MARK: - ITEM VARIABLES
-    @State private var unGroupedItems: [AlgoliaRankoItem] = []
-    @State private var groupedItems: [[AlgoliaRankoItem]]
-    @State private var selectedDetailItem: AlgoliaRankoItem? = nil
+    @State private var unGroupedItems: [RankoItem] = []
+    @State private var groupedItems: [[RankoItem]]
+    @State private var selectedDetailItem: RankoItem? = nil
     
     // MARK: - OTHER VARIABLES (INC. TOAST)
     @State private var hoveredRow: Int? = nil
     
     @State private var activeTab: GroupListPersonalTab = .addItems
+    
+    @State private var onSave: ((RankoItem) -> Void)? = nil
+    private let onDelete: (() -> Void)?
     
     private enum GroupViewMode: String, CaseIterable {
         case biggerList, defaultList, largeGrid
@@ -64,7 +68,9 @@ struct GroupListPersonal: View {
             category: "Unknown",
             synonym: ""
         ),
-        groupedItems: [AlgoliaRankoItem] = []
+        groupedItems: [RankoItem] = [],
+        onSave: ((RankoItem) -> Void)? = nil,
+        onDelete: (() -> Void)? = nil
     ) {
         self.listID = listID
         _rankoName    = State(initialValue: rankoName)
@@ -77,6 +83,8 @@ struct GroupListPersonal: View {
         let sortedKeys = dict.keys.sorted()
         let rows = sortedKeys.compactMap { dict[$0] }
         _groupedItems = State(initialValue: rows)
+        _onSave = State(initialValue: onSave)
+        self.onDelete = onDelete
     }
     
     // MARK: - BODY VIEW
@@ -391,8 +399,61 @@ struct GroupListPersonal: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                         dismiss()   // dismiss DefaultListView without saving
                     }   // dismiss DefaultListView without saving
+                },
+                onDelete: {
+                    showTabBar = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                        showDeleteAlert = true
+                    }
                 }
             )
+        }
+        .alert(isPresented: $showDeleteAlert) {
+            CustomDialog(
+                title: "Delete Ranko?",
+                content: "Are you sure you want to delete your Ranko.",
+                image: .init(
+                    content: "trash.fill",
+                    background: .red,
+                    foreground: .white
+                ),
+                button1: .init(
+                    content: "Delete",
+                    background: .red,
+                    foreground: .white,
+                    action: { _ in
+                        showDeleteAlert = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                            removeFeaturedRanko(listID: listID) { success in}
+                            deleteRanko() { success in
+                                if success {
+                                    print("🎉 Fields updated in Algolia")
+                                } else {
+                                    print("⚠️ Failed to update fields")
+                                }
+                            }
+                            onDelete!()
+                            dismiss()
+                        }
+                    }
+                ),
+                button2: .init(
+                    content: "Cancel",
+                    background: .orange,
+                    foreground: .white,
+                    action: { _ in
+                        showDeleteAlert = false
+                        showTabBar = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                            showTabBar = true
+                        }
+                    }
+                )
+            )
+            .transition(.blurReplace.combined(with: .push(from: .bottom)))
+        } background: {
+            Rectangle()
+                .fill(.primary.opacity(0.35))
         }
         .sheet(isPresented: $showEmbeddedStickyPoolSheet) {
             embeddedStickyPoolView
@@ -483,7 +544,7 @@ struct GroupListPersonal: View {
             let rowIndex = groupedItems.firstIndex { row in
                 row.contains { $0.id == tappedItem.id }
             } ?? 0
-
+            
             GroupItemDetailView(
                 items: groupedItems[rowIndex],
                 rowIndex: rowIndex,
@@ -492,7 +553,7 @@ struct GroupListPersonal: View {
                 listID:  listID
             ) { updatedItem in
                 if let idx = groupedItems[rowIndex]
-                                .firstIndex(where: { $0.id == updatedItem.id }) {
+                    .firstIndex(where: { $0.id == updatedItem.id }) {
                     groupedItems[rowIndex][idx] = updatedItem
                 }
             }
@@ -502,257 +563,340 @@ struct GroupListPersonal: View {
     
     // MARK: - EMBEDDED STICKY POOL
     private var embeddedStickyPoolView: some View {
-            VStack(spacing: 6) {
-                Text("Drag the below items to groups")
-                    .font(.caption2)
-                    .foregroundColor(.gray)
-                    .padding(.top, 3)
+        VStack(spacing: 6) {
+            Text("Drag the below items to groups")
+                .font(.caption2)
+                .foregroundColor(.gray)
+                .padding(.top, 3)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(unGroupedItems) { item in
+                        GroupSelectedItemRow(item: item)
+                            .onDrag { NSItemProvider(object: item.id as NSString) }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .onDrop(
+            of: ["public.text"],
+            delegate: RowDropDelegate(
+                itemRows:   $groupedItems,
+                unGrouped:  $unGroupedItems,
+                hoveredRow: $hoveredRow,
+                targetRow:  nil
+            )
+        )
+    }
+    
+    private func loadListFromFirebase() {
+        let db = Database.database().reference()
+        let listRef = db.child("RankoData").child(listID)
+        
+        listRef.observeSingleEvent(of: .value,
+                                   with: { snapshot in
+            guard let data = snapshot.value as? [String: Any] else {
+                print("⚠️ No data at RankoData/\(listID)")
+                return
+            }
+            
+            DispatchQueue.main.async {
+                // — map your top-level fields…
+                self.rankoName   = data["RankoName"]        as? String ?? ""
+                self.description = data["RankoDescription"] as? String ?? ""
+                self.isPrivate   = data["RankoPrivacy"]     as? Bool   ?? false
                 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(unGroupedItems) { item in
-                            GroupSelectedItemRow(item: item)
-                                .onDrag { NSItemProvider(object: item.id as NSString) }
-                        }
+                if let catName = data["RankoCategory"] as? String {
+                    let allChips = categoryChipsByCategory.values.flatMap { $0 }
+                    self.category = allChips.first {
+                        $0.name.caseInsensitiveCompare(catName) == .orderedSame
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
                 }
-            }
-            .frame(maxWidth: .infinity)
-            .onDrop(
-                of: ["public.text"],
-                delegate: RowDropDelegate(
-                    itemRows:   $groupedItems,
-                    unGrouped:  $unGroupedItems,
-                    hoveredRow: $hoveredRow,
-                    targetRow:  nil
-                )
-            )
-        }
-        
-        private func loadListFromFirebase() {
-            let db = Database.database().reference()
-            let listRef = db.child("RankoData").child(listID)
-
-            listRef.observeSingleEvent(of: .value,
-                                       with: { snapshot in
-                guard let data = snapshot.value as? [String: Any] else {
-                    print("⚠️ No data at RankoData/\(listID)")
-                    return
-                }
-
-                DispatchQueue.main.async {
-                    // — map your top-level fields…
-                    self.rankoName   = data["RankoName"]        as? String ?? ""
-                    self.description = data["RankoDescription"] as? String ?? ""
-                    self.isPrivate   = data["RankoPrivacy"]     as? Bool   ?? false
-
-                    if let catName = data["RankoCategory"] as? String {
-                        let allChips = categoryChipsByCategory.values.flatMap { $0 }
-                        self.category = allChips.first {
-                            $0.name.caseInsensitiveCompare(catName) == .orderedSame
-                        }
-                    }
-
-                    // — map your items…
-                    if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
-                        var loaded: [AlgoliaRankoItem] = []
-                        for (_, itemData) in itemsDict {
-                            guard
-                                let id    = itemData["ItemID"]          as? String,
-                                let name  = itemData["ItemName"]        as? String,
-                                let desc  = itemData["ItemDescription"] as? String,
-                                let image = itemData["ItemImage"]       as? String,
-                                let rank  = itemData["ItemRank"]        as? Int,
-                                let votes = itemData["ItemVotes"]       as? Int
-                            else { continue }
-                            
-                            let record = AlgoliaItemRecord(
-                                objectID: id,
-                                ItemName: name,
-                                ItemDescription: desc,
-                                ItemCategory: "",
-                                ItemImage: image
-                            )
-                            let item = AlgoliaRankoItem(
-                                id: id,
-                                rank: rank,
-                                votes: votes,
-                                record: record
-                            )
-                            loaded.append(item)
-                        }
+                
+                // — map your items…
+                if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
+                    var loaded: [RankoItem] = []
+                    for (_, itemData) in itemsDict {
+                        guard
+                            let id    = itemData["ItemID"]          as? String,
+                            let name  = itemData["ItemName"]        as? String,
+                            let desc  = itemData["ItemDescription"] as? String,
+                            let image = itemData["ItemImage"]       as? String,
+                            let rank  = itemData["ItemRank"]        as? Int,
+                            let votes = itemData["ItemVotes"]       as? Int
+                        else { continue }
                         
-                        DispatchQueue.main.async {
-                            // If you also want them in the “ungrouped pool”:
-                            self.unGroupedItems = loaded
-                            
-                            // Group by the thousands-digit of `rank`:
-                            let groupedDict = Dictionary(grouping: loaded) { $0.rank / 1000 }
-                            self.groupedItems = groupedDict
-                                .sorted(by: { $0.key < $1.key })
-                                .map { $0.value }
+                        let record = RankoRecord(
+                            objectID: id,
+                            ItemName: name,
+                            ItemDescription: desc,
+                            ItemCategory: "",
+                            ItemImage: image
+                        )
+                        let item = RankoItem(
+                            id: id,
+                            rank: rank,
+                            votes: votes,
+                            record: record
+                        )
+                        loaded.append(item)
+                    }
+                    
+                    DispatchQueue.main.async {
+                        // If you also want them in the “ungrouped pool”:
+                        self.unGroupedItems = loaded
+                        
+                        // Group by the thousands-digit of `rank`:
+                        let groupedDict = Dictionary(grouping: loaded) { $0.rank / 1000 }
+                        self.groupedItems = groupedDict
+                            .sorted(by: { $0.key < $1.key })
+                            .map { $0.value }
+                    }
+                }
+            }
+        },
+                                   withCancel: { error in
+            print("❌ Firebase load error:", error.localizedDescription)
+        })
+    }
+    
+    private func deleteRanko(completion: @escaping (Bool) -> Void
+    ) {
+        let db = Database.database().reference()
+        
+        let statusUpdate: [String: Any] = [
+            "RankoStatus": "deleted"
+        ]
+        
+        let listRef = db.child("RankoData").child(listID)
+        
+        // ✅ Update list fields
+        listRef.updateChildValues(statusUpdate) { error, _ in
+            if let err = error {
+                print("❌ Failed to update list fields: \(err.localizedDescription)")
+            } else {
+                print("✅ List fields updated successfully")
+            }
+        }
+        
+        let client = SearchClient(
+            appID: ApplicationID(rawValue: Secrets.algoliaAppID),
+            apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
+        )
+        let index = client.index(withName: "RankoLists")
+
+        // ✅ Prepare partial updates
+        let updates: [(ObjectID, PartialUpdate)] = [
+            (ObjectID(rawValue: listID), .update(attribute: "RankoStatus", value: "deleted"))
+        ]
+
+        // ✅ Perform batch update in Algolia
+        index.partialUpdateObjects(updates: updates) { result in
+            switch result {
+            case .success(let response):
+                print("✅ Ranko list status updated successfully:", response)
+                completion(true)
+            case .failure(let error):
+                print("❌ Failed to update Ranko list status:", error.localizedDescription)
+                completion(false)
+            }
+        }
+    }
+    
+    func removeFeaturedRanko(listID: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
+            // No user; nothing to delete
+            completion(.success(()))
+            return
+        }
+
+        let featuredRef = Database.database()
+            .reference()
+            .child("UserData")
+            .child(uid)
+            .child("UserFeatured")
+
+        // 1) Load all featured slots
+        featuredRef.getData { error, snapshot in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+
+            guard let snap = snapshot, snap.exists() else {
+                // No featured entries at all
+                completion(.success(()))
+                return
+            }
+
+            // 2) Find the slot whose value == listID
+            var didRemove = false
+            for case let child as DataSnapshot in snap.children {
+                if let value = child.value as? String, value == listID {
+                    didRemove = true
+                    // 3) Remove that child entirely
+                    featuredRef.child(child.key).removeValue { removeError, _ in
+                        if let removeError = removeError {
+                            completion(.failure(removeError))
+                        } else {
+                            // Optionally reload your local state here:
+                            // self.tryLoadFeaturedRankos()
+                            completion(.success(()))
                         }
                     }
+                    break
                 }
-            },
-            withCancel: { error in
-                print("❌ Firebase load error:", error.localizedDescription)
-            })
+            }
+
+            // 4) If no match was found, still report success
+            if !didRemove {
+                completion(.success(()))
+            }
         }
+    }
+    
+    // MARK: - Firebase Update
+    private func updateListInFirebase() {
+        guard let category = category else { return }
         
-        // MARK: - Firebase Update
-        private func updateListInFirebase() {
-            guard let category = category else { return }
-            
-            let db = Database.database().reference()
-            let safeUID = (Auth.auth().currentUser?.uid ?? user_data.userID)
-                .components(separatedBy: CharacterSet(charactersIn: ".#$[]")).joined()
-            
-            // ✅ Prepare the top-level fields to update
-            let listUpdates: [String: Any] = [
-                "RankoName": rankoName,
-                "RankoDescription": description,
-                "RankoPrivacy": isPrivate,
-                "RankoCategory": category.name
-            ]
-            
-            let listRef = db.child("RankoData").child(listID)
-            
-            // ✅ Update list fields
-            listRef.updateChildValues(listUpdates) { error, _ in
-                if let err = error {
-                    print("❌ Failed to update list fields: \(err.localizedDescription)")
-                } else {
-                    print("✅ List fields updated successfully")
-                }
-            }
-            
-            // ✅ Prepare all RankoItems
-            var itemsUpdate: [String: Any] = [:]
-            for row in groupedItems {
-                for item in row {
-                    itemsUpdate[item.id] = [
-                        "ItemName":        item.record.ItemName,
-                        "ItemDescription": item.record.ItemDescription,
-                        "ItemImage":       item.record.ItemImage,
-                        "ItemRank":        item.rank,
-                        "ItemVotes":       item.votes
-                    ]
-                }
-            }
-            
-            // ✅ Update RankoItems node with the new data
-            listRef.child("RankoItems").setValue(itemsUpdate) { error, _ in
-                if let err = error {
-                    print("❌ Failed to update RankoItems: \(err.localizedDescription)")
-                } else {
-                    print("✅ RankoItems updated successfully")
-                }
-            }
-            
-            // ✅ Update the user's reference to this list
-            db.child("UserData").child(safeUID).child("RankoData").child(listID)
-                .setValue(category.name) { error, _ in
-                    if let err = error {
-                        print("❌ Failed to update user's list reference: \(err.localizedDescription)")
-                    } else {
-                        print("✅ User's list reference updated")
-                    }
-                }
-        }
-
-            // MARK: - Algolia Update
-        private func updateListInAlgolia(
-            listID: String,
-            newName: String,
-            newDescription: String,
-            newCategory: String,
-            isPrivate: Bool,
-            completion: @escaping (Bool) -> Void
-        ) {
-            let client = SearchClient(
-                appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-                apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
-            )
-            let index = client.index(withName: "RankoLists")
-
-            // ✅ Prepare partial updates
-            let updates: [(ObjectID, PartialUpdate)] = [
-                (ObjectID(rawValue: listID), .update(attribute: "RankoName", value: .string(newName))),
-                (ObjectID(rawValue: listID), .update(attribute: "RankoDescription", value: .string(newDescription))),
-                (ObjectID(rawValue: listID), .update(attribute: "RankoCategory", value: .string(newCategory))),
-                (ObjectID(rawValue: listID), .update(attribute: "RankoPrivacy", value: .bool(isPrivate)))
-            ]
-
-            // ✅ Perform batch update in Algolia
-            index.partialUpdateObjects(updates: updates) { result in
-                switch result {
-                case .success(let response):
-                    print("✅ Ranko list fields updated successfully:", response)
-                    completion(true)
-                case .failure(let error):
-                    print("❌ Failed to update Ranko list fields:", error.localizedDescription)
-                    completion(false)
-                }
+        let db = Database.database().reference()
+        
+        // ✅ Prepare the top-level fields to update
+        let listUpdates: [String: Any] = [
+            "RankoName": rankoName,
+            "RankoDescription": description,
+            "RankoPrivacy": isPrivate,
+            "RankoCategory": category.name
+        ]
+        
+        let listRef = db.child("RankoData").child(listID)
+        
+        // ✅ Update list fields
+        listRef.updateChildValues(listUpdates) { error, _ in
+            if let err = error {
+                print("❌ Failed to update list fields: \(err.localizedDescription)")
+            } else {
+                print("✅ List fields updated successfully")
             }
         }
         
-        // MARK: – Helpers & DropDelegate
-        struct FlowLayout2: Layout {
-            var spacing: CGFloat = 3
-
-            func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-                let maxWidth = proposal.width ?? .infinity
-                var currentRowWidth: CGFloat = 0, currentRowHeight: CGFloat = 0
-                var totalWidth: CGFloat = 0, totalHeight: CGFloat = 0
-
-                for subview in subviews {
-                    let size = subview.sizeThatFits(.unspecified)
-                    if currentRowWidth + size.width > maxWidth {
-                        totalWidth = max(totalWidth, currentRowWidth)
-                        totalHeight += currentRowHeight + spacing
-                        currentRowWidth = size.width + spacing
-                        currentRowHeight = size.height
-                    } else {
-                        currentRowWidth += size.width + spacing
-                        currentRowHeight = max(currentRowHeight, size.height)
-                    }
-                }
-                totalWidth = max(totalWidth, currentRowWidth)
-                totalHeight += currentRowHeight
-                return CGSize(width: totalWidth, height: totalHeight)
+        // ✅ Prepare all RankoItems
+        var itemsUpdate: [String: Any] = [:]
+        for row in groupedItems {
+            for item in row {
+                itemsUpdate[item.id] = [
+                    "ItemName":        item.record.ItemName,
+                    "ItemDescription": item.record.ItemDescription,
+                    "ItemImage":       item.record.ItemImage,
+                    "ItemRank":        item.rank,
+                    "ItemVotes":       item.votes
+                ]
             }
-
-            func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-                var x = bounds.minX
-                var y = bounds.minY
-                var currentRowHeight: CGFloat = 0
-
-                for subview in subviews {
-                    let size = subview.sizeThatFits(.unspecified)
-                    if x + size.width > bounds.maxX {
-                        x = bounds.minX
-                        y += currentRowHeight + spacing
-                        currentRowHeight = 0
-                    }
-                    subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-                    x += size.width + spacing
+        }
+        
+        // ✅ Update RankoItems node with the new data
+        listRef.child("RankoItems").setValue(itemsUpdate) { error, _ in
+            if let err = error {
+                print("❌ Failed to update RankoItems: \(err.localizedDescription)")
+            } else {
+                print("✅ RankoItems updated successfully")
+            }
+        }
+    }
+    
+    // MARK: - Algolia Update
+    private func updateListInAlgolia(
+        listID: String,
+        newName: String,
+        newDescription: String,
+        newCategory: String,
+        isPrivate: Bool,
+        completion: @escaping (Bool) -> Void
+    ) {
+        let client = SearchClient(
+            appID: ApplicationID(rawValue: Secrets.algoliaAppID),
+            apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
+        )
+        let index = client.index(withName: "RankoLists")
+        
+        // ✅ Prepare partial updates
+        let updates: [(ObjectID, PartialUpdate)] = [
+            (ObjectID(rawValue: listID), .update(attribute: "RankoName", value: .string(newName))),
+            (ObjectID(rawValue: listID), .update(attribute: "RankoDescription", value: .string(newDescription))),
+            (ObjectID(rawValue: listID), .update(attribute: "RankoCategory", value: .string(newCategory))),
+            (ObjectID(rawValue: listID), .update(attribute: "RankoPrivacy", value: .bool(isPrivate)))
+        ]
+        
+        // ✅ Perform batch update in Algolia
+        index.partialUpdateObjects(updates: updates) { result in
+            switch result {
+            case .success(let response):
+                print("✅ Ranko list fields updated successfully:", response)
+                completion(true)
+            case .failure(let error):
+                print("❌ Failed to update Ranko list fields:", error.localizedDescription)
+                completion(false)
+            }
+        }
+    }
+    
+    // MARK: – Helpers & DropDelegate
+    struct FlowLayout2: Layout {
+        var spacing: CGFloat = 3
+        
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            let maxWidth = proposal.width ?? .infinity
+            var currentRowWidth: CGFloat = 0, currentRowHeight: CGFloat = 0
+            var totalWidth: CGFloat = 0, totalHeight: CGFloat = 0
+            
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+                if currentRowWidth + size.width > maxWidth {
+                    totalWidth = max(totalWidth, currentRowWidth)
+                    totalHeight += currentRowHeight + spacing
+                    currentRowWidth = size.width + spacing
+                    currentRowHeight = size.height
+                } else {
+                    currentRowWidth += size.width + spacing
                     currentRowHeight = max(currentRowHeight, size.height)
                 }
             }
+            totalWidth = max(totalWidth, currentRowWidth)
+            totalHeight += currentRowHeight
+            return CGSize(width: totalWidth, height: totalHeight)
         }
+        
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            var x = bounds.minX
+            var y = bounds.minY
+            var currentRowHeight: CGFloat = 0
+            
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+                if x + size.width > bounds.maxX {
+                    x = bounds.minX
+                    y += currentRowHeight + spacing
+                    currentRowHeight = 0
+                }
+                subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+                currentRowHeight = max(currentRowHeight, size.height)
+            }
+        }
+    }
     
     struct GroupRowView: View {
         let rowIndex: Int
-        let items: [AlgoliaRankoItem]
+        let items: [RankoItem]
         
         // NEW: bindings to the parent’s state
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGroupedItems: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGroupedItems: [RankoItem]
         @Binding var hoveredRow: Int?
-        @Binding var selectedDetailItem: AlgoliaRankoItem?
+        @Binding var selectedDetailItem: RankoItem?
         
         var body: some View {
             HStack(alignment: .top, spacing: 8) {
@@ -826,14 +970,14 @@ struct GroupListPersonal: View {
     
     struct GroupRowView2: View {
         let rowIndex: Int
-        let items: [AlgoliaRankoItem]
-
+        let items: [RankoItem]
+        
         // NEW: bindings to the parent’s state
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGroupedItems: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGroupedItems: [RankoItem]
         @Binding var hoveredRow: Int?
-        @Binding var selectedDetailItem: AlgoliaRankoItem?
-
+        @Binding var selectedDetailItem: RankoItem?
+        
         var body: some View {
             HStack(alignment: .top, spacing: 8) {
                 // badge
@@ -883,35 +1027,35 @@ struct GroupListPersonal: View {
             .overlay(highlightOverlay)
             .animation(.easeInOut(duration: 0.25), value: hoveredRow)
             .onDrop(of: ["public.text"], delegate:
-                RowDropDelegate(
-                    itemRows: $itemRows,
-                    unGrouped: $unGroupedItems,
-                    hoveredRow: $hoveredRow,
-                    targetRow: rowIndex
-                )
+                        RowDropDelegate(
+                            itemRows: $itemRows,
+                            unGrouped: $unGroupedItems,
+                            hoveredRow: $hoveredRow,
+                            targetRow: rowIndex
+                        )
             )
         }
-
+        
         @ViewBuilder
         private var highlightOverlay: some View {
             if hoveredRow == rowIndex {
                 RoundedRectangle(cornerRadius: 8)
-                  .stroke(Color(hex: 0x6D400F), lineWidth: 2)
-                  .shadow(color: Color(hex: 0x6D400F).opacity(0.6), radius: 8)
+                    .stroke(Color(hex: 0x6D400F), lineWidth: 2)
+                    .shadow(color: Color(hex: 0x6D400F).opacity(0.6), radius: 8)
             }
         }
     }
     
     struct GroupRowView3: View {
         let rowIndex: Int
-        let items: [AlgoliaRankoItem]
-
+        let items: [RankoItem]
+        
         // NEW: bindings to the parent’s state
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGroupedItems: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGroupedItems: [RankoItem]
         @Binding var hoveredRow: Int?
-        @Binding var selectedDetailItem: AlgoliaRankoItem?
-
+        @Binding var selectedDetailItem: RankoItem?
+        
         var body: some View {
             HStack(alignment: .top, spacing: 8) {
                 // badge
@@ -961,28 +1105,28 @@ struct GroupListPersonal: View {
             .overlay(highlightOverlay)
             .animation(.easeInOut(duration: 0.25), value: hoveredRow)
             .onDrop(of: ["public.text"], delegate:
-                RowDropDelegate(
-                    itemRows: $itemRows,
-                    unGrouped: $unGroupedItems,
-                    hoveredRow: $hoveredRow,
-                    targetRow: rowIndex
-                )
+                        RowDropDelegate(
+                            itemRows: $itemRows,
+                            unGrouped: $unGroupedItems,
+                            hoveredRow: $hoveredRow,
+                            targetRow: rowIndex
+                        )
             )
         }
-
+        
         @ViewBuilder
         private var highlightOverlay: some View {
             if hoveredRow == rowIndex {
                 RoundedRectangle(cornerRadius: 8)
-                  .stroke(Color(hex: 0x6D400F), lineWidth: 2)
-                  .shadow(color: Color(hex: 0x6D400F).opacity(0.6), radius: 8)
+                    .stroke(Color(hex: 0x6D400F), lineWidth: 2)
+                    .shadow(color: Color(hex: 0x6D400F).opacity(0.6), radius: 8)
             }
         }
     }
     /// Handles drops into a specific row (or nil => into unGroupedItems)
     struct RowDropDelegate: DropDelegate {
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGrouped: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGrouped: [RankoItem]
         @Binding var hoveredRow: Int?     // ← NEW
         let targetRow: Int?
         
@@ -998,7 +1142,7 @@ struct GroupListPersonal: View {
                 hoveredRow = nil
             }
         }
-            
+        
         func performDrop(info: DropInfo) -> Bool {
             hoveredRow = nil   // clear highlight immediately
             
@@ -1013,7 +1157,7 @@ struct GroupListPersonal: View {
                     else { return }
                     
                     // 1) Remove from wherever it is
-                    var dragged: AlgoliaRankoItem?
+                    var dragged: RankoItem?
                     if let idx = unGrouped.firstIndex(where: { $0.id == id }) {
                         dragged = unGrouped.remove(at: idx)
                     } else {
@@ -1070,13 +1214,13 @@ enum GroupListPersonalTab: String, CaseIterable {
 
 
 struct GroupListPersonalView_Previews: PreviewProvider {
-    // Create 10 sample AlgoliaRankoItem instances representing top destinations
-    static var sampleItems: [AlgoliaRankoItem] = [
-        AlgoliaRankoItem(
+    // Create 10 sample RankoItem instances representing top destinations
+    static var sampleItems: [RankoItem] = [
+        RankoItem(
             id: UUID().uuidString,
             rank: 1001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "1",
                 ItemName: "Paris",
                 ItemDescription: "The City of Light",
@@ -1084,11 +1228,11 @@ struct GroupListPersonalView_Previews: PreviewProvider {
                 ItemImage: "https://res.klook.com/image/upload/c_fill,w_750,h_750/q_80/w_80,x_15,y_15,g_south_west,l_Klook_water_br_trans_yhcmh3/activities/wrgwlkhnjekv8h5tjbn4.jpg"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 1002,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "2",
                 ItemName: "New York",
                 ItemDescription: "The Big Apple",
@@ -1096,11 +1240,11 @@ struct GroupListPersonalView_Previews: PreviewProvider {
                 ItemImage: "https://hips.hearstapps.com/hmg-prod/images/manhattan-skyline-with-empire-state-building-royalty-free-image-960609922-1557777571.jpg?crop=0.66635xw:1xh;center,top&resize=640:*"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 2001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "3",
                 ItemName: "Tokyo",
                 ItemDescription: "Land of the Rising Sun",
@@ -1108,11 +1252,11 @@ struct GroupListPersonalView_Previews: PreviewProvider {
                 ItemImage: "https://static.independent.co.uk/s3fs-public/thumbnails/image/2018/04/10/13/tokyo-main.jpg?width=1200&height=1200&fit=crop"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 3001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "4",
                 ItemName: "Rome",
                 ItemDescription: "a city steeped in history, culture, and artistic treasures, often referred to as the Eternal City",
@@ -1120,11 +1264,11 @@ struct GroupListPersonalView_Previews: PreviewProvider {
                 ItemImage: "https://i.guim.co.uk/img/media/03303b5f042b72c03541fcd7f3777180f61a01a5/0_2310_4912_2947/master/4912.jpg?width=1200&height=1200&quality=85&auto=format&fit=crop&s=19cf880f7508ea310bdb136057d78240"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 3002,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "5",
                 ItemName: "Sydney",
                 ItemDescription: "Harbour City",
@@ -1132,11 +1276,11 @@ struct GroupListPersonalView_Previews: PreviewProvider {
                 ItemImage: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/13/93/a7/be/sydney-opera-house.jpg?w=500&h=500&s=1"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 3003,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "6",
                 ItemName: "Barcelona",
                 ItemDescription: "Gaudí’s Masterpiece City",
@@ -1144,11 +1288,11 @@ struct GroupListPersonalView_Previews: PreviewProvider {
                 ItemImage: "https://lp-cms-production.imgix.net/2023-08/iStock-1297827939.jpg?fit=crop&ar=1%3A1&w=1200&auto=format&q=75"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 3004,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "7",
                 ItemName: "Cape Town",
                 ItemDescription: "Mother City of South Africa",
@@ -1156,11 +1300,11 @@ struct GroupListPersonalView_Previews: PreviewProvider {
                 ItemImage: "https://imageresizer.static9.net.au/0sx9mhfU8tYDs_T-ftiFBrWR_as=/0x0:1307x735/1200x1200/https%3A%2F%2Fprod.static9.net.au%2Ffs%2F15af5183-fb21-49d9-a22c-d9f4813ccbea"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 4001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "8",
                 ItemName: "Rio de Janeiro",
                 ItemDescription: "Marvelous City",
@@ -1168,11 +1312,11 @@ struct GroupListPersonalView_Previews: PreviewProvider {
                 ItemImage: "https://whc.unesco.org/uploads/thumbs/site_1100_0004-750-750-20120625114004.jpg"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 5001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "9",
                 ItemName: "Reykjavik",
                 ItemDescription: "Land of Fire and Ice",
@@ -1180,11 +1324,11 @@ struct GroupListPersonalView_Previews: PreviewProvider {
                 ItemImage: "https://media.gq-magazine.co.uk/photos/5d138e07d7a7017355bb9bf3/1:1/w_1280,h_1280,c_limit/reykjavik-gq-22jun18_istock_b.jpg"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 5002,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "10",
                 ItemName: "Istanbul",
                 ItemDescription: "Where East Meets West",

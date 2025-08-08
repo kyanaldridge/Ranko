@@ -45,9 +45,9 @@ struct GroupListSpectate: View {
     @State private var toastID = UUID()
     
     // MARK: - ITEM VARIABLES
-    @State private var unGroupedItems: [AlgoliaRankoItem] = []
-    @State private var groupedItems: [[AlgoliaRankoItem]]
-    @State private var selectedDetailItem: AlgoliaRankoItem? = nil
+    @State private var unGroupedItems: [RankoItem] = []
+    @State private var groupedItems: [[RankoItem]]
+    @State private var selectedDetailItem: RankoItem? = nil
     
     // MARK: - OTHER VARIABLES (INC. TOAST)
     @State private var hoveredRow: Int? = nil
@@ -77,7 +77,7 @@ struct GroupListSpectate: View {
         creatorID: String = "",
         creatorName: String = "searching...",
         creatorImage: UIImage? = nil,
-        groupedItems: [AlgoliaRankoItem] = []
+        groupedItems: [RankoItem] = []
     ) {
         self.listID = listID
         _rankoName    = State(initialValue: rankoName)
@@ -580,7 +580,7 @@ struct GroupListSpectate: View {
                 
                 // — map your items…
                 if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
-                    var loaded: [AlgoliaRankoItem] = []
+                    var loaded: [RankoItem] = []
                     for (_, itemData) in itemsDict {
                         guard
                             let id    = itemData["ItemID"]          as? String,
@@ -591,14 +591,14 @@ struct GroupListSpectate: View {
                             let votes = itemData["ItemVotes"]       as? Int
                         else { continue }
                         
-                        let record = AlgoliaItemRecord(
+                        let record = RankoRecord(
                             objectID: id,
                             ItemName: name,
                             ItemDescription: desc,
                             ItemCategory: "",
                             ItemImage: image
                         )
-                        let item = AlgoliaRankoItem(
+                        let item = RankoItem(
                             id: id,
                             rank: rank,
                             votes: votes,
@@ -769,13 +769,13 @@ struct GroupListSpectate: View {
     
     struct GroupRowView: View {
         let rowIndex: Int
-        let items: [AlgoliaRankoItem]
+        let items: [RankoItem]
         
         // NEW: bindings to the parent’s state
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGroupedItems: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGroupedItems: [RankoItem]
         @Binding var hoveredRow: Int?
-        @Binding var selectedDetailItem: AlgoliaRankoItem?
+        @Binding var selectedDetailItem: RankoItem?
         
         var body: some View {
             HStack(alignment: .top, spacing: 8) {
@@ -849,13 +849,13 @@ struct GroupListSpectate: View {
     
     struct GroupRowView2: View {
         let rowIndex: Int
-        let items: [AlgoliaRankoItem]
+        let items: [RankoItem]
         
         // NEW: bindings to the parent’s state
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGroupedItems: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGroupedItems: [RankoItem]
         @Binding var hoveredRow: Int?
-        @Binding var selectedDetailItem: AlgoliaRankoItem?
+        @Binding var selectedDetailItem: RankoItem?
         
         var body: some View {
             HStack(alignment: .top, spacing: 8) {
@@ -927,13 +927,13 @@ struct GroupListSpectate: View {
     
     struct GroupRowView3: View {
         let rowIndex: Int
-        let items: [AlgoliaRankoItem]
+        let items: [RankoItem]
         
         // NEW: bindings to the parent’s state
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGroupedItems: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGroupedItems: [RankoItem]
         @Binding var hoveredRow: Int?
-        @Binding var selectedDetailItem: AlgoliaRankoItem?
+        @Binding var selectedDetailItem: RankoItem?
         
         var body: some View {
             HStack(alignment: .top, spacing: 8) {
@@ -1004,8 +1004,8 @@ struct GroupListSpectate: View {
     }
     /// Handles drops into a specific row (or nil => into unGroupedItems)
     struct RowDropDelegate: DropDelegate {
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGrouped: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGrouped: [RankoItem]
         @Binding var hoveredRow: Int?     // ← NEW
         let targetRow: Int?
         
@@ -1036,7 +1036,7 @@ struct GroupListSpectate: View {
                     else { return }
                     
                     // 1) Remove from wherever it is
-                    var dragged: AlgoliaRankoItem?
+                    var dragged: RankoItem?
                     if let idx = unGrouped.firstIndex(where: { $0.id == id }) {
                         dragged = unGrouped.remove(at: idx)
                     } else {
@@ -1109,9 +1109,9 @@ struct GroupListSpectate3: View {
     @State private var profileImage: UIImage?
     
     // State to track which sheet to present
-    @State private var unGroupedItems: [AlgoliaRankoItem] = []
-    @State private var groupedItems: [[AlgoliaRankoItem]]
-    @State private var selectedDetailItem: AlgoliaRankoItem? = nil
+    @State private var unGroupedItems: [RankoItem] = []
+    @State private var groupedItems: [[RankoItem]]
+    @State private var selectedDetailItem: RankoItem? = nil
     @State private var spectateProfile: Bool = false
 
     // MARK: – UI state
@@ -1147,7 +1147,7 @@ struct GroupListSpectate3: View {
         creatorID: String = "",
         creatorName: String = "searching...",
         creatorImage: UIImage? = nil,
-        groupedItems: [AlgoliaRankoItem] = []
+        groupedItems: [RankoItem] = []
     ) {
         self.listID = listID
         _rankoName    = State(initialValue: rankoName)
@@ -1809,13 +1809,13 @@ struct GroupListSpectate3: View {
     
     struct GroupRowView: View {
         let rowIndex: Int
-        let items: [AlgoliaRankoItem]
+        let items: [RankoItem]
         
         // NEW: bindings to the parent’s state
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGroupedItems: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGroupedItems: [RankoItem]
         @Binding var hoveredRow: Int?
-        @Binding var selectedDetailItem: AlgoliaRankoItem?
+        @Binding var selectedDetailItem: RankoItem?
         
         var body: some View {
             HStack(alignment: .top, spacing: 8) {
@@ -1893,13 +1893,13 @@ struct GroupListSpectate3: View {
     
     struct GroupRowView2: View {
         let rowIndex: Int
-        let items: [AlgoliaRankoItem]
+        let items: [RankoItem]
 
         // NEW: bindings to the parent’s state
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGroupedItems: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGroupedItems: [RankoItem]
         @Binding var hoveredRow: Int?
-        @Binding var selectedDetailItem: AlgoliaRankoItem?
+        @Binding var selectedDetailItem: RankoItem?
 
         var body: some View {
             HStack(alignment: .top, spacing: 8) {
@@ -1959,13 +1959,13 @@ struct GroupListSpectate3: View {
     
     struct GroupRowView3: View {
         let rowIndex: Int
-        let items: [AlgoliaRankoItem]
+        let items: [RankoItem]
 
         // NEW: bindings to the parent’s state
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGroupedItems: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGroupedItems: [RankoItem]
         @Binding var hoveredRow: Int?
-        @Binding var selectedDetailItem: AlgoliaRankoItem?
+        @Binding var selectedDetailItem: RankoItem?
 
         var body: some View {
             HStack(alignment: .top, spacing: 8) {
@@ -2023,8 +2023,8 @@ struct GroupListSpectate3: View {
     }
     /// Handles drops into a specific row (or nil => into unGroupedItems)
     struct RowDropDelegate: DropDelegate {
-        @Binding var itemRows: [[AlgoliaRankoItem]]
-        @Binding var unGrouped: [AlgoliaRankoItem]
+        @Binding var itemRows: [[RankoItem]]
+        @Binding var unGrouped: [RankoItem]
         @Binding var hoveredRow: Int?     // ← NEW
         let targetRow: Int?
         
@@ -2055,7 +2055,7 @@ struct GroupListSpectate3: View {
                     else { return }
                     
                     // 1) Remove from wherever it is
-                    var dragged: AlgoliaRankoItem?
+                    var dragged: RankoItem?
                     if let idx = unGrouped.firstIndex(where: { $0.id == id }) {
                         dragged = unGrouped.remove(at: idx)
                     } else {
@@ -2085,13 +2085,13 @@ struct GroupListSpectate3: View {
 
 
 struct GroupListSpectateView_Previews: PreviewProvider {
-    // Create 10 sample AlgoliaRankoItem instances representing top destinations
-    static var sampleItems: [AlgoliaRankoItem] = [
-        AlgoliaRankoItem(
+    // Create 10 sample RankoItem instances representing top destinations
+    static var sampleItems: [RankoItem] = [
+        RankoItem(
             id: UUID().uuidString,
             rank: 1001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "1",
                 ItemName: "Paris",
                 ItemDescription: "The City of Light",
@@ -2099,11 +2099,11 @@ struct GroupListSpectateView_Previews: PreviewProvider {
                 ItemImage: "https://res.klook.com/image/upload/c_fill,w_750,h_750/q_80/w_80,x_15,y_15,g_south_west,l_Klook_water_br_trans_yhcmh3/activities/wrgwlkhnjekv8h5tjbn4.jpg"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 1002,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "2",
                 ItemName: "New York",
                 ItemDescription: "The Big Apple",
@@ -2111,11 +2111,11 @@ struct GroupListSpectateView_Previews: PreviewProvider {
                 ItemImage: "https://hips.hearstapps.com/hmg-prod/images/manhattan-skyline-with-empire-state-building-royalty-free-image-960609922-1557777571.jpg?crop=0.66635xw:1xh;center,top&resize=640:*"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 2001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "3",
                 ItemName: "Tokyo",
                 ItemDescription: "Land of the Rising Sun",
@@ -2123,11 +2123,11 @@ struct GroupListSpectateView_Previews: PreviewProvider {
                 ItemImage: "https://static.independent.co.uk/s3fs-public/thumbnails/image/2018/04/10/13/tokyo-main.jpg?width=1200&height=1200&fit=crop"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 3001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "4",
                 ItemName: "Rome",
                 ItemDescription: "a city steeped in history, culture, and artistic treasures, often referred to as the Eternal City",
@@ -2135,11 +2135,11 @@ struct GroupListSpectateView_Previews: PreviewProvider {
                 ItemImage: "https://i.guim.co.uk/img/media/03303b5f042b72c03541fcd7f3777180f61a01a5/0_2310_4912_2947/master/4912.jpg?width=1200&height=1200&quality=85&auto=format&fit=crop&s=19cf880f7508ea310bdb136057d78240"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 3002,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "5",
                 ItemName: "Sydney",
                 ItemDescription: "Harbour City",
@@ -2147,11 +2147,11 @@ struct GroupListSpectateView_Previews: PreviewProvider {
                 ItemImage: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/13/93/a7/be/sydney-opera-house.jpg?w=500&h=500&s=1"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 3003,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "6",
                 ItemName: "Barcelona",
                 ItemDescription: "Gaudí’s Masterpiece City",
@@ -2159,11 +2159,11 @@ struct GroupListSpectateView_Previews: PreviewProvider {
                 ItemImage: "https://lp-cms-production.imgix.net/2023-08/iStock-1297827939.jpg?fit=crop&ar=1%3A1&w=1200&auto=format&q=75"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 3004,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "7",
                 ItemName: "Cape Town",
                 ItemDescription: "Mother City of South Africa",
@@ -2171,11 +2171,11 @@ struct GroupListSpectateView_Previews: PreviewProvider {
                 ItemImage: "https://imageresizer.static9.net.au/0sx9mhfU8tYDs_T-ftiFBrWR_as=/0x0:1307x735/1200x1200/https%3A%2F%2Fprod.static9.net.au%2Ffs%2F15af5183-fb21-49d9-a22c-d9f4813ccbea"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 4001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "8",
                 ItemName: "Rio de Janeiro",
                 ItemDescription: "Marvelous City",
@@ -2183,11 +2183,11 @@ struct GroupListSpectateView_Previews: PreviewProvider {
                 ItemImage: "https://whc.unesco.org/uploads/thumbs/site_1100_0004-750-750-20120625114004.jpg"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 5001,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "9",
                 ItemName: "Reykjavik",
                 ItemDescription: "Land of Fire and Ice",
@@ -2195,11 +2195,11 @@ struct GroupListSpectateView_Previews: PreviewProvider {
                 ItemImage: "https://media.gq-magazine.co.uk/photos/5d138e07d7a7017355bb9bf3/1:1/w_1280,h_1280,c_limit/reykjavik-gq-22jun18_istock_b.jpg"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 5002,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "10",
                 ItemName: "Istanbul",
                 ItemDescription: "Where East Meets West",

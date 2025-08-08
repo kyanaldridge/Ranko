@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import FirebaseAuth
 import InstantSearchCore
 import StoreKit
@@ -13,6 +14,7 @@ import FirebaseAnalytics
 
 struct SettingItem: Identifiable {
     let id = UUID()
+    let variable: String
     let title: String
     let icon: String
     let keywords: [String]
@@ -283,16 +285,16 @@ struct SettingsView: View {
     // Example settings with keywords
     private var settings: [SettingItem] {
         [
-            SettingItem(title: "Account", icon: "person.crop.circle", keywords: ["account", "profile", "sign in", "sign out", "user", "login", "logout"]),
-            SettingItem(title: "Ranko Pro", icon: "medal.star", keywords: ["ranko", "pro", "premium"]),
-            SettingItem(title: "Notifications", icon: "bell.badge", keywords: ["notification", "alerts", "reminders", "push", "messages"]),
-            SettingItem(title: "Preferences", icon: "wrench.and.screwdriver", keywords: ["preferences", "alerts", "reminders", "push", "messages"]),
-            SettingItem(title: "Privacy & Security", icon: "lock.shield", keywords: ["privacy", "security", "password", "passcode", "auth", "protection"]),
-            SettingItem(title: "Please Leave Us A Review", icon: "star.fill", keywords: ["Review"]),
-            SettingItem(title: "Suggestions & Ideas", icon: "brain.head.profile.fill", keywords: ["suggestions", "ideas", "help", "contact", "feedback"]),
-            SettingItem(title: "Data & Storage", icon: "externaldrive", keywords: ["data", "storage", "cache", "clear", "reset"]),
-            SettingItem(title: "About", icon: "info.circle", keywords: ["about", "info", "version", "app", "credits"]),
-            SettingItem(title: "Privacy Policy & Terms Of Use", icon: "scroll", keywords: ["privacy policy", "terms of use", "legal"])
+            SettingItem(variable: "account", title: "Account", icon: "person.crop.circle", keywords: ["account", "profile", "sign in", "sign out", "user", "login", "logout"]),
+            SettingItem(variable: "rankoPro", title: "Ranko Pro", icon: "medal.star", keywords: ["ranko", "pro", "premium"]),
+            SettingItem(variable: "notifications", title: "Notifications", icon: "bell.badge", keywords: ["notification", "alerts", "reminders", "push", "messages"]),
+            SettingItem(variable: "preferences", title: "Preferences", icon: "wrench.and.screwdriver", keywords: ["preferences", "alerts", "reminders", "push", "messages"]),
+            SettingItem(variable: "privacy", title: "Privacy & Security", icon: "lock.shield", keywords: ["privacy", "security", "password", "passcode", "auth", "protection"]),
+            SettingItem(variable: "review", title: "Please Leave Us A Review", icon: "star.fill", keywords: ["Review"]),
+            SettingItem(variable: "suggestions", title: "Suggestions & Ideas", icon: "brain.head.profile.fill", keywords: ["suggestions", "ideas", "help", "contact", "feedback"]),
+            SettingItem(variable: "dataStorage", title: "Data & Storage", icon: "externaldrive", keywords: ["data", "storage", "cache", "clear", "reset"]),
+            SettingItem(variable: "about", title: "About", icon: "info.circle", keywords: ["about", "info", "version", "app", "credits"]),
+            SettingItem(variable: "legal", title: "Privacy Policy & Terms Of Use", icon: "scroll", keywords: ["privacy policy", "terms of use", "legal"])
         ]
     }
     
@@ -351,7 +353,6 @@ struct SettingsView: View {
         print("✅ All caches cleared")
     }
 }
-
 
 
 
@@ -892,9 +893,9 @@ struct NotificationsView: View {
         ZStack {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
-            
+
             VStack(alignment: .leading, spacing: 20) {
-                // Title
+                // Title Bar
                 HStack {
                     Text("Notifications")
                         .font(.system(size: 32, weight: .black))
@@ -906,17 +907,299 @@ struct NotificationsView: View {
                             .frame(width: 30, height: 30)
                     }
                     .foregroundColor(Color(hex: 0x857467))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
+                    .tint(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                     .buttonStyle(.glassProminent)
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
-                
+
                 Divider()
-                Spacer()
+                
+                ScrollView {
+                    VStack(spacing: 25) {
+                        VStack {
+                            HStack {
+                                Text("Personal")
+                                    .font(.system(size: 14, weight: .heavy))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                    .padding(.leading, 40)
+                                    .padding(.bottom, 5)
+                                Spacer()
+                            }
+                            VStack(spacing: 0) {
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "hand.thumbsup.fill")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("Ranko Likes")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationRankoLikes)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("Receive a notification whenever someone likes one of your rankos.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                                
+                                Divider()
+                                    .padding(.horizontal, 30)
+                                
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "square.fill.on.square.fill")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("Ranko Clones")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationRankoClones)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("Get alerted when another user clones one of your rankos.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                                
+                                Divider()
+                                    .padding(.horizontal, 30)
+                                
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "person.crop.circle.badge")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("Personalized Recommendations")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationPersonalizedRecommendations)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("See suggested rankos tailored to your interests.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                                
+                                Divider()
+                                    .padding(.horizontal, 30)
+                                
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "calendar.badge.exclamationmark")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("Weekly Progress Summary")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationWeeklyProgress)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("View a weekly summary of your activity progress.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                                
+                                Divider()
+                                    .padding(.horizontal, 30)
+                                
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "app.badge")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("App Update Available")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationAppUpdateAvailable)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("Be notified when a new app version is available.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(Color(hex: 0xFFFCF2))
+                                    .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                            )
+                            .padding(.horizontal, 25)
+                        }
+                        
+                        VStack {
+                            HStack {
+                                Text("Friends")
+                                    .font(.system(size: 14, weight: .heavy))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                    .padding(.leading, 40)
+                                    .padding(.bottom, 5)
+                                Spacer()
+                            }
+                            VStack(spacing: 0) {
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "figure.2.arms.open")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("Friend Requests")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationFriendRequests)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("Get notified when someone sends you a friend request.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                                
+                                Divider()
+                                    .padding(.horizontal, 30)
+                                
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "hands.clap.fill")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("Shared Rankos")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationSharedRankos)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("See when a friend shares a ranko with you.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                                
+                                Divider()
+                                    .padding(.horizontal, 30)
+                                
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "plus.diamond.fill")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("Friends' New Rankos")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationFriendsNewRankos)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("Be alerted when friends create new rankos.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(Color(hex: 0xFFFCF2))
+                                    .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                            )
+                            .padding(.horizontal, 25)
+                        }
+                        
+                        VStack {
+                            HStack {
+                                Text("Community")
+                                    .font(.system(size: 14, weight: .heavy))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                    .padding(.leading, 40)
+                                    .padding(.bottom, 5)
+                                Spacer()
+                            }
+                            VStack(spacing: 0) {
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "flame.fill")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("Trending Rankos")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationTrendingRankos)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("Stay updated on rankos that are trending community-wide.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                                
+                                Divider()
+                                    .padding(.horizontal, 30)
+                                
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        Image(systemName: "party.popper.fill")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text("Mini Game Events")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Spacer()
+                                        Toggle("", isOn: $user_data.notificationMiniGameEvents)
+                                            .tint(Color(hex: 0x857467))
+                                            .labelsHidden()
+                                    }
+                                    Text("Receive alerts for upcoming in-app mini game events.")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .padding(.top, 6)
+                                }
+                                .padding(20)
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(Color(hex: 0xFFFCF2))
+                                    .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                            )
+                            .padding(.horizontal, 25)
+                        }
+                        
+                    }
+                }
             }
         }
     }
@@ -954,6 +1237,67 @@ struct PreferencesView: View {
                 .padding(.top, 40)
                 
                 Divider()
+                
+                VStack {
+                    HStack {
+                        Text("Text Preferences")
+                            .font(.system(size: 14, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x857467))
+                            .padding(.leading, 40)
+                            .padding(.bottom, 5)
+                        Spacer()
+                    }
+                    VStack(spacing: 0) {
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Image(systemName: "text.magnifyingglass")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Text("Auto-Correction Disabled")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Spacer()
+                                Toggle("", isOn: $user_data.preferencesAutocorrectDisabled)
+                                    .tint(Color(hex: 0x857467))
+                                    .labelsHidden()
+                            }
+                            Text("Disable Autocorrect for all text fields in Ranko.")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                .padding(.top, 6)
+                        }
+                        .padding(20)
+                        
+                        Divider()
+                            .padding(.horizontal, 30)
+                        
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Image(systemName: "party.popper.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Text("Mini Game Events")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Spacer()
+                                Toggle("", isOn: $user_data.notificationMiniGameEvents)
+                                    .tint(Color(hex: 0x857467))
+                                    .labelsHidden()
+                            }
+                            Text("Receive alerts for upcoming in-app mini game events.")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                .padding(.top, 6)
+                        }
+                        .padding(20)
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(Color(hex: 0xFFFCF2))
+                            .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                    )
+                    .padding(.horizontal, 25)
+                }
                 Spacer()
             }
         }

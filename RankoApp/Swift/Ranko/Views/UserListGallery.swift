@@ -96,10 +96,10 @@ import AlgoliaSearchClient
 //                                let lists: [RankoList] = response.hits.compactMap { hit in
 //                                    do {
 //                                        let data = try JSONEncoder().encode(hit.object)
-//                                        let record = try JSONDecoder().decode(RankoListRecord.self, from: data)
+//                                        let record = try JSONDecoder().decode(RankoListAlgolia.self, from: data)
 //                                        
 //                                        let id = record.objectID
-//                                        let items: [AlgoliaRankoItem] = (record.RankoItems ?? [:]).compactMap { (itemID, values) in
+//                                        let items: [RankoItem] = (record.RankoItems ?? [:]).compactMap { (itemID, values) in
 //                                            guard let firebaseItem = itemDict[itemID],
 //                                                  let itemName = firebaseItem["ItemName"] as? String,
 //                                                  let itemImage = firebaseItem["ItemImage"] as? String,
@@ -110,7 +110,7 @@ import AlgoliaSearchClient
 //                                            let rank = values["Rank"] ?? 0
 //                                            let votes = values["Votes"] ?? 0
 //                                            
-//                                            let record = AlgoliaItemRecord(
+//                                            let record = RankoRecord(
 //                                                objectID: itemID,
 //                                                ItemName: itemName,
 //                                                ItemDescription: itemDescription,
@@ -118,7 +118,7 @@ import AlgoliaSearchClient
 //                                                ItemImage: itemImage
 //                                            )
 //                                            
-//                                            return AlgoliaRankoItem(id: itemID, rank: rank, votes: votes, record: record)
+//                                            return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
 //                                        }
 //                                        
 //                                        return RankoList(
@@ -177,7 +177,7 @@ import AlgoliaSearchClient
 //            let itemsDict   = dict["RankoItems"]       as? [String: Any]
 //        else { return nil }
 //
-//        let items: [AlgoliaRankoItem] = itemsDict.compactMap { _, value in
+//        let items: [RankoItem] = itemsDict.compactMap { _, value in
 //            guard
 //                let d = value as? [String: Any],
 //                let id = d["ItemID"]     as? String,
@@ -186,12 +186,12 @@ import AlgoliaSearchClient
 //                let votes = d["ItemVotes"] as? Int,
 //                let rank = d["ItemRank"]  as? Int
 //            else { return nil }
-//            let record = AlgoliaItemRecord(objectID: id,
+//            let record = RankoRecord(objectID: id,
 //                                     ItemName: name,
 //                                     ItemDescription: "",
 //                                     ItemCategory: "",
 //                                     ItemImage: img)
-//            return AlgoliaRankoItem(id: id, rank: rank, votes: votes, record: record)
+//            return RankoItem(id: id, rank: rank, votes: votes, record: record)
 //        }
 //        return RankoList(
 //            id:               id,
@@ -287,10 +287,10 @@ import AlgoliaSearchClient
 //                                let lists: [RankoList] = response.hits.compactMap { hit in
 //                                    do {
 //                                        let data = try JSONEncoder().encode(hit.object)
-//                                        let record = try JSONDecoder().decode(RankoListRecord.self, from: data)
+//                                        let record = try JSONDecoder().decode(RankoListAlgolia.self, from: data)
 //                                        
 //                                        let id = record.objectID
-//                                        let items: [AlgoliaRankoItem] = (record.RankoItems ?? [:]).compactMap { (itemID, values) in
+//                                        let items: [RankoItem] = (record.RankoItems ?? [:]).compactMap { (itemID, values) in
 //                                            guard let firebaseItem = itemDict[itemID],
 //                                                  let itemName = firebaseItem["ItemName"] as? String,
 //                                                  let itemImage = firebaseItem["ItemImage"] as? String,
@@ -301,7 +301,7 @@ import AlgoliaSearchClient
 //                                            let rank = values["Rank"] ?? 0
 //                                            let votes = values["Votes"] ?? 0
 //                                            
-//                                            let record = AlgoliaItemRecord(
+//                                            let record = RankoRecord(
 //                                                objectID: itemID,
 //                                                ItemName: itemName,
 //                                                ItemDescription: itemDescription,
@@ -309,7 +309,7 @@ import AlgoliaSearchClient
 //                                                ItemImage: itemImage
 //                                            )
 //                                            
-//                                            return AlgoliaRankoItem(id: itemID, rank: rank, votes: votes, record: record)
+//                                            return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
 //                                        }
 //                                        
 //                                        return RankoList(
@@ -368,7 +368,7 @@ import AlgoliaSearchClient
 //            let itemsDict   = dict["RankoItems"]       as? [String: Any]
 //        else { return nil }
 //
-//        let items: [AlgoliaRankoItem] = itemsDict.compactMap { _, value in
+//        let items: [RankoItem] = itemsDict.compactMap { _, value in
 //            guard
 //                let d = value as? [String: Any],
 //                let id = d["ItemID"]     as? String,
@@ -377,12 +377,12 @@ import AlgoliaSearchClient
 //                let votes = d["ItemVotes"] as? Int,
 //                let rank = d["ItemRank"]  as? Int
 //            else { return nil }
-//            let record = AlgoliaItemRecord(objectID: id,
+//            let record = RankoRecord(objectID: id,
 //                                     ItemName: name,
 //                                     ItemDescription: "",
 //                                     ItemCategory: "",
 //                                     ItemImage: img)
-//            return AlgoliaRankoItem(id: id, rank: rank, votes: votes, record: record)
+//            return RankoItem(id: id, rank: rank, votes: votes, record: record)
 //        }
 //        return RankoList(
 //            id:               id,
@@ -486,10 +486,10 @@ import AlgoliaSearchClient
 //                                let lists: [RankoList] = response.hits.compactMap { hit in
 //                                    do {
 //                                        let data = try JSONEncoder().encode(hit.object)
-//                                        let record = try JSONDecoder().decode(RankoListRecord.self, from: data)
+//                                        let record = try JSONDecoder().decode(RankoListAlgolia.self, from: data)
 //                                        
 //                                        let id = record.objectID
-//                                        let items: [AlgoliaRankoItem] = (record.RankoItems ?? [:]).compactMap { (itemID, values) in
+//                                        let items: [RankoItem] = (record.RankoItems ?? [:]).compactMap { (itemID, values) in
 //                                            guard let firebaseItem = itemDict[itemID],
 //                                                  let itemName = firebaseItem["ItemName"] as? String,
 //                                                  let itemImage = firebaseItem["ItemImage"] as? String,
@@ -500,7 +500,7 @@ import AlgoliaSearchClient
 //                                            let rank = values["Rank"] ?? 0
 //                                            let votes = values["Votes"] ?? 0
 //                                            
-//                                            let record = AlgoliaItemRecord(
+//                                            let record = RankoRecord(
 //                                                objectID: itemID,
 //                                                ItemName: itemName,
 //                                                ItemDescription: itemDescription,
@@ -508,7 +508,7 @@ import AlgoliaSearchClient
 //                                                ItemImage: itemImage
 //                                            )
 //                                            
-//                                            return AlgoliaRankoItem(id: itemID, rank: rank, votes: votes, record: record)
+//                                            return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
 //                                        }
 //                                        
 //                                        return RankoList(
@@ -567,7 +567,7 @@ import AlgoliaSearchClient
 //            let itemsDict   = dict["RankoItems"]       as? [String: Any]
 //        else { return nil }
 //
-//        let items: [AlgoliaRankoItem] = itemsDict.compactMap { _, value in
+//        let items: [RankoItem] = itemsDict.compactMap { _, value in
 //            guard
 //                let d = value as? [String: Any],
 //                let id = d["ItemID"]     as? String,
@@ -576,12 +576,12 @@ import AlgoliaSearchClient
 //                let votes = d["ItemVotes"] as? Int,
 //                let rank = d["ItemRank"]  as? Int
 //            else { return nil }
-//            let record = AlgoliaItemRecord(objectID: id,
+//            let record = RankoRecord(objectID: id,
 //                                     ItemName: name,
 //                                     ItemDescription: "",
 //                                     ItemCategory: "",
 //                                     ItemImage: img)
-//            return AlgoliaRankoItem(id: id, rank: rank, votes: votes, record: record)
+//            return RankoItem(id: id, rank: rank, votes: votes, record: record)
 //        }
 //        return RankoList(
 //            id:               id,

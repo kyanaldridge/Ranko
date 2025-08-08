@@ -15,7 +15,7 @@ struct DefaultListIndividualGallery: View {
     let type: String
     let onUnpin: (() -> Void)?
     
-    private var sortedItems: [AlgoliaRankoItem] {
+    private var sortedItems: [RankoItem] {
         listData.items.sorted { $0.rank < $1.rank }
     }
 
@@ -120,8 +120,8 @@ struct DefaultListIndividualGallery: View {
                 userCreator: "",
                 dateTime: "20230718094500",
                 items: [
-                AlgoliaRankoItem(id: "", rank: 5, votes: 23, record:
-                                    AlgoliaItemRecord(
+                RankoItem(id: "", rank: 5, votes: 23, record:
+                                    RankoRecord(
                                         objectID: "",
                                         ItemName: "Madvillainy",
                                         ItemDescription: "",
@@ -129,8 +129,8 @@ struct DefaultListIndividualGallery: View {
                                         ItemImage: "https://upload.wikimedia.org/wikipedia/en/5/5e/Madvillainy_cover.png"
                                     )
                                 ),
-                AlgoliaRankoItem(id: "", rank: 4, votes: 19, record:
-                                    AlgoliaItemRecord(
+                RankoItem(id: "", rank: 4, votes: 19, record:
+                                    RankoRecord(
                                         objectID: "",
                                         ItemName: "Wish You Were Here",
                                         ItemDescription: "",
@@ -138,8 +138,8 @@ struct DefaultListIndividualGallery: View {
                                         ItemImage: "https://www.emp.co.uk/dw/image/v2/BBQV_PRD/on/demandware.static/-/Sites-master-emp/default/dw74154f22/images/4/0/6/0/406025.jpg?sw=1000&sh=800&sm=fit&sfrm=png"
                                     )
                                 ),
-                AlgoliaRankoItem(id: "", rank: 3, votes: 26, record:
-                                    AlgoliaItemRecord(
+                RankoItem(id: "", rank: 3, votes: 26, record:
+                                    RankoRecord(
                                         objectID: "",
                                         ItemName: "In Rainbows",
                                         ItemDescription: "",
@@ -147,8 +147,8 @@ struct DefaultListIndividualGallery: View {
                                         ItemImage: "https://m.media-amazon.com/images/I/A1MwaIeBpwL._UF894,1000_QL80_.jpg"
                                     )
                                 ),
-                AlgoliaRankoItem(id: "", rank: 2, votes: 26, record:
-                                    AlgoliaItemRecord(
+                RankoItem(id: "", rank: 2, votes: 26, record:
+                                    RankoRecord(
                                         objectID: "",
                                         ItemName: "OK Computer",
                                         ItemDescription: "",
@@ -156,8 +156,8 @@ struct DefaultListIndividualGallery: View {
                                         ItemImage: "https://upload.wikimedia.org/wikipedia/en/thumb/b/ba/Radioheadokcomputer.png/250px-Radioheadokcomputer.png"
                                     )
                                 ),
-                AlgoliaRankoItem(id: "", rank: 1, votes: 26, record:
-                                    AlgoliaItemRecord(
+                RankoItem(id: "", rank: 1, votes: 26, record:
+                                    RankoRecord(
                                         objectID: "",
                                         ItemName: "To Pimp a Butterfly",
                                         ItemDescription: "",

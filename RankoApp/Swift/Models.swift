@@ -36,6 +36,21 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     @AppStorage("log_Status") var logStatus: Bool = false
     @AppStorage("user_ranko_categories") var userRankoCategories: String = ""
     
+    // MARK: - NOTIFICATIONS -
+    @AppStorage("user_notification_rankoLikes") var notificationRankoLikes: Bool = true
+    @AppStorage("user_notification_rankoClones") var notificationRankoClones: Bool = true
+    @AppStorage("user_notification_personalRecommendations") var notificationPersonalizedRecommendations: Bool = true
+    @AppStorage("user_notification_weeklyProgress") var notificationWeeklyProgress: Bool = true
+    @AppStorage("user_notification_appUpdate") var notificationAppUpdateAvailable: Bool = true
+    @AppStorage("user_notification_friendRequests") var notificationFriendRequests: Bool = true
+    @AppStorage("user_notification_sharedRankos") var notificationSharedRankos: Bool = true
+    @AppStorage("user_notification_friendsNewRankos") var notificationFriendsNewRankos: Bool = true
+    @AppStorage("user_notification_trendingRankos") var notificationTrendingRankos: Bool = true
+    @AppStorage("user_notification_miniGameEvents") var notificationMiniGameEvents: Bool = true
+    
+    // MARK: - PREFERENCES -
+    @AppStorage("user_preferences_autocorrectDisabled") var preferencesAutocorrectDisabled: Bool = true
+    
     // ✅ Track login service (Apple or Google)
     @AppStorage("user_login_service") var userLoginService: String = "" // "Apple" or "Google"
     
@@ -47,7 +62,18 @@ final class UserInformation: ObservableObject { // App Wide User Variables
 
 
 // MARK: -- Ranko Models
-struct AlgoliaItemRecord: Codable, Identifiable {
+struct RankoList: Identifiable, Codable {
+    let id: String
+    let listName: String
+    let listDescription: String   // from "RankoDescription"
+    let type: String
+    let category: String          // from "RankoCategory"
+    let isPrivate: String          // e.g. "Private" / "Public"
+    let userCreator: String       // from "RankoUserID"
+    let dateTime: String          // from "RankoDateTime" e.g. "2024-04-06-17-42"
+    var items: [RankoItem]
+}
+struct RankoRecord: Codable, Identifiable {
     let objectID: String
     let ItemName: String
     let ItemDescription: String
@@ -57,11 +83,11 @@ struct AlgoliaItemRecord: Codable, Identifiable {
     var id: String { objectID }
 }
 
-struct AlgoliaRankoItem: Identifiable, Codable {
+struct RankoItem: Identifiable, Codable {
     let id: String            // ← will hold our random 12-char code
     var rank: Int             // ← selection order
     var votes: Int
-    let record: AlgoliaItemRecord
+    let record: RankoRecord
     var itemName: String { record.ItemName }
     var itemDescription: String { record.ItemDescription }
     var itemImage: String { record.ItemImage }
@@ -74,49 +100,21 @@ struct RankoUser: Identifiable, Codable {
     let userProfilePicture: String
 }
 
-struct RankoRecord: Codable, Identifiable {
-    let objectID: String
-    let ItemName: String
-    var ItemDescription: String
-    let ItemImage: String
-    var RankoID: String
-    
-    // satisfy Identifiable
-    var id: String { objectID }
-}
 
-struct RankoList: Identifiable, Codable {
-    let id: String
-    let listName: String
-    let listDescription: String   // from "RankoDescription"
-    let type: String
-    let category: String          // from "RankoCategory"
-    let isPrivate: String          // e.g. "Private" / "Public"
-    let userCreator: String       // from "RankoUserID"
-    let dateTime: String          // from "RankoDateTime" e.g. "2024-04-06-17-42"
-    var items: [AlgoliaRankoItem]
-}
-
-struct RankoListRecord: Codable {
+struct RankoListAlgolia: Codable {
     let objectID: String
     let RankoName: String
     let RankoDescription: String
     let RankoType: String
     let RankoPrivacy: Bool
+    let RankoStatus: String
     let RankoCategory: String
     let RankoUserID: String
     let RankoDateTime: String
-    let RankoItems: [String: [String: Int]]?  // Add this!
-}
-
-struct RankoItemRecord: Codable {
-    let objectID: String
-    let ItemName: String
-    let ItemDescription: String
-    let ItemImage: String
-    let ItemRank: Int
-    let ItemVotes: Int
-    let ListID: String
+    
+    let RankoLikes: Int
+    let RankoComments: Int
+    let RankoVotes: Int
 }
 
 // MARK: - Global Functions
@@ -162,21 +160,6 @@ struct ProfileIconView: View {
         .shadow(radius: 3)
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // MARK: - SAMPLE ALGOLIA LOADER -
 class AlgoliaLoader<T: Decodable> {

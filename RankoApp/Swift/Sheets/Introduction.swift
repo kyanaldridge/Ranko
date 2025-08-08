@@ -144,7 +144,7 @@ struct TrayView: View {
         let aedtFormatter = DateFormatter()
         aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
         aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
-        aedtFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
+        aedtFormatter.dateFormat = "yyyyMMddHHmmss"
         let rankoDateTime = aedtFormatter.string(from: now)
         
         if Auth.auth().currentUser!.isAnonymous {

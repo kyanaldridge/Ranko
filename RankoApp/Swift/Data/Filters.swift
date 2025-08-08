@@ -1689,7 +1689,7 @@ struct FilterChipPickerView: View {
     
     @Environment(\.dismiss) private var dismiss
     
-    @Binding var selectedRankoItems: [AlgoliaRankoItem]
+    @Binding var selectedRankoItems: [RankoItem]
 
     @State private var chipStack: [FilterChip] = []
     @State private var currentChips: [FilterChip] = defaultFilterChips.sorted { $0.order < $1.order }
@@ -1759,7 +1759,7 @@ struct FilterChipPickerView: View {
         .fullScreenCover(isPresented: $addItemsOpen) {
             if let last = chipStack.last, last.children.isEmpty {
                 AddItemView(filterChip: last, existingCount: selectedRankoItems.count) { newItems in
-                    // newItems is now [AlgoliaRankoItem]
+                    // newItems is now [RankoItem]
                     selectedRankoItems.append(contentsOf: newItems)
                     selectedRankoItems.sort { $0.rank < $1.rank }
                     dismiss()
@@ -1825,14 +1825,14 @@ extension FilterChip {
 }
 
 struct FilterChipPickerView_Previews: PreviewProvider {
-    @State static var selectedItems: [AlgoliaRankoItem] = sampleItems
+    @State static var selectedItems: [RankoItem] = sampleItems
     
-    static var sampleItems: [AlgoliaRankoItem] = [
-        AlgoliaRankoItem(
+    static var sampleItems: [RankoItem] = [
+        RankoItem(
             id: UUID().uuidString,
             rank: 1,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "1",
                 ItemName: "Paris",
                 ItemDescription: "The City of Light",
@@ -1840,11 +1840,11 @@ struct FilterChipPickerView_Previews: PreviewProvider {
                 ItemImage:"https://res.klook.com/image/upload/c_fill,w_750,h_750/q_80/w_80,x_15,y_15,g_south_west,l_Klook_water_br_trans_yhcmh3/activities/wrgwlkhnjekv8h5tjbn4.jpg"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 2,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "2",
                 ItemName: "New York",
                 ItemDescription: "The Big Apple",
@@ -1852,11 +1852,11 @@ struct FilterChipPickerView_Previews: PreviewProvider {
                 ItemImage:"https://hips.hearstapps.com/hmg-prod/images/manhattan-skyline-with-empire-state-building-royalty-free-image-960609922-1557777571.jpg?crop=0.66635xw:1xh;center,top&resize=640:*"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 3,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "3",
                 ItemName: "Tokyo",
                 ItemDescription: "Land of the Rising Sun",
@@ -1864,11 +1864,11 @@ struct FilterChipPickerView_Previews: PreviewProvider {
                 ItemImage:"https://static.independent.co.uk/s3fs-public/thumbnails/image/2018/04/10/13/tokyo-main.jpg?width=1200&height=1200&fit=crop"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 4,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "4",
                 ItemName: "Rome",
                 ItemDescription: "a city steeped in history, culture, and artistic treasures, often referred to as the Eternal City",
@@ -1876,11 +1876,11 @@ struct FilterChipPickerView_Previews: PreviewProvider {
                 ItemImage:"https://i.guim.co.uk/img/media/03303b5f042b72c03541fcd7f3777180f61a01a5/0_2310_4912_2947/master/4912.jpg?width=1200&height=1200&quality=85&auto=format&fit=crop&s=19cf880f7508ea310bdb136057d78240"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 5,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "5",
                 ItemName: "Sydney",
                 ItemDescription: "Harbour City",
@@ -1888,11 +1888,11 @@ struct FilterChipPickerView_Previews: PreviewProvider {
                 ItemImage:"https://dynamic-media-cdn.tripadvisor.com/media/photo-o/13/93/a7/be/sydney-opera-house.jpg?w=500&h=500&s=1"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 6,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "6",
                 ItemName: "Barcelona",
                 ItemDescription: "Gaudí’s Masterpiece City",
@@ -1900,11 +1900,11 @@ struct FilterChipPickerView_Previews: PreviewProvider {
                 ItemImage:"https://lp-cms-production.imgix.net/2023-08/iStock-1297827939.jpg?fit=crop&ar=1%3A1&w=1200&auto=format&q=75"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 7,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "7",
                 ItemName: "Cape Town",
                 ItemDescription: "Mother City of South Africa",
@@ -1912,11 +1912,11 @@ struct FilterChipPickerView_Previews: PreviewProvider {
                 ItemImage:"https://imageresizer.static9.net.au/0sx9mhfU8tYDs_T-ftiFBrWR_as=/0x0:1307x735/1200x1200/https%3A%2F%2Fprod.static9.net.au%2Ffs%2F15af5183-fb21-49d9-a22c-d9f4813ccbea"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 8,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "8",
                 ItemName: "Rio de Janeiro",
                 ItemDescription: "Marvelous City",
@@ -1924,11 +1924,11 @@ struct FilterChipPickerView_Previews: PreviewProvider {
                 ItemImage:"https://whc.unesco.org/uploads/thumbs/site_1100_0004-750-750-20120625114004.jpg"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 9,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "9",
                 ItemName: "Reykjavik",
                 ItemDescription: "Land of Fire and Ice",
@@ -1936,11 +1936,11 @@ struct FilterChipPickerView_Previews: PreviewProvider {
                 ItemImage:"https://media.gq-magazine.co.uk/photos/5d138e07d7a7017355bb9bf3/1:1/w_1280,h_1280,c_limit/reykjavik-gq-22jun18_istock_b.jpg"
             )
         ),
-        AlgoliaRankoItem(
+        RankoItem(
             id: UUID().uuidString,
             rank: 10,
             votes: 0,
-            record: AlgoliaItemRecord(
+            record: RankoRecord(
                 objectID: "10",
                 ItemName: "Istanbul",
                 ItemDescription: "Where East Meets West",
