@@ -799,7 +799,7 @@ struct BlindSequence: View {
     private func updateLeaderboardIfNeeded() {
         let userID = user_data.userID
         let userName = user_data.username
-        let userImage = user_data.userProfilePicture
+        let userImage = user_data.userProfilePicturePath
 
         guard !userID.isEmpty, !userName.isEmpty, !userImage.isEmpty else {
             print("🚫 Missing user data for leaderboard update.")

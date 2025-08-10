@@ -13,6 +13,38 @@ import GoogleSignIn
 import GoogleSignInSwift
 import FirebaseAnalytics
 
+final class PresenterBox: ObservableObject { weak var vc: UIViewController? }
+
+struct ViewControllerResolver: UIViewControllerRepresentable {
+    @ObservedObject var box: PresenterBox
+    func makeUIViewController(context: Context) -> UIViewController {
+        let vc = UIViewController()
+        DispatchQueue.main.async { self.box.vc = vc }
+        return vc
+    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+
+@MainActor
+func topViewController(_ root: UIViewController? = nil) -> UIViewController? {
+    let rootVC = root ?? (UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap { $0.windows }
+        .first { $0.isKeyWindow }?
+        .rootViewController)
+
+    if let nav = rootVC as? UINavigationController {
+        return topViewController(nav.visibleViewController)
+    }
+    if let tab = rootVC as? UITabBarController {
+        return topViewController(tab.selectedViewController)
+    }
+    if let presented = rootVC?.presentedViewController {
+        return topViewController(presented)
+    }
+    return rootVC
+}
+
 // MARK: - Login View
 struct Login: View {
     // View Properties
@@ -21,6 +53,7 @@ struct Login: View {
     @State private var isLoading: Bool = false
     @State private var nonce: String?
     @Environment(\.colorScheme) private var scheme
+    @StateObject private var presenterBox = PresenterBox()
     @StateObject private var user_data = UserInformation.shared
     
     var body: some View {
@@ -171,44 +204,28 @@ struct Login: View {
     }
     
     // Login With Google
+    @MainActor
     func googleSignIn() {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootViewController = windowScene.windows.first?.rootViewController else {
+        guard let presenter = topViewController() else {
             showError("Unable to access root view controller.")
             return
         }
-        
         isLoading = true
-
-        GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController) { result, error in
-            if let error = error {
-                showError(error.localizedDescription)
-                return
-            }
-
+        GIDSignIn.sharedInstance.signIn(withPresenting: presenter) { result, error in
+            if let error = error { showError(error.localizedDescription); return }
             guard let user = result?.user,
                   let idToken = user.idToken?.tokenString else {
-                showError("Missing Google user info.")
-                return
+                showError("Missing Google user info."); return
             }
-
-            let credential = GoogleAuthProvider.credential(withIDToken: idToken,
-                                                           accessToken: user.accessToken.tokenString)
-
-            Auth.auth().signIn(with: credential) { authResult, error in
-                if let error = error {
-                    showError(error.localizedDescription)
-                    return
-                }
-
-                // Sign-in success
-                user_data.logStatus = true
+            let credential = GoogleAuthProvider.credential(
+                withIDToken: idToken,
+                accessToken: user.accessToken.tokenString
+            )
+            Auth.auth().signIn(with: credential) { _, error in
+                if let error = error { showError(error.localizedDescription); return }
                 user_data.userLoginService = "Google"
+                user_data.logStatus = true
                 isLoading = false
-                print("Google sign-in success: \(user.profile?.name ?? "")")
-                Analytics.logEvent(AnalyticsEventLogin, parameters: [
-                    AnalyticsParameterMethod: "Google"
-                ])
             }
         }
     }

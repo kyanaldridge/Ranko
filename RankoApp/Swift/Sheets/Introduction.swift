@@ -60,14 +60,16 @@ enum CurrentView {
 }
 
 struct TrayView: View {
+    @StateObject private var user_data = UserInformation.shared
+    @Environment(\.dismiss) var dismiss
+    
     @State private var currentView: CurrentView = .actions
     @State private var selectedAction: Action?
     @State private var selectedPeriod: Period?
     @State private var duration: String = ""
     @State private var selection: [String] = []
-    @Binding var currentDetent: PresentationDetent
-    @StateObject private var user_data = UserInformation.shared
-    @Environment(\.dismiss) var dismiss
+    @State private var currentDetent: PresentationDetent = .fraction(0.7)
+    
     var body: some View {
         VStack(spacing: 20) {
             ZStack {
@@ -136,6 +138,7 @@ struct TrayView: View {
             }
         }
         .padding(20)
+        .presentationDetents([.fraction(0.7), .large], selection: $currentDetent)
     }
     
     func saveDetailsToDatabase() {
@@ -153,7 +156,7 @@ struct TrayView: View {
             user_data.username = Auth.auth().currentUser!.displayName ?? "New User"
         }
         
-        user_data.userProfilePicture = "default-profilePicture.jpg"
+        user_data.userProfilePicturePath = "default-profilePicture.jpg"
 
         // 1) Build Group List Codable Struct
         let listRecord = RankoUserInformation(
@@ -161,12 +164,13 @@ struct TrayView: View {
             UserID: Auth.auth().currentUser!.uid,
             UserName: user_data.username,
             UserDescription: "",
-            UserPrivacy: true,
+            UserPrivacy: "Public",
             UserInterests: user_data.userInterests,
             UserJoined: rankoDateTime,
             UserYear: user_data.userYear,
             UserFoundUs: selectedAction!.title,
-            UserProfilePicturePath: user_data.userProfilePicture,
+            UserSignInMethod: user_data.userLoginService,
+            UserProfilePicturePath: user_data.userProfilePicturePath,
             UserProfilePictureModified: rankoDateTime,
             UserProfilePictureFile: "image",
             UserRankoCount: 0,
@@ -178,15 +182,16 @@ struct TrayView: View {
             "UserID": Auth.auth().currentUser!.uid,
             "UserName": user_data.username,
             "UserDescription": "",
-            "UserPrivacy": true,
+            "UserPrivacy": "Public",
             "UserInterests": user_data.userInterests,
             "UserJoined": rankoDateTime,
             "UserYear": user_data.userYear,
-            "UserFoundUs": selectedAction!.title
+            "UserFoundUs": selectedAction!.title,
+            "UserSignInMethod": user_data.userLoginService
         ]
         
         let userProfilePicture: [String: Any] = [
-            "UserProfilePicturePath": "default-profilePicture.jpg",
+            "UserProfilePicturePath": user_data.userProfilePicturePath,
             "UserProfilePictureModified": rankoDateTime,
             "UserProfilePictureFile": "image"
         ]

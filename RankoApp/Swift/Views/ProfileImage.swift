@@ -126,14 +126,14 @@ final class ProfileImageService: ObservableObject {
             
             // 2️⃣ write new path & timestamp
             DispatchQueue.main.async {
-                self.user_data.userProfilePicture = fileName
+                self.user_data.userProfilePicturePath = fileName
                 self.user_data.userProfilePictureModified = Self.timestampString()
             }
         }
     }
     
     private func downloadAndCache() {
-        guard !user_data.userProfilePicture.isEmpty else { return }
+        guard !user_data.userProfilePicturePath.isEmpty else { return }
         
         DispatchQueue.main.async { [weak self] in
             self?.isLoading = true
@@ -142,7 +142,7 @@ final class ProfileImageService: ObservableObject {
         let storageRef = Storage.storage()
             .reference()
             .child("profilePictures")
-            .child(user_data.userProfilePicture)
+            .child(user_data.userProfilePicturePath)
         
         storageRef.getData(maxSize: 2 * 1024 * 1024) { [weak self] data, error in
             DispatchQueue.global(qos: .userInitiated).async {

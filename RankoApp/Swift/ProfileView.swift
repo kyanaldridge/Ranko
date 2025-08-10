@@ -579,6 +579,7 @@ struct ProfileView: View {
                                 .reference()
                                 .child("UserData")
                                 .child(user_data.userID)
+                                .child("UserRankos")
                                 .child("UserFeaturedRankos")
                                 .child("\(slot)")
                             ref.setValue(selected.id)
@@ -689,7 +690,7 @@ struct ProfileView: View {
                     rankoCount = totalResults!
                     print("✅ Total Algolia Results: \(String(describing: totalResults))")
                     let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(user_data.userID).child("UserRankoCount")
+                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserRankoCount")
                     dbRef.setValue(totalResults!)
                 case .failure(let error):
                     print("❌ Error fetching Algolia results: \(error)")
@@ -723,6 +724,7 @@ struct ProfileView: View {
             let dbRef = Database.database().reference()
                 .child("UserData")
                 .child(user_data.userID)
+                .child("UserProfilePicture")
                 .child("UserProfilePicturePath")
             dbRef.setValue(filePath) { _, _ in
                 // 3️⃣ Now download it back and cache
@@ -739,6 +741,7 @@ struct ProfileView: View {
             Database.database().reference()
                 .child("UserData")
                 .child(user_data.userID)
+                .child("UserProfilePicture")
                 .child("UserProfilePictureModified")
                 .setValue(ts)
         }
@@ -780,28 +783,68 @@ struct ProfileView: View {
             return
         }
         
-        let dbRef = Database.database().reference().child("UserData").child(uid)
-        dbRef.observeSingleEvent(of: .value) { snapshot in
+        let userDetails = Database.database().reference().child("UserData").child(uid).child("UserDetails")
+        let userProfilePicture = Database.database().reference().child("UserData").child(uid).child("UserProfilePicture")
+        let userStats = Database.database().reference().child("UserData").child(uid).child("UserStats")
+        
+        print("UserID: \(uid)")
+        
+        userDetails.observeSingleEvent(of: .value) { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed to fetch user data from Firebase.")
+                print("❌ Failed To Fetch User Data From Firebase.")
                 return
             }
             
-            user_data.userID = uid
+            user_data.userID = value["UserID"] as? String ?? ""
             user_data.username = value["UserName"] as? String ?? ""
             user_data.userDescription = value["UserDescription"] as? String ?? ""
-            user_data.userProfilePicture = value["UserProfilePicturePath"] as? String ?? ""
-            let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
-            user_data.userProfilePictureModified = modifiedTimestamp
+            user_data.userPrivacy = value["UserPrivacy"] as? String ?? ""
+            user_data.userInterests = value["UserInterests"] as? String ?? ""
+            user_data.userJoined = value["UserJoined"] as? String ?? ""
+            user_data.userYear = value["UserYear"] as? Int ?? 0
+            user_data.userFoundUs = value["UserFoundUs"] as? String ?? ""
+            user_data.userLoginService = value["UserSignInMethod"] as? String ?? ""
             
-            // Check if profile picture needs to be re-downloaded
-            if modifiedTimestamp != self.user_data.userProfilePictureModified {
-                print("🔁 Profile picture modified, re-downloading...")
-                self.downloadAndCacheProfileImage(from: user_data.userProfilePicture)
-            } else {
-                print("✅ Using cached profile image.")
-                self.profileImage = loadImageFromDisk()
+            print("✅ Successfully Loaded User Details.")
+            
+        }
+        
+        userProfilePicture.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Failed To Fetch User Data From Firebase.")
+                return
             }
+            
+            user_data.userProfilePictureFile = value["UserProfilePictureFile"] as? String ?? ""
+            let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
+            user_data.userProfilePicturePath = value["UserProfilePicturePath"] as? String ?? ""
+            
+            print("✅ Successfully Loaded Profile Picture Details.")
+            print("🤔 Checking For New Image...")
+            
+            // Only load profile image if the modified string has changed
+            if modifiedTimestamp != user_data.userProfilePictureModified {
+                print("🔁 Profile Picture Modified Date Changed, Reloading Image...")
+                user_data.userProfilePictureModified = modifiedTimestamp
+                downloadAndCacheProfileImage(from: user_data.userProfilePicturePath)
+            } else {
+                print("✅ Using Cached Profile Image From Disk.")
+                profileImage = loadImageFromDisk()
+            }
+        }
+        
+        userStats.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Failed To Fetch User Data From Firebase.")
+                return
+            }
+            
+            user_data.userStatsFollowers = value["UserFollowerCount"] as? Int ?? 0
+            user_data.userStatsFollowing = value["UserFollowingCount"] as? Int ?? 0
+            user_data.userStatsRankos = value["UserRankoCount"] as? Int ?? 0
+            
+            print("✅ Successfully Loaded Statistics Details.")
+            print("✅ Successfully Loaded All User Data.")
         }
     }
     
@@ -812,24 +855,24 @@ struct ProfileView: View {
         let group = DispatchGroup()
 
         group.enter()
-        db.child("UserData").child(user_data.userID).child("UserFollowers")
+        db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowers")
             .observeSingleEvent(of: .value) { snapshot in
                 DispatchQueue.main.async {
                     self.followersCount = Int(snapshot.childrenCount)
                     let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(user_data.userID).child("UserFollowerCount")
+                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowerCount")
                     dbRef.setValue(followersCount)
                 }
                 group.leave()
             }
 
         group.enter()
-        db.child("UserData").child(user_data.userID).child("UserFollowing")
+        db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowing")
             .observeSingleEvent(of: .value) { snapshot in
                 DispatchQueue.main.async {
                     self.followingCount = Int(snapshot.childrenCount)
                     let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(user_data.userID).child("UserFollowingCount")
+                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowingCount")
                     dbRef.setValue(followingCount)
                 }
                 group.leave()
@@ -868,6 +911,7 @@ struct ProfileView: View {
             .reference()
             .child("UserData")
             .child(uid)
+            .child("UserRankos")
             .child("UserFeaturedRankos")
 
         baseRef.getData { error, snapshot in
@@ -986,6 +1030,7 @@ struct ProfileView: View {
             .reference()
             .child("UserData")
             .child(user_data.userID)
+            .child("UserRankos")
             .child("UserFeaturedRankos")
             .child("\(slot)")
         ref.removeValue { error, _ in
@@ -1002,7 +1047,7 @@ struct ProfileView: View {
             return
         }
 
-        let ref = Database.database().reference().child("UserData").child(user_data.userID)
+        let ref = Database.database().reference().child("UserData").child(user_data.userID).child("UserDetails")
 
         let updates: [String: Any] = [
             "UserName": name,
@@ -1020,7 +1065,7 @@ struct ProfileView: View {
     }
 
     private func loadImageFromDisk() -> UIImage? {
-        let path = URL(string: user_data.userProfilePicture)!
+        let path = URL(string: user_data.userProfilePicturePath)!
         if FileManager.default.fileExists(atPath: path.path) {
             if let data = try? Data(contentsOf: path),
                let image = UIImage(data: data) {
@@ -1938,13 +1983,14 @@ struct UserGalleryView: View {
 struct SearchFollowersView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
-
+    
     @State private var users: [RankoUser] = []
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
     @State private var searchText: String = ""
     @State private var selectedUser: RankoUser?
     @State private var filteredUsers: [RankoUser] = []
+    @State private var followerIDs: [String] = []
     
     let userID: String
     
@@ -1985,7 +2031,7 @@ struct SearchFollowersView: View {
                     .cornerRadius(12)
                     .padding(.leading, 10)
                     .padding(.top, 15)
-
+                    
                     Button {
                         dismiss()
                     } label: {
@@ -2066,62 +2112,89 @@ struct SearchFollowersView: View {
             }
         }
     }
-
+    
     private func loadFollowers() {
         isLoading = true
         errorMessage = nil
-        
+
         let followersRef = Database.database()
             .reference()
             .child("UserData")
             .child(userID)
+            .child("UserSocial")
             .child("UserFollowers")
-        
-        // 1️⃣ Fetch the map of timestamp→followerID
+
+        // 1) Fetch the map of timestamp → followerID
         followersRef.observeSingleEvent(of: .value) { snap in
-            guard let map = snap.value as? [String: String] else {
+            guard let map = snap.value as? [String: String], !map.isEmpty else {
                 self.errorMessage = "No followers found."
                 self.isLoading = false
                 return
             }
-            let followerIDs = Array(map.keys)
-            fetchFollowerProfiles(ids: followerIDs)
+
+            // If your timestamps are strings like "yyyyMMddHHmmss", sorting numerically works.
+            let sortedPairs: [(Int, String)] = map.compactMap { (tsStr, fid) in
+                if let ts = Int(tsStr) { return (ts, fid) }
+                return nil
+            }
+            .sorted(by: { $0.0 > $1.0 }) // newest first
+
+            followerIDs = sortedPairs.map { $0.1 }
+            self.fetchFollowerProfiles(ids: followerIDs)
+        }
+    }
+
+    private func fetchFollowerProfiles(ids: [String]) {
+        // Build RankoUser for each followerID by reading: UserData/{id}/(UserDetails, UserProfilePicture)
+        let group = DispatchGroup()
+        var loaded: [RankoUser] = []
+        let appendQueue = DispatchQueue(label: "followers.append")
+
+        for fid in followerIDs {
+            group.enter()
+            fetchUserCard(uid: fid) { user in
+                if let user = user { appendQueue.sync { loaded.append(user) } }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            self.users = loaded
+            self.filteredUsers = loaded
+            self.isLoading = false
         }
     }
     
-    private func fetchFollowerProfiles(ids: [String]) {
-        let usersRef = Database.database()
-            .reference()
-            .child("UserData")
-        
-        // 2️⃣ Read all user‐records once, then pick out the followers
-        usersRef.observeSingleEvent(of: .value) { snap in
-            guard let all = snap.value as? [String: Any] else {
-                self.errorMessage = "Could not load user data."
-                self.isLoading = false
-                return
+    func fetchUserCard(uid: String, completion: @escaping (RankoUser?) -> Void) {
+        let base = Database.database().reference().child("UserData").child(uid)
+        let detailsRef = base.child("UserDetails")
+        let pfpRef     = base.child("UserProfilePicture")
+
+        var name: String = "Unknown"
+        var desc: String = ""
+        var pic:  String = ""
+
+        let group = DispatchGroup()
+
+        group.enter()
+        detailsRef.observeSingleEvent(of: .value) { snap in
+            defer { group.leave() }
+            if let d = snap.value as? [String: Any] {
+                name = (d["UserName"] as? String) ?? name
+                desc = (d["UserDescription"] as? String) ?? desc
             }
-            
-            var loaded: [RankoUser] = []
-            for id in ids {
-                if let dict = all[id] as? [String: Any],
-                   let name = dict["UserName"] as? String,
-                   let desc = dict["UserDescription"] as? String,
-                   let pic  = dict["UserProfilePicturePath"] as? String {
-                    loaded.append(.init(
-                        id: id,
-                        userName: name,
-                        userDescription: desc,
-                        userProfilePicture: pic
-                    ))
-                }
+        }
+
+        group.enter()
+        pfpRef.observeSingleEvent(of: .value) { snap in
+            defer { group.leave() }
+            if let p = snap.value as? [String: Any] {
+                pic = (p["UserProfilePicturePath"] as? String) ?? ""
             }
-            
-            DispatchQueue.main.async {
-                self.users = loaded
-                self.filteredUsers = loaded
-                self.isLoading = false
-            }
+        }
+
+        group.notify(queue: .main) {
+            completion(RankoUser(id: uid, userName: name, userDescription: desc, userProfilePicture: pic))
         }
     }
 }
@@ -2129,13 +2202,14 @@ struct SearchFollowersView: View {
 struct SearchFollowingView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
-
+    
     @State private var users: [RankoUser] = []
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
     @State private var searchText: String = ""
     @State private var selectedUser: RankoUser?
     @State private var filteredUsers: [RankoUser] = []
+    @State private var followingIDs: [String] = []
     
     let userID: String
     
@@ -2149,7 +2223,7 @@ struct SearchFollowingView: View {
                             .font(.system(size: 16, weight: .heavy))
                             .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
                             .padding(6)
-                        TextField("Search Followers", text: $searchText)
+                        TextField("Search Following", text: $searchText)
                             .font(.system(size: 16, weight: .heavy))
                             .foregroundColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.6) : Color(hex: 0x7E5F46).opacity(0.9))
                             .autocapitalization(.none)
@@ -2176,7 +2250,7 @@ struct SearchFollowingView: View {
                     .cornerRadius(12)
                     .padding(.leading, 10)
                     .padding(.top, 15)
-
+                    
                     Button {
                         dismiss()
                     } label: {
@@ -2257,66 +2331,92 @@ struct SearchFollowingView: View {
             }
         }
     }
-
+    
     private func loadFollowing() {
         isLoading = true
         errorMessage = nil
-        
+
         let followingRef = Database.database()
             .reference()
             .child("UserData")
             .child(userID)
+            .child("UserSocial")
             .child("UserFollowing")
-        
-        // 1️⃣ Fetch the map of timestamp→followerID
+
+        // 1) Fetch the map of timestamp → followingID
         followingRef.observeSingleEvent(of: .value) { snap in
-            guard let map = snap.value as? [String: String] else {
+            guard let map = snap.value as? [String: String], !map.isEmpty else {
                 self.errorMessage = "No following found."
                 self.isLoading = false
                 return
             }
-            let followingIDs = Array(map.keys)
-            fetchFollowingProfiles(ids: followingIDs)
+
+            // If your timestamps are strings like "yyyyMMddHHmmss", sorting numerically works.
+            let sortedPairs: [(Int, String)] = map.compactMap { (tsStr, fid) in
+                if let ts = Int(tsStr) { return (ts, fid) }
+                return nil
+            }
+            .sorted(by: { $0.0 > $1.0 }) // newest first
+
+            followingIDs = sortedPairs.map { $0.1 }
+            self.fetchFollowingProfiles(ids: followingIDs)
+        }
+    }
+
+    private func fetchFollowingProfiles(ids: [String]) {
+        // Build RankoUser for each followingID by reading: UserData/{id}/(UserDetails, UserProfilePicture)
+        let group = DispatchGroup()
+        var loaded: [RankoUser] = []
+        let appendQueue = DispatchQueue(label: "following.append")
+
+        for fid in followingIDs {
+            group.enter()
+            fetchUserCard(uid: fid) { user in
+                if let user = user { appendQueue.sync { loaded.append(user) } }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            self.users = loaded
+            self.filteredUsers = loaded
+            self.isLoading = false
         }
     }
     
-    private func fetchFollowingProfiles(ids: [String]) {
-        let usersRef = Database.database()
-            .reference()
-            .child("UserData")
-        
-        // 2️⃣ Read all user‐records once, then pick out the followers
-        usersRef.observeSingleEvent(of: .value) { snap in
-            guard let all = snap.value as? [String: Any] else {
-                self.errorMessage = "Could not load user data."
-                self.isLoading = false
-                return
+    func fetchUserCard(uid: String, completion: @escaping (RankoUser?) -> Void) {
+        let base = Database.database().reference().child("UserData").child(uid)
+        let detailsRef = base.child("UserDetails")
+        let pfpRef     = base.child("UserProfilePicture")
+
+        var name: String = "Unknown"
+        var desc: String = ""
+        var pic:  String = ""
+
+        let group = DispatchGroup()
+
+        group.enter()
+        detailsRef.observeSingleEvent(of: .value) { snap in
+            defer { group.leave() }
+            if let d = snap.value as? [String: Any] {
+                name = (d["UserName"] as? String) ?? name
+                desc = (d["UserDescription"] as? String) ?? desc
             }
-            
-            var loaded: [RankoUser] = []
-            for id in ids {
-                if let dict = all[id] as? [String: Any],
-                   let name = dict["UserName"] as? String,
-                   let desc = dict["UserDescription"] as? String,
-                   let pic  = dict["UserProfilePicturePath"] as? String {
-                    loaded.append(.init(
-                        id: id,
-                        userName: name,
-                        userDescription: desc,
-                        userProfilePicture: pic
-                    ))
-                }
+        }
+
+        group.enter()
+        pfpRef.observeSingleEvent(of: .value) { snap in
+            defer { group.leave() }
+            if let p = snap.value as? [String: Any] {
+                pic = (p["UserProfilePicturePath"] as? String) ?? ""
             }
-            
-            DispatchQueue.main.async {
-                self.users = loaded
-                self.filteredUsers = loaded
-                self.isLoading = false
-            }
+        }
+
+        group.notify(queue: .main) {
+            completion(RankoUser(id: uid, userName: name, userDescription: desc, userProfilePicture: pic))
         }
     }
 }
-
 
 
 struct ProfileSpectateView: View {
@@ -2793,6 +2893,7 @@ struct ProfileSpectateView: View {
             let db = Database.database().reference()
             db.child("UserData")
               .child(userID)
+              .child("UserSocial")
               .child("UserFollowers")
               .child(user_data.userID)
               .observeSingleEvent(of: .value) { snap in
@@ -2814,10 +2915,12 @@ struct ProfileSpectateView: View {
             let db = Database.database().reference()
             let followerPath = db.child("UserData")
                                 .child(userID)
+                                .child("UserSocial")
                                 .child("UserFollowers")
                                 .child(user_data.userID)
             let followingPath = db.child("UserData")
                                 .child(user_data.userID)
+                                .child("UserSocial")
                                 .child("UserFollowing")
                                 .child(userID)
             
@@ -2834,10 +2937,12 @@ struct ProfileSpectateView: View {
             let db = Database.database().reference()
             let followerPath = db.child("UserData")
                                 .child(userID)
+                                .child("UserSocial")
                                 .child("UserFollowers")
                                 .child(user_data.userID)
             let followingPath = db.child("UserData")
                                 .child(user_data.userID)
+                                .child("UserSocial")
                                 .child("UserFollowing")
                                 .child(userID)
             
@@ -2865,7 +2970,7 @@ struct ProfileSpectateView: View {
                     rankoCount = totalResults!
                     print("✅ Total Algolia Results: \(String(describing: totalResults))")
                     let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(userID).child("UserRankoCount")
+                    let dbRef = db.child("UserData").child("UserStats").child(userID).child("UserRankoCount")
                     dbRef.setValue(totalResults!)
                 case .failure(let error):
                     print("❌ Error fetching Algolia results: \(error)")
@@ -2875,12 +2980,10 @@ struct ProfileSpectateView: View {
     }
     
     private func loadProfileData() {
-        let dbRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(userID)
+        let userDetails = Database.database().reference().child("UserData").child(userID).child("UserDetails")
+        let userProfilePicture = Database.database().reference().child("UserData").child(userID).child("UserProfilePicture")
 
-        dbRef.observeSingleEvent(of: .value) { snapshot in
+        userDetails.observeSingleEvent(of: .value) { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
                 print("❌ loadProfileData: no user data at path")
                 return
@@ -2894,14 +2997,12 @@ struct ProfileSpectateView: View {
                                 .joined(separator: ",")
                                 .trimmingCharacters(in: .whitespacesAndNewlines)
                             ?? (value["UserInterests"] as? String ?? "")
-            let picPath = value["UserProfilePicturePath"] as? String ?? ""
 
             DispatchQueue.main.async {
                 // Update all UI state
                 self.username             = name
                 self.userDescription      = desc
                 self.userInterests        = interests
-                self.userProfileImagePath = picPath
 
                 // Animate tags
                 let tags = interests
@@ -2914,8 +3015,22 @@ struct ProfileSpectateView: View {
                         }
                     }
                 }
+            }
+        } withCancel: { error in
+            print("❌ loadProfileData cancelled:", error.localizedDescription)
+        }
+        
+        userProfilePicture.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ loadProfileData: no user data at path")
+                return
+            }
+            
+            let picPath = value["UserProfilePicturePath"] as? String ?? ""
 
-                // Now that path is set, fetch the image
+            DispatchQueue.main.async {
+                self.userProfileImagePath = picPath
+
                 loadProfileImage(from: picPath)
             }
         } withCancel: { error in
@@ -2957,24 +3072,24 @@ struct ProfileSpectateView: View {
         let group = DispatchGroup()
 
         group.enter()
-        db.child("UserData").child(userID).child("UserFollowers")
+        db.child("UserData").child(userID).child("UserSocial").child("UserFollowers")
             .observeSingleEvent(of: .value) { snapshot in
                 DispatchQueue.main.async {
                     self.followersCount = Int(snapshot.childrenCount)
                     let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(userID).child("UserFollowerCount")
+                    let dbRef = db.child("UserData").child(userID).child("UserStats").child("UserFollowerCount")
                     dbRef.setValue(followersCount)
                 }
                 group.leave()
             }
 
         group.enter()
-        db.child("UserData").child(userID).child("UserFollowing")
+        db.child("UserData").child(userID).child("UserSocial").child("UserFollowing")
             .observeSingleEvent(of: .value) { snapshot in
                 DispatchQueue.main.async {
                     self.followingCount = Int(snapshot.childrenCount)
                     let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(userID).child("UserFollowingCount")
+                    let dbRef = db.child("UserData").child(userID).child("UserStats").child("UserFollowingCount")
                     dbRef.setValue(followingCount)
                 }
                 group.leave()
@@ -3013,6 +3128,7 @@ struct ProfileSpectateView: View {
             .reference()
             .child("UserData")
             .child(userID)
+            .child("UserRankos")
             .child("UserFeaturedRankos")
 
         baseRef.getData { error, snapshot in
@@ -3614,287 +3730,3 @@ struct AppIconGridItem: View {
         }
     }
 }
-
-
-
-
-//
-//// MARK: – Tab content builder
-//@ViewBuilder
-//private var tabContent: some View {
-//    switch selectedType {
-//    case "Featured":
-//        VStack(spacing: 3) {
-//            // Show filled slots first
-//            let filledSlots = featuredLists.keys.sorted()
-//            let emptySlots = (1...10).filter { !featuredLists.keys.contains($0) }
-//
-//            ForEach(filledSlots, id: \.self) { slot in
-//                HStack {
-//                    Button {
-//                        if let list = featuredLists[slot] {
-//                            // open the existing Ranko
-//                            selectedFeaturedList = list
-//                        }
-//                    } label: {
-//                        if let list = featuredLists[slot] {
-//                            if list.type == "default" {
-//                                DefaultListIndividualGallery(listData: list)
-//                            } else if list.type == "group" {
-//                                GroupListIndividualGallery(listData: list)
-//                            }
-//                        }
-//                    }
-//                    .buttonStyle(PlainButtonStyle())
-//                    Spacer()
-//                    Button {
-//                        slotToUnpin = slot
-//                        showUnpinAlert = true
-//                    } label: {
-//                        Image(systemName: "pin.fill")
-//                            .font(.headline)
-//                            .foregroundColor(currentTint)
-//                    }
-//                    .buttonStyle(PlainButtonStyle())
-//                    .padding(.trailing, 16)
-//                }
-//            }
-//
-//            // Then show empty placeholder slots
-//            ForEach(emptySlots, id: \.self) { slot in
-//                HStack {
-//                    Button {
-//                        slotToSelect = slot
-//                    } label: {
-//                        ZStack {
-//                            RoundedRectangle(cornerRadius: 10)
-//                                .fill(Color.white)
-//                                .shadow(radius: 2)
-//                            Image(systemName: "plus")
-//                                .font(.title2)
-//                                .foregroundColor(.gray)
-//                        }
-//                        .frame(height: 100)
-//                    }
-//                    .buttonStyle(PlainButtonStyle())
-//                    Spacer()
-//                }
-//            }
-//        }
-//        .padding()
-//
-//            // 1) Sheet for picking a brand-new list into an empty slot
-//        .sheet(item: $slotToSelect) { slot in
-//            UserListGallery_PublicOnly { selected in
-//                // Dismiss sheet first
-//                DispatchQueue.main.async {
-//                    slotToSelect = nil
-//                }
-//
-//                // Delay slightly to ensure dismissal is finished
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-//                    // Save to Firebase
-//                    let ref = Database.database()
-//                        .reference()
-//                        .child("UserData")
-//                        .child(user_data.userID)
-//                        .child("UserFeaturedRankos")
-//                        .child("\(slot)")
-//                    ref.setValue(selected.id)
-//
-//                    // Update local UI state
-//                    featuredLists[slot] = selected
-//                }
-//            }
-//        }
-//            // 2) Sheet for viewing an existing featured Ranko
-//        .sheet(item: $selectedFeaturedList) { list in
-//            if list.type == "default" {
-//                DefaultListPersonal(listID: list.id){ updatedItem in }
-//            } else if list.type == "group" {
-//                GroupListPersonal(listID: list.id)
-//            }
-//            
-//        }
-//
-//        
-//    case "Rankos":
-//        if isLoadingLists {
-//            VStack(spacing: 16) {
-//                ForEach(0..<4, id: \.self) { _ in HomeListSkeletonViewRow() }
-//            }
-//            .padding(.vertical, 10)
-//        } else {
-//            UserListGallery() { _ in }
-//                .id(listViewID)
-//                .padding(.top, 16)
-//        }
-//    case "Statistics":
-//        Text("Coming Soon...")
-//        
-//    case "Games":
-//        Text("Coming Soon...")
-//        
-//    default:
-//        Text("Coming Soon...")
-//    }
-//}
-
-//struct CustomiseAppIconView: View {
-//    @AppStorage("totalBlindSequenceGamesPlayed") private var totalGamesPlayed = 0
-//    @AppStorage("BlindSequenceHighScore") private var highScore = 0
-//    @AppStorage("isProUser") var subscribed: Int = 0
-//    @State private var unlockingIconIndex: Int? = nil
-//    @State private var isUnlocking: Bool = false
-//    
-//    @AppStorage("unlocked_Medal_AppIcon") private var unlockedMedal: Bool = false
-//    @AppStorage("unlocked_Trophy_AppIcon") private var unlockedTrophy: Bool = false
-//    @AppStorage("unlocked_Crown_AppIcon") private var unlockedCrown: Bool = false
-//    @AppStorage("unlocked_Star_AppIcon") private var unlockedStar: Bool = false
-//    
-//    @State private var appIcons: [AppIcon] = []
-//    
-//    private func initializeAppIcons() {
-//        appIcons = [
-//            AppIcon(iconName: "Default_AppIcon", previewImage: "Default_AppIcon_Preview", isLocked: false, mission: nil),
-//            AppIcon(iconName: "Medal_AppIcon", previewImage: "Medal_AppIcon_Preview", isLocked: !unlockedMedal, mission: Mission(description: "Achieve 20 Points on Blind Sequence", goal: 20, type: .highScore)),
-//            AppIcon(iconName: "Trophy_AppIcon", previewImage: "Trophy_AppIcon_Preview", isLocked: !unlockedTrophy, mission: Mission(description: "Achieve 25 Points on Blind Sequence", goal: 25, type: .highScore)),
-//            AppIcon(iconName: "Crown_AppIcon", previewImage: "Crown_AppIcon_Preview", isLocked: !unlockedCrown, mission: Mission(description: "Please Support Us By Subscribing to Premium", goal: 1, type: .subscribed)),
-//            AppIcon(iconName: "Star_AppIcon", previewImage: "Star_AppIcon_Preview", isLocked: !unlockedStar, mission: Mission(description: "Achieve 30 Points on Blind Sequence", goal: 30, type: .highScore)),
-//            AppIcon(iconName: nil, previewImage: "ComingSoon_Preview", isLocked: true, mission: Mission(description: "More Icons & Missions Coming Soon!", goal: 100, type: .highScore)),
-//        ]
-//    }
-//    
-//    @State private var selectedIcon: String? = UIApplication.shared.alternateIconName
-//    @State private var showingMission: Bool = false
-//    @State private var selectedMission: Mission?
-//    @State private var showToast: Bool = false
-//    
-//    let columns: [GridItem] = Array(repeating: .init(.flexible(), spacing: 4), count: 5)
-//
-//    var body: some View {
-//        VStack(alignment: .leading, spacing: 8) {
-//            Text("Change App Icon")
-//                .font(.title2.bold())
-//
-//            Text("Click on a locked icon to see the mission to claim it.")
-//                .font(.subheadline)
-//                .foregroundColor(.gray)
-//
-//            if let mission = selectedMission {
-//                let progress = {
-//                    switch mission.type {
-//                    case .gamesPlayed:
-//                        return totalGamesPlayed
-//                    case .highScore:
-//                        return highScore
-//                    case .subscribed:
-//                        return subscribed
-//                    }
-//                }()
-//
-//                VStack(alignment: .leading, spacing: 8) {
-//                    Text("🔒 Mission to Unlock")
-//                        .font(.headline)
-//
-//                    Text(mission.description)
-//
-//                    ProgressView(value: Float(progress), total: Float(mission.goal))
-//                        .accentColor(.blue)
-//
-//                    Text("\(progress)/\(mission.goal)")
-//                        .font(.caption)
-//                        .foregroundColor(.gray)
-//                }
-//                .padding()
-//                .background(Color(.systemGray6))
-//                .cornerRadius(12)
-//                .padding(.top)
-//            }
-//
-//
-//            VStack {
-//                LazyVGrid(columns: columns, spacing: 20) {
-//                    ForEach(appIcons.indices, id: \.self) { index in
-//                        let icon = appIcons[index]
-//                        let isLast = index == appIcons.count - 1
-//
-//                        AppIconGridItem(
-//                            icon: icon,
-//                            isComingSoon: isLast,
-//                            isUnlocking: unlockingIconIndex == index && isUnlocking,
-//                            isSelected: (selectedIcon == icon.iconName || (selectedIcon == nil && icon.iconName == nil))
-//                        ) {
-//                            if !icon.isLocked && !isLast {
-//                                changeAppIcon(to: icon.iconName)
-//                                selectedIcon = icon.iconName
-//                            } else if icon.isLocked, let mission = icon.mission {
-//                                // Get current progress for mission type
-//                                let progress: Int
-//                                switch mission.type {
-//                                case .gamesPlayed: progress = totalGamesPlayed
-//                                case .highScore: progress = highScore
-//                                case .subscribed: progress = subscribed
-//                                }
-//
-//                                if progress >= mission.goal {
-//                                    unlockingIconIndex = index
-//                                    isUnlocking = true
-//
-//                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-//                                        withAnimation {
-//                                            appIcons[index].isLocked = false
-//                                            isUnlocking = false
-//                                            unlockingIconIndex = nil
-//
-//                                            // 🔒 Permanently unlock via AppStorage
-//                                            switch icon.iconName {
-//                                            case "Medal_AppIcon": unlockedMedal = true
-//                                            case "Trophy_AppIcon": unlockedTrophy = true
-//                                            case "Crown_AppIcon": unlockedCrown = true
-//                                            case "Star_AppIcon": unlockedStar = true
-//                                            default: break
-//                                            }
-//                                        }
-//                                    }
-//                                } else {
-//                                    // Show mission
-//                                    selectedMission = mission
-//                                }
-//                            }
-//                        }
-//                        .onTapGesture {
-//                            showToast.toggle()
-//                        }
-//                    }
-//                }
-//                Spacer()
-//            }
-//        }
-//        .toast(isShown: $showToast, message: "some message")
-//        .padding(.top, 15)
-//        .onAppear {
-//            initializeAppIcons()
-//            
-//            Analytics.logEvent(AnalyticsEventScreenView, parameters: [
-//                AnalyticsParameterScreenName: "CustomiseAppIcon",
-//                AnalyticsParameterScreenClass: "CustomiseAppIconView"
-//            ])
-//        }
-//        .padding()
-//        .navigationTitle("Choose App Icon")
-//    }
-//
-//    private func changeAppIcon(to name: String?) {
-//        guard UIApplication.shared.supportsAlternateIcons else { return }
-//        UIApplication.shared.setAlternateIconName(name) { error in
-//            if let error = error {
-//                print("Error setting alternate icon: \(error.localizedDescription)")
-//            } else {
-//                print("App icon changed to \(name ?? "primary")")
-//            }
-//        }
-//    }
-//}
-
-

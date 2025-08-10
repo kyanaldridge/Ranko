@@ -45,12 +45,11 @@ let isSimulator: Bool = {
 struct HomeView: View {
     // MARK: - Variables
     @StateObject private var user_data = UserInformation.shared
-    @State private var trayViewOpen: Bool = false
-    @State private var trayDetent: PresentationDetent = .medium
     @State private var showPicker: Bool = false
     @State private var profileImage: UIImage?
     @State private var listViewID = UUID()
     @State private var isLoadingLists = true
+    @State private var trayViewOpen = false
     
     @State private var showToast = false
     @State private var toastMessage = ""
@@ -184,9 +183,17 @@ struct HomeView: View {
             .animation(.easeInOut(duration: 0.25), value: toastID)
             .navigationBarHidden(true)
         }
+        .onChange(of: user_data.userID) {
+            if user_data.userID == "0" {
+                print("ERROR: User ID not set!")
+            } else if user_data.userID == "" {
+                print("ERROR: User ID is empty!")
+            }
+        }
         
         // MARK: – reset "listViewID" whenever HomeView comes back on screen
         .onAppear {
+            user_data.userID = Auth.auth().currentUser?.uid ?? "0"
             listViewID = UUID()
 
             if isSimulator {
@@ -194,6 +201,9 @@ struct HomeView: View {
                 print("ℹ️ Simulator detected — skipping Firebase calls.")
             } else {
                 isLoadingLists = true
+                
+                syncUserDataFromFirebase()
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     isLoadingLists = false
                 }
@@ -201,8 +211,6 @@ struct HomeView: View {
                 Task {
                     await updateGlobalSubscriptionStatus(groupID: "4205BB53", productIDs: ["pro_weekly", "pro_monthly", "pro_yearly"])
                 }
-
-                syncUserDataFromFirebase()
 
                 Analytics.logEvent(AnalyticsEventScreenView, parameters: [
                     AnalyticsParameterScreenName: "Home",
@@ -221,10 +229,7 @@ struct HomeView: View {
             }
         }
         .sheet(isPresented: $trayViewOpen) {
-            TrayView(currentDetent: $trayDetent)
-                .presentationDetents([.fraction(0.7), .large], selection: $trayDetent)
-                .presentationDragIndicator(.visible)
-                .interactiveDismissDisabled(true)
+            TrayView()
         }
     }
     
@@ -255,45 +260,80 @@ struct HomeView: View {
             print("❌ No current user logged in. Aborting sync.")
             return
         }
-
-        let dbRef = Database.database().reference().child("UserData").child(uid)
-        dbRef.observeSingleEvent(of: .value) { snapshot in
+        
+        let userDetails = Database.database().reference().child("UserData").child(uid).child("UserDetails")
+        let userProfilePicture = Database.database().reference().child("UserData").child(uid).child("UserProfilePicture")
+        let userStats = Database.database().reference().child("UserData").child(uid).child("UserStats")
+        
+        print("UserID: \(uid)")
+        print("🤔 Checking If Introduction Survey Should Open...")
+        
+        userDetails.observeSingleEvent(of: .value) { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed to fetch user data from Firebase.")
+                print("❌ Failed To Fetch User Data From Firebase.")
                 checkIfTrayShouldOpen()
                 return
             }
-
-            user_data.userID = uid
+            
+            user_data.userID = value["UserID"] as? String ?? ""
             user_data.username = value["UserName"] as? String ?? ""
             user_data.userDescription = value["UserDescription"] as? String ?? ""
-            user_data.userYear = value["UserYear"] as? Int ?? 0
+            user_data.userPrivacy = value["UserPrivacy"] as? String ?? ""
             user_data.userInterests = value["UserInterests"] as? String ?? ""
-            user_data.userProfilePicture = value["UserProfilePicturePath"] as? String ?? ""
-            let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
-            user_data.userFoundUs = value["UserFoundUs"] as? String ?? ""
             user_data.userJoined = value["UserJoined"] as? String ?? ""
-
-            print("✅ Successfully loaded user data.")
-
+            user_data.userYear = value["UserYear"] as? Int ?? 0
+            user_data.userFoundUs = value["UserFoundUs"] as? String ?? ""
+            user_data.userLoginService = value["UserSignInMethod"] as? String ?? ""
+            
+            print("✅ Successfully Loaded User Details.")
+            
+        }
+        
+        userProfilePicture.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Failed To Fetch User Data From Firebase.")
+                return
+            }
+            
+            user_data.userProfilePictureFile = value["UserProfilePictureFile"] as? String ?? ""
+            let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
+            user_data.userProfilePicturePath = value["UserProfilePicturePath"] as? String ?? ""
+            
+            print("✅ Successfully Loaded Profile Picture Details.")
+            print("🤔 Checking For New Image...")
+            
             // Only load profile image if the modified string has changed
             if modifiedTimestamp != user_data.userProfilePictureModified {
-                print("🔁 Profile picture modified date changed, reloading image.")
+                print("🔁 Profile Picture Modified Date Changed, Reloading Image...")
                 user_data.userProfilePictureModified = modifiedTimestamp
-                user_data.userProfilePicture = user_data.userProfilePicture
-                downloadAndCacheProfileImage(from: user_data.userProfilePicture)
+                downloadAndCacheProfileImage(from: user_data.userProfilePicturePath)
             } else {
-                print("✅ Using cached profile image from disk.")
+                print("✅ Using Cached Profile Image From Disk.")
                 profileImage = loadImageFromDisk()
             }
-
-            checkIfTrayShouldOpen()
+        }
+        
+        userStats.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Failed To Fetch User Data From Firebase.")
+                return
+            }
+            
+            user_data.userStatsFollowers = value["UserFollowerCount"] as? Int ?? 0
+            user_data.userStatsFollowing = value["UserFollowingCount"] as? Int ?? 0
+            user_data.userStatsRankos = value["UserRankoCount"] as? Int ?? 0
+            
+            print("✅ Successfully Loaded Statistics Details.")
+            print("✅ Successfully Loaded All User Data.")
         }
     }
     
     private func checkIfTrayShouldOpen() {
         if user_data.username == "" || user_data.userInterests == "" {
             trayViewOpen = true
+            print("📖 Opening Introduction Survey")
+        } else {
+            print("✅ Introduction Survey Already Completed")
         }
     }
     
@@ -696,22 +736,25 @@ struct DefaultListHomeView: View {
     
     // MARK: — Data fetches
     private func fetchCreatorName() {
-        let dbRef = Database.database().reference()
-            .child("UserData")
-            .child(listData.userCreator)
+        let userDetails = Database.database().reference().child("UserData").child(listData.userCreator).child("UserDetails")
+        let userProfilePicture = Database.database().reference().child("UserData").child(listData.userCreator).child("UserProfilePicture")
 
-        dbRef.observeSingleEvent(of: .value) { snapshot in
+        userDetails.observeSingleEvent(of: .value) { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Could not load user data for creator \(listData.userCreator)")
+                print("❌ Could Not Load User Data for HomeView Rankos with UserID: \(listData.userCreator)")
                 return
             }
 
             self.creatorName = value["UserName"] as? String ?? ""
-            let profilePath = value["UserProfilePicturePath"] as? String ?? ""
+        }
+        
+        userProfilePicture.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Could Not Load Profile Photo Data for HomeView Rankos with UserID: \(listData.userCreator)")
+                return
+            }
 
-            print("✅ Creator info loaded from Firebase:")
-            print("   Name: \(self.creatorName)")
-            print("   Profile Picture Path: \(profilePath)")
+            let profilePath = value["UserProfilePicturePath"] as? String ?? ""
 
             loadProfileImage(from: profilePath)
         }

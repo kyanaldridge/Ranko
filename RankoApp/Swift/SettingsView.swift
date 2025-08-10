@@ -139,18 +139,7 @@ struct SettingsView: View {
                                                     dataStorageView = true
                                                 case "About":
                                                     aboutView = true
-                                                    user_data.userID = "ZNhZwy5NalYDRCPusrHwep63VlG2"
-                                                    user_data.username = "kyanaldridge"
-                                                    user_data.userDescription = "Obsessed with ranking everything from 90s cartoons to underground indie albums. Let's debate!"
-                                                    user_data.userYear = 2023
-                                                    user_data.userInterests = "Music, Travel, History"
-                                                    user_data.userFoundUs = "People"
-                                                    user_data.userJoined = "2025-06-12-12-34-56"
-                                                    user_data.userProfilePicture = "ZNhZwy5NalYDRCPusrHwep63VlG2.jpg"
-                                                    user_data.logStatus = true
-                                                    user_data.userLoginService = "Apple"
                                                 case "Privacy Policy & Terms Of Use":
-                                                    user_data.userLoginService = "Google"
                                                     legalView = true
                                                 default:
                                                     break
@@ -856,7 +845,7 @@ struct AccountView: View {
         user_data.userDescription = ""
         user_data.userYear = 0
         user_data.userInterests = ""
-        user_data.userProfilePicture = "default-profilePicture.jpg"
+        user_data.userProfilePicturePath = "default-profilePicture.jpg"
         user_data.userFoundUs = ""
         user_data.userJoined = ""
         user_data.logStatus = false
@@ -877,7 +866,7 @@ struct AccountView: View {
               user_data.userDescription = ""
               user_data.userYear = 0
               user_data.userInterests = ""
-              user_data.userProfilePicture = "default-profilePicture.jpg"
+              user_data.userProfilePicturePath = "default-profilePicture.jpg"
               user_data.userFoundUs = ""
               user_data.userJoined = ""
               user_data.logStatus = false

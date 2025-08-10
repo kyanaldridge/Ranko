@@ -16,11 +16,12 @@ struct RankoUserInformation: Codable { // Used in Introduction Survey
     let UserID: String
     let UserName: String
     let UserDescription: String
-    let UserPrivacy: Bool
+    let UserPrivacy: String
     let UserInterests: String
     let UserJoined: String
     let UserYear: Int
     let UserFoundUs: String
+    let UserSignInMethod: String
     
     // MARK: - UserProfilePicture -
     let UserProfilePicturePath: String
@@ -37,15 +38,28 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     static let shared = UserInformation()
     
     // MARK: - All User Information -
+    
+    // MARK: - UserDetails
     @AppStorage("user_id") var userID: String = ""
     @AppStorage("user_name") var username: String = ""
     @AppStorage("user_description") var userDescription: String = ""
-    @AppStorage("user_year") var userYear: Int = 0
+    @AppStorage("user_privacy") var userPrivacy: String = ""
     @AppStorage("user_interests") var userInterests: String = ""
-    @AppStorage("user_profile_picture") var userProfilePicture: String = ""
-    @AppStorage("user_profile_picture_modified") var userProfilePictureModified: String = ""
-    @AppStorage("user_found_us") var userFoundUs: String = ""
     @AppStorage("user_joined") var userJoined: String = ""
+    @AppStorage("user_year") var userYear: Int = 0
+    @AppStorage("user_found_us") var userFoundUs: String = ""
+    @AppStorage("user_login_service") var userLoginService: String = ""
+    
+    // MARK: - UserProfilePicture
+    @AppStorage("user_profile_picture_file") var userProfilePictureFile: String = ""
+    @AppStorage("user_profile_picture_path") var userProfilePicturePath: String = ""
+    @AppStorage("user_profile_picture_modified") var userProfilePictureModified: String = ""
+    
+    // MARK: - UserStats
+    @AppStorage("user_stats_followers") var userStatsFollowers: Int = 0
+    @AppStorage("user_stats_following") var userStatsFollowing: Int = 0
+    @AppStorage("user_stats_rankos") var userStatsRankos: Int = 0
+    
     @AppStorage("log_Status") var logStatus: Bool = false
     @AppStorage("user_ranko_categories") var userRankoCategories: String = ""
     
@@ -63,9 +77,6 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     
     // MARK: - PREFERENCES -
     @AppStorage("user_preferences_autocorrectDisabled") var preferencesAutocorrectDisabled: Bool = true
-    
-    // ✅ Track login service (Apple or Google)
-    @AppStorage("user_login_service") var userLoginService: String = "" // "Apple" or "Google"
     
     @Published var ProfilePicture: UIImage? = loadCachedProfileImage()
     

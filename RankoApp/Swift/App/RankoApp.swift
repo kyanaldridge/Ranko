@@ -16,6 +16,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         FirebaseApp.configure()
         
+        // Provide GoogleSignIn with a configuration explicitly
+        if let clientID = FirebaseApp.app()?.options.clientID {
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+        } else {
+            assertionFailure("Missing Firebase clientID")
+        }
+        
         // Try restoring previous Google Sign-In
         GIDSignIn.sharedInstance.restorePreviousSignIn { user, error in
             if let user = user {
@@ -26,55 +33,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
         
         return true
-    }
-}
-
-@main
-struct RankoApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @StateObject private var imageService = ProfileImageService()
-    @State private var showLaunchScreen = true  // State to control visibility of the launch screen
-    @State private var scale: CGFloat = 1
-    @State private var opacity: Double = 1
-
-    var body: some Scene {
-        WindowGroup {
-            ZStack {
-                // ContentView is always in the background
-                ContentView()
-
-                // LaunchScreenView is shown initially, and will fade out
-                if showLaunchScreen {
-                    LaunchScreenView()
-                        .onAppear {
-                            startLaunchScreenAnimation()
-                        }
-                        .scaleEffect(scale)
-                        .opacity(opacity)
-                        .animation(.easeInOut(duration: 1.0), value: opacity)
-                }
-            }
-            .onOpenURL { url in
-                GIDSignIn.sharedInstance.handle(url)
-            }
-            .environmentObject(imageService)
-        }
-    }
-
-    // Function to start the launch screen animation
-    private func startLaunchScreenAnimation() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            // Start zoom-in and fade-out effect
-            withAnimation(.easeInOut(duration: 1.0)) {
-                scale = 1.5  // Zoom in by 1.5x
-                opacity = 0  // Fade out the launch screen
-            }
-            
-            // After the animation, hide the launch screen and show ContentView
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                showLaunchScreen = false
-            }
-        }
     }
 }
 
