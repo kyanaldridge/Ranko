@@ -82,7 +82,7 @@ struct HomeView: View {
                                     .font(.system(size: 32, weight: .black))
                                     .foregroundColor(.white)
                                 Spacer()
-                                ProfileIconView(size: CGFloat(50))
+                                ProfileIconView(diameter: CGFloat(50))
                             }
                             .padding(.top, 20)
                             .padding(.bottom, 20)
@@ -118,7 +118,7 @@ struct HomeView: View {
                                         .foregroundColor(.white)
                                         .fontDesign(.rounded)
                                     Spacer()
-                                    ProfileIconView(size: CGFloat(50))
+                                    ProfileIconView(diameter: CGFloat(50))
                                 }
                                 .padding(.top, 20)
                                 .padding(.bottom, 20)

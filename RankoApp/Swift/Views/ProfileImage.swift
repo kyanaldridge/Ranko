@@ -9,6 +9,8 @@ import SwiftUI
 import UIKit
 import PhotosUI
 import Combine
+import Firebase
+import FirebaseStorage
 
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var image: UIImage?
@@ -46,120 +48,541 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
 }
 
-struct ProfilePictureEditor: View {
+struct ProfileIconView: View {
+    @EnvironmentObject private var imageService: ProfileImageService
+    let diameter: CGFloat
+    
+    var body: some View {
+        Group {
+            if imageService.isLoading {
+                SkeletonView(Circle())
+            } else if let img = imageService.image {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                SkeletonView(Circle())
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .clipShape(Circle())
+        .overlay(
+            Circle()
+                .stroke(LinearGradient(
+                    gradient: Gradient(colors: [Color(hex: 0xFFECC5), Color(hex: 0xFECF88)]),
+                    startPoint: .top,
+                    endPoint: .bottom),
+                    lineWidth: 3
+                )
+        )
+        .shadow(radius: 3)
+    }
+}
+
+final class ProfileImageService: ObservableObject {
+    @Published var image: UIImage?
+    @Published var isLoading = false
+    
+    @AppStorage("user_profile_picture") private var profilePath: String = ""
+    @AppStorage("user_profile_picture_modified") private var profileModified: String = ""
+    private var cancellables = Set<AnyCancellable>()
+    private let userID: String = UserInformation.shared.userID
+    
+    init() {
+        // Start from cache
+        image = loadCachedImage()
+        // Whenever the stored path changes, re-download
+        NotificationCenter.default
+              .publisher(for: UserDefaults.didChangeNotification)
+              .sink { [weak self] _ in
+                self?.downloadAndCache()
+              }
+              .store(in: &cancellables)
+        // And do one boot download
+        downloadAndCache()
+    }
+    
+    func upload(_ newImage: UIImage) {
+        guard let data = newImage.jpegData(compressionQuality: 0.8) else { return }
+        isLoading = true
+        
+        let fileName = "\(userID).jpg"
+        let storageRef = Storage.storage()
+            .reference()
+            .child("profilePictures")
+            .child(fileName)
+        
+        // 1️⃣ upload
+        storageRef.putData(data, metadata: nil) { [weak self] _, err in
+            guard let self = self else { return }
+            
+            if let e = err {
+                print("Upload error:", e)
+                DispatchQueue.main.async { self.isLoading = false }
+                return
+            }
+            
+            // 2️⃣ write new path & timestamp
+            DispatchQueue.main.async {
+                self.profilePath = fileName
+                self.profileModified = Self.timestampString()
+            }
+        }
+    }
+    
+    private func downloadAndCache() {
+        guard !profilePath.isEmpty else { return }
+        
+        // defer the "loading = true" so it doesn't fire during a view update
+        DispatchQueue.main.async { [weak self] in
+            self?.isLoading = true
+        }
+        
+        let storageRef = Storage.storage()
+            .reference()
+            .child("profilePictures")
+            .child(profilePath)
+        
+        storageRef.getData(maxSize: 2 * 1024 * 1024) { [weak self] data, error in
+            // once the network callback comes back, parse + write cache off the main thread
+            DispatchQueue.global(qos: .userInitiated).async {
+                var newImage: UIImage? = nil
+                if let d = data, let ui = UIImage(data: d) {
+                    newImage = ui
+                    do {
+                        try d.write(to: Self.diskURL())
+                    } catch {
+                        print("Cache write failed:", error)
+                    }
+                }
+                
+                // now publish the new image + turn off loading back on the main thread
+                DispatchQueue.main.async { [weak self] in
+                    self?.image     = newImage
+                    self?.isLoading = false
+                }
+            }
+        }
+    }
+    
+    private func loadCachedImage() -> UIImage? {
+        let url = Self.diskURL()
+        guard let d = try? Data(contentsOf: url),
+              let ui = UIImage(data: d) else { return nil }
+        return ui
+    }
+    
+    private static func diskURL() -> URL {
+        let filename = "cached_profile_image.jpg"
+        return FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(filename)
+    }
+    
+    private static func timestampString() -> String {
+        let fmt = DateFormatter()
+        fmt.locale = .init(identifier: "en_US_POSIX")
+        fmt.timeZone = .init(identifier: "Australia/Sydney")
+        fmt.dateFormat = "yyyyMMddHHmmss"
+        return fmt.string(from: Date())
+    }
+}
+
+struct EditProfileView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var imageService: ProfileImageService
+    @StateObject private var user_data = UserInformation.shared
+    
     let originalImage: UIImage?
-    let onSave: (UIImage?) -> Void
+    let initialName: String
+    let initialBio: String
+    let initialTags: [String]
+    let onSave: (_ name: String, _ bio: String, _ tags: [String], _ image: UIImage?) -> Void
     let onCancel: () -> Void
     
+    // MARK: - State
+    @State private var name: String
+    @State private var bioText: String
+    @State private var localSelectedTags: [String]
     @State private var workingImage: UIImage?
+    @State private var backupImage: UIImage?
     @State private var imageForCropping: UIImage?
+    @State private var showPhotoPicker = false
     @State private var showImageCropper = false
-    @State private var showPhotoPicker  = false
     @State private var showNewImageSheet  = false
     @State private var showCamera  = false
     @State private var recentImages: [UIImage] = []
+    
+    private let allTags = Array(ProfileView.interestIconMapping.keys).sorted()
+    private let maxTags = 3
+    
+    private var isValid: Bool {
+        name.trimmingCharacters(in: .whitespaces).count >= 2 && (1...maxTags).contains(localSelectedTags.count) && workingImage != nil
+    }
+    
+    init(
+        originalImage: UIImage?,
+        username: String,
+        userDescription: String,
+        initialTags: [String],
+        onSave: @escaping (_ name: String, _ bio: String, _ tags: [String], _ image: UIImage?) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.originalImage = originalImage
+        self.initialName = username
+        self.initialBio = userDescription
+        self.initialTags = initialTags
+        self.onSave = onSave
+        self.onCancel = onCancel
+        _name = State(initialValue: username)
+        _bioText = State(initialValue: userDescription)
+        _localSelectedTags = State(initialValue: initialTags)
+        _workingImage = State(initialValue: originalImage)
+    }
+    
+    let localTagIconMapping: [String: String] = [
+        "Sport": "figure.gymnastics",
+        "Animals": "pawprint.fill",
+        "Music": "music.note",
+        "Food": "fork.knife",
+        "Nature": "leaf.fill",
+        "Geography": "globe.europe.africa.fill",
+        "History": "building.columns.fill",
+        "Science": "atom",
+        "Gaming": "gamecontroller.fill",
+        "Celebrities": "star.fill",
+        "Art": "paintbrush.pointed.fill",
+        "Cars": "car.side.roof.cargo.carrier.fill",
+        "Football": "soccerball",
+        "Fruit": "apple.logo",
+        "Soda": "takeoutbag.and.cup.and.straw.fill",
+        "Mammals": "hare.fill",
+        "Flowers": "microbe.fill",
+        "Movies": "movieclapper",
+        "Instruments": "guitars.fill",
+        "Politics": "person.bust.fill",
+        "Basketball": "basketball.fill",
+        "Vegetables": "carrot.fill",
+        "Alcohol": "flame.fill",
+        "Birds": "bird.fill",
+        "Trees": "tree.fill",
+        "Shows": "tv",
+        "Festivals": "hifispeaker.2.fill",
+        "Planets": "circles.hexagonpath.fill",
+        "Tennis": "tennisball.fill",
+        "Pizza": "triangle.lefthalf.filled",
+        "Coffee": "cup.and.heat.waves.fill",
+        "Dogs": "dog.fill",
+        "Social Media": "message.fill",
+        "Albums": "record.circle",
+        "Actors": "theatermasks.fill",
+        "Travel": "airplane",
+        "Motorsport": "steeringwheel",
+        "Eggs": "oval.portrait.fill",
+        "Cats": "cat.fill",
+        "Books": "books.vertical.fill",
+        "Musicians": "music.microphone",
+        "Australian Football": "australian.football.fill",
+        "Fast Food": "takeoutbag.and.cup.and.straw.fill",
+        "Fish": "fish.fill",
+        "Board Games": "dice.fill",
+        "Numbers": "1.square.fill",
+        "Relationships": "heart.fill",
+        "American Football": "american.football.fill",
+        "Pasta": "water.waves",
+        "Reptiles": "lizard.fill",
+        "Card Games": "suit.club.fill",
+        "Letters": "a.square.fill",
+        "Baseball": "baseball.fill",
+        "Ice Cream": "snowflake",
+        "Bugs": "ladybug.fill",
+        "Memes": "camera.fill",
+        "Shapes": "triangle.fill",
+        "Emotions": "face.smiling",
+        "Ice Hockey": "figure.ice.hockey",
+        "Statues": "figure.stand",
+        "Gym": "figure.indoor.cycle",
+        "Running": "figure.run"
+    ]
+    
+    let tags = [
+        "Sport",
+        "Animals",
+        "Music",
+        "Food",
+        "Nature",
+        "Geography",
+        "History",
+        "Science",
+        "Gaming",
+        "Celebrities",
+        "Art",
+        "Cars",
+        "Football",
+        "Fruit",
+        "Soda",
+        "Mammals",
+        "Flowers",
+        "Movies",
+        "Instruments",
+        "Politics",
+        "Basketball",
+        "Vegetables",
+        "Alcohol",
+        "Birds",
+        "Trees",
+        "Shows",
+        "Festivals",
+        "Planets",
+        "Tennis",
+        "Pizza",
+        "Coffee",
+        "Dogs",
+        "Social Media",
+        "Albums",
+        "Actors",
+        "Travel",
+        "Motorsport",
+        "Eggs",
+        "Cats",
+        "Books",
+        "Musicians",
+        "Australian Football",
+        "Fast Food",
+        "Fish",
+        "Board Games",
+        "Numbers",
+        "Relationships",
+        "American Football",
+        "Pasta",
+        "Reptiles",
+        "Card Games",
+        "Letters",
+        "Baseball",
+        "Ice Cream",
+        "Bugs",
+        "Memes",
+        "Shapes",
+        "Emotions",
+        "Ice Hockey",
+        "Statues",
+        "Gym",
+        "Running"
+    ]
 
     var body: some View {
         ZStack {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
-            
             NavigationView {
-                VStack(spacing: 10) {
-                    // Preview
-                    if let img = workingImage {
-                        Image(uiImage: img)
-                            .resizable().scaledToFit()
-                            .frame(width: 300, height: 300)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.clear)
-                                    .stroke(Color(hex: 0x857467), lineWidth: 3)
-                                    .shadow(color: Color(hex: 0x857467).opacity(0.3), radius: 6, x: 0, y: 0)
-                            )
-                            .padding(.bottom, 25)
-                    } else {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: 300, height: 300)
-                            .overlay(
-                                Image(systemName: "camera.fill")
-                                    .font(.system(size: 32, weight: .black, design: .default))
-                                    .foregroundColor(.gray)
-                            )
-                            .padding(.bottom, 25)
-                    }
-                    
-                    HStack(spacing: 10) {
-                        Spacer(minLength: 0)
-                        Button {
-                            if imageForCropping == nil {
-                                imageForCropping = originalImage
-                            } else {
+                ScrollView {
+                    VStack(spacing: 10) {
+                        // Preview
+                        if let img = workingImage {
+                            Image(uiImage: img)
+                                .resizable().scaledToFit()
+                                .frame(width: 250, height: 250)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.clear)
+                                        .stroke(Color(hex: 0x857467), lineWidth: 3)
+                                        .shadow(color: Color(hex: 0x857467).opacity(0.3), radius: 6, x: 0, y: 0)
+                                )
+                                .padding(.bottom, 25)
+                        } else {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 250, height: 250)
+                                .overlay(
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 32, weight: .black, design: .default))
+                                        .foregroundColor(.gray)
+                                )
+                                .padding(.bottom, 25)
+                        }
+                        
+                        HStack(spacing: 15) {
+                            Spacer(minLength: 0)
+                            Button {
+                                backupImage = workingImage
                                 imageForCropping = workingImage
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    showImageCropper = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "crop.rotate")
+                                        .font(.system(size: 16, weight: .heavy))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                        .padding(.leading, 13)
+                                    Text("Edit Image")
+                                        .font(.system(size: 14, weight: .heavy))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                        .padding(.vertical, 13)
+                                        .padding(.trailing, 13)
                                 }
                             }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "crop.rotate")
-                                    .font(.system(size: 16, weight: .heavy))
-                                    .foregroundColor(Color(hex: 0x857467))
-                                    .padding(.leading, 13)
-                                Text("Edit Image")
-                                    .font(.system(size: 16, weight: .heavy))
-                                    .foregroundColor(Color(hex: 0x857467))
-                                    .padding(.vertical, 13)
-                                    .padding(.trailing, 13)
+                            .foregroundColor(Color(hex: 0xFF9864))
+                            .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                 startPoint: .top,
+                                                 endPoint: .bottom
+                                                ))
+                            .buttonStyle(.glassProminent)
+                            
+                            Button {
+                                backupImage = workingImage
+                                showNewImageSheet = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "plus.app.fill")
+                                        .font(.system(size: 16, weight: .heavy))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                        .padding(.leading, 13)
+                                    Text("New Image")
+                                        .font(.system(size: 14, weight: .heavy))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                        .padding(.vertical, 13)
+                                        .padding(.trailing, 13)
+                                }
                             }
+                            .foregroundColor(Color(hex: 0xFF9864))
+                            .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                                 startPoint: .top,
+                                                 endPoint: .bottom
+                                                ))
+                            .buttonStyle(.glassProminent)
+                            Spacer(minLength: 0)
                         }
-                        .foregroundColor(Color(hex: 0xFF9864))
-                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                             startPoint: .top,
-                                             endPoint: .bottom
-                                            ))
-                        .buttonStyle(.glassProminent)
                         
-                        Button { showNewImageSheet = true } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "plus.app.fill")
-                                    .font(.system(size: 16, weight: .heavy))
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 3) {
+                                Text("Name")
+                                    .font(.system(size: 14, weight: .heavy))
                                     .foregroundColor(Color(hex: 0x857467))
-                                    .padding(.leading, 13)
-                                Text("New Image")
-                                    .font(.system(size: 16, weight: .heavy))
+                                Text("*")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(Color(hex: 0x4C2C33))
+                            }
+                            .padding(.leading, 6)
+                            HStack {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 15, weight: .heavy))
                                     .foregroundColor(Color(hex: 0x857467))
-                                    .padding(.vertical, 13)
-                                    .padding(.trailing, 13)
+                                    .padding(.trailing, 1)
+                                TextField("Enter name", text: $name)
+                                    .autocorrectionDisabled(true)
+                                    .font(.system(size: 15, weight: .heavy))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                    .onChange(of: name) { _, newValue in
+                                        if newValue.count > 30 {
+                                            name = String(newValue.prefix(30))
+                                        }
+                                    }
+                                Spacer()
+                                Text("\(name.count)/30")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 6)
+                            }
+                            .padding(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .foregroundColor(Color.gray.opacity(0.08))
+                                    .allowsHitTesting(false)
+                            )
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 30)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Description")
+                                .font(.system(size: 14, weight: .heavy))
+                                .foregroundColor(Color(hex: 0x857467))
+                                .padding(.leading, 6)
+                            HStack {
+                                Image(systemName: "pencil.line")
+                                    .font(.system(size: 15, weight: .heavy))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                    .padding(.trailing, 1)
+                                TextField("Enter Description", text: $bioText)
+                                    .autocorrectionDisabled(true)
+                                    .font(.system(size: 15, weight: .heavy))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                    .onChange(of: bioText) { _, newValue in
+                                        if newValue.count > 30 {
+                                            bioText = String(newValue.prefix(30))
+                                        }
+                                    }
+                                Spacer()
+                                Text("\(bioText.count)/50")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 6)
+                            }
+                            .padding(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .foregroundColor(Color.gray.opacity(0.08))
+                                    .allowsHitTesting(false)
+                            )
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+
+                        // user_data.userInterests field
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 3) {
+                                Text("Interests (1-3)")
+                                    .font(.system(size: 14, weight: .heavy))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Text("*")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(Color(hex: 0x4C2C33))
+                            }
+                            .padding(.leading, 6)
+                            FlexibleView(spacing: 8) {
+                                ForEach(tags, id: \.self) { tag in
+                                    let selected = localSelectedTags.contains(tag)
+                                    
+                                    EditProfileChipView(tag, isSelected: selected, mapping: localTagIconMapping)
+                                        .onTapGesture {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                if selected {
+                                                    // Deselect if already selected
+                                                    localSelectedTags.removeAll { $0 == tag }
+                                                } else if localSelectedTags.count < 3 {
+                                                    // Only allow a new selection if fewer than 3 are chosen
+                                                    localSelectedTags.append(tag)
+                                                }
+                                            }
+                                            // Always write back to user_data.userInterests in AppStorage
+                                            user_data.userInterests = localSelectedTags.joined(separator: ", ")
+                                        }
+                                        .opacity(
+                                            // Dim it if it's not already selected and we've already picked 3
+                                            (!selected && localSelectedTags.count >= 3) ? 0.4 : 1.0
+                                        )
+                                }
                             }
                         }
-                        .foregroundColor(Color(hex: 0xFF9864))
-                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                             startPoint: .top,
-                                             endPoint: .bottom
-                                            ))
-                        .buttonStyle(.glassProminent)
-                        Spacer(minLength: 0)
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 10)
                     }
-                    
-                    Spacer()
                 }
-                .padding(.top, 60)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done", systemImage: "checkmark") {
-                            onSave(workingImage)
+                            imageService.upload(workingImage!)
+                            onSave(name, bioText, localSelectedTags, workingImage)
                         }
+                        .disabled(!isValid)
                     }
                     ToolbarItemGroup(placement: .principal) {
-                        Text("Edit Profile Picture")
-                            .font(.system(size: 16, weight: .black, design: .rounded))
+                        Text("Edit Profile")
+                            .font(.system(size: 20, weight: .black, design: .rounded))
                             .foregroundColor(Color(hex: 0x857467))
                     }
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel", systemImage: "xmark") {
+                            localSelectedTags = initialTags
                             onCancel()
                         }
                     }
@@ -167,8 +590,13 @@ struct ProfilePictureEditor: View {
             }
         }
         // Photo library picker
-        .sheet(isPresented: $showPhotoPicker, onDismiss: { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showImageCropper = true } }) {
-            ImagePicker(image: $imageForCropping, isPresented: $showPhotoPicker)
+        .sheet(isPresented: $showPhotoPicker) {
+            ImagePicker(image: $imageForCropping,
+                        isPresented: $showPhotoPicker)
+        }
+        .onChange(of: imageForCropping) { _, newValue in
+            guard newValue != nil else { return }
+            showImageCropper = true
         }
         // Cropper
         .fullScreenCover(isPresented: $showImageCropper) {
@@ -184,9 +612,13 @@ struct ProfilePictureEditor: View {
                     usesLiquidGlassDesign: true,
                     zoomSensitivity: 3.0
                 ),
-                onCancel: { showImageCropper = false },
+                onCancel: {
+                    workingImage = backupImage
+                    imageForCropping = nil
+                    showImageCropper = false
+                },
                 onComplete: { cropped in
-                    workingImage = cropped
+                    workingImage    = cropped
                     imageForCropping = nil
                     showImageCropper = false
                 }
@@ -194,7 +626,6 @@ struct ProfilePictureEditor: View {
         }
         .onAppear {
             workingImage = originalImage
-            imageForCropping = workingImage
             loadRecentPhotos()
         }
         .sheet(isPresented: $showNewImageSheet) {
@@ -355,198 +786,6 @@ struct ProfilePictureEditor: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(Color(hex: 0xFFFFFF))
             .presentationContentInteraction(.resizes)
-        }
-    }
-
-    private func loadRecentPhotos() {
-        // TODO: fetch last 10 UIImages from Photo library
-    }
-}
-
-
-
-
-struct ProfilePictureEditor1: View {
-    @State private var showPhotoPicker = false
-    @State private var showImageCropper: Bool = false
-    @State private var selectedImage: UIImage?
-    @FocusState private var textFieldFocused: Bool
-    @State private var imageForCropping: UIImage?
-    
-    var body: some View {
-        VStack {
-            Spacer()
-            Group {
-                if let selectedImage = selectedImage {
-                    Image(uiImage: selectedImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .cornerRadius(8)
-                } else {
-                    ProgressView()
-                }
-            }
-            .scaledToFit()
-            .padding()
-            Spacer()
-            
-            GroupBox {
-                VStack(spacing: 15) {
-                    Button {
-                        showPhotoPicker.toggle()
-                    } label: {
-                        Text("Pick Profile Picture")
-                    }
-                }
-            }
-            .padding()
-        }
-        .sheet(isPresented: $showPhotoPicker) {
-          ImagePicker(image: $imageForCropping, isPresented: $showPhotoPicker)
-        }
-        .onChange(of: imageForCropping) { _, new in
-          if new != nil { showImageCropper = true }
-        }
-
-        .fullScreenCover(isPresented: $showImageCropper) {
-          SwiftyCropView(
-            imageToCrop: imageForCropping!,
-            maskShape: .square,
-            configuration: SwiftyCropConfiguration(
-                maxMagnificationScale: 8.0,
-                maskRadius: 190.0,
-                cropImageCircular: false,
-                rotateImage: false,
-                rotateImageWithButtons: true,
-                usesLiquidGlassDesign: true,
-                zoomSensitivity: 3.0
-            ),
-            onCancel: {
-                print("Operation cancelled")
-            }
-          ) { cropped in
-            // save final result
-            selectedImage   = cropped
-            // clear the intermediate so we don't reopen
-            imageForCropping = nil
-          }
-        }
-    }
-}
-
-
-
-
-struct ProfilePictureEditor2: View {
-    let originalImage: UIImage?
-    let onSave: (UIImage?) -> Void
-    let onCancel: () -> Void
-
-    @State private var workingImage: UIImage? = nil
-    @State private var showCropper = false
-    @State private var showPicker  = false
-    @State private var showCamera  = false
-    @State private var recentImages: [UIImage] = []
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 16) {
-                // Preview
-                if let img = workingImage {
-                    Image(uiImage: img)
-                        .resizable().scaledToFit()
-                        .frame(height: 300)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: 300)
-                }
-
-                // Crop / New Image buttons
-                HStack(spacing: 20) {
-                    Button { showCropper = true }
-                      label: { Label("Crop Image", systemImage: "crop") }
-                    Button { showCamera = true }
-                      label: { Label("New Image", systemImage: "camera") }
-                }
-                .font(.headline)
-
-                // Recent photos carousel
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        Button { showCamera = true } label: {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(width: 80, height: 80)
-                                .overlay(Image(systemName: "camera")
-                                            .font(.title)
-                                            .foregroundColor(.gray))
-                        }
-                        ForEach(recentImages, id: \.self) { img in
-                            Image(uiImage: img)
-                                .resizable().scaledToFill()
-                                .frame(width: 80, height: 80)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .onTapGesture { workingImage = img }
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-
-                Divider()
-
-                // Photo Library & Files
-                HStack(spacing: 20) {
-                    Button("Show Photo Library") { showPicker = true }
-                    Button("Show Files") { /* TODO */ }
-                }
-                .font(.body)
-
-                Spacer()
-            }
-            .padding()
-            .navigationBarTitle("Edit Profile Picture", displayMode: .inline)
-            .navigationBarItems(
-                leading: Button("Cancel") { onCancel() },
-                trailing: Button("Save") { onSave(workingImage) }
-            )
-        }
-        // Photo library picker
-        .sheet(isPresented: $showPicker) {
-            ImagePicker(image: $workingImage, isPresented: $showPicker)
-        }
-        // Camera capture
-        .fullScreenCover(isPresented: $showCamera) {
-            ImagePicker(image: $workingImage, isPresented: $showCamera)
-        }
-        // Cropper
-        .fullScreenCover(isPresented: $showCropper) {
-            if let toCrop = workingImage {
-                SwiftyCropView(
-                    imageToCrop: toCrop,
-                    maskShape: .square,
-                    configuration: SwiftyCropConfiguration(
-                        maxMagnificationScale: 8.0,
-                        maskRadius: 190.0,
-                        cropImageCircular: false,
-                        rotateImage: false,
-                        rotateImageWithButtons: true,
-                        usesLiquidGlassDesign: true,
-                        zoomSensitivity: 3.0
-                    ),
-                    onCancel: { showCropper = false },
-                    onComplete: { cropped in
-                        workingImage = cropped
-                        showCropper = false
-                    }
-                )
-                .ignoresSafeArea()
-            }
-        }
-        .onAppear {
-            workingImage = originalImage
-            loadRecentPhotos()
         }
     }
 

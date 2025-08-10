@@ -59,7 +59,8 @@ struct SettingsView: View {
                                     .font(.system(size: 32, weight: .black))
                                     .foregroundColor(.white)
                                 Spacer()
-                                ProfileIconView(size: CGFloat(50))
+                                // Profile Picture
+                                ProfileIconView(diameter: CGFloat(50))
                             }
                             .padding(.top, 20)
                             .padding(.bottom, 20)

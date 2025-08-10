@@ -20,7 +20,8 @@ struct ProfileView: View {
     @StateObject private var user_data = UserInformation.shared
     @Namespace private var transition
 
-    @State private var showEditor = false
+    @State private var showEditProfileImage = false
+    @State private var showEditProfileButton = false
     @State private var loadingProfileImage = false
     @State private var profileImage: UIImage?
     
@@ -28,7 +29,6 @@ struct ProfileView: View {
     @State private var followersCount: Int = 0
     @State private var followingCount: Int = 0
     @State private var showSearchRankos = false
-    @State private var showEditProfile = false
     @State private var showUserFollowers = false
     @State private var showUserFollowing = false
     @State private var listViewID = UUID()
@@ -45,7 +45,6 @@ struct ProfileView: View {
     @State private var selectedFeaturedList: RankoList?
     
     @State private var selectedItem: PhotosPickerItem?
-    @State private var selectedImage: UIImage?
     @State private var showUserFinder = false
     @State private var appIconCustomiserView: Bool = false
     @State private var lists: [RankoList] = []
@@ -144,7 +143,7 @@ struct ProfileView: View {
                             )
                             Spacer()
                             Button {
-                                showEditProfile = true
+                                showEditProfileButton = true
                                 print("Editing Profile...")
                             } label: {
                                 Image(systemName: "pencil")
@@ -155,20 +154,23 @@ struct ProfileView: View {
                             .tint(Color(hex: 0xFEF4E7))
                             .buttonStyle(.glassProminent)
                             .matchedTransitionSource(
-                                id: "editProfile", in: transition
+                                id: "editProfileButton", in: transition
                             )
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, -70)
                         // Profile Picture
-                        ProfileIconView(size: CGFloat(100))
-                            .contextMenu {
-                                Button(role: .confirm) {
-                                    showEditor = true
-                                } label: {
-                                    Label("Change Profile Picture", systemImage: "person.crop.square")
-                                }
+                        ProfileIconView(diameter: CGFloat(100))
+                        .contextMenu {
+                            Button(role: .confirm) {
+                                showEditProfileImage = true
+                            } label: {
+                                Label("Change Profile Picture", systemImage: "person.crop.square")
                             }
+                        }
+                        .matchedTransitionSource(
+                            id: "editProfileImage", in: transition
+                        )
                         
                         // Name
                         Text(user_data.username)
@@ -441,37 +443,53 @@ struct ProfileView: View {
                             )
                     )
                 }
-                .fullScreenCover(isPresented: $showEditor) {
-                    ProfilePictureEditor(
-                        originalImage: user_data.ProfilePicture,
-                        onSave: { newImg in
-                            loadingProfileImage = true
-                            profileImage = newImg
-                            showEditor = false
-                            uploadImageToFirebase(newImg!)
-                            
-                            let db = Database.database().reference()
-                            let group = DispatchGroup()
-                            
-                            let now = Date()
-                            let aedtFormatter = DateFormatter()
-                            aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
-                            aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
-                            aedtFormatter.dateFormat = "yyyyMMddHHmmss"
-                            let userProfilePictureModified = aedtFormatter.string(from: now)
-                            
-                            group.enter()
-                            db.child("UserData")
-                                .child(user_data.userID)
-                                .child("UserProfilePictureModified")
-                                .setValue(userProfilePictureModified) { _, _ in
-                                    group.leave()
+                .fullScreenCover(isPresented: $showEditProfileImage) {
+                    EditProfileView(
+                        originalImage:       user_data.ProfilePicture,
+                        username:            user_data.username,
+                        userDescription:     user_data.userDescription,
+                        // → make initialTags a [String], not a single String
+                        initialTags:         user_data.userInterests
+                                                .split(separator: ",")
+                                                .map { $0.trimmingCharacters(in: .whitespaces) },
+                        onSave: { name, bioText, tags, newImg in
+                            user_data.username        = name
+                            user_data.userDescription = bioText
+                            user_data.userInterests   = tags.joined(separator: ", ")
+                            saveUserDataToFirebase(
+                                name:        name,
+                                description: bioText,
+                                interests:   tags
+                            )
+
+                            // animate tags…
+                            Task {
+                                for (index, tag) in tags.enumerated() {
+                                    try? await Task.sleep(for: .milliseconds(200 * index))
+                                    _ = withAnimation(.easeOut(duration: 0.4)) {
+                                        animatedTags.insert(tag)
+                                    }
                                 }
+                            }
+
+                            // handle image
+                            guard let img = newImg else {
+                                showEditProfileImage = false
+                                return
+                            }
+                            loadingProfileImage = true
+                            profileImage        = nil
+                            showEditProfileImage          = false
+                            uploadImageToFirebase(img)
                         },
                         onCancel: {
-                            showEditor = false
+                            showEditProfileImage = false
                         }
                     )
+                    .navigationTransition(
+                        .zoom(sourceID: "editProfileImage", in: transition)
+                    )
+                    .interactiveDismissDisabled(true)
                 }
                 .sheet(isPresented: $showUserFollowers) {
                     SearchFollowersView(userID: user_data.userID)
@@ -497,24 +515,26 @@ struct ProfileView: View {
                             .zoom(sourceID: "customiseApp", in: transition)
                         )
                 }
-                .sheet(isPresented: $showEditProfile) {
+                .fullScreenCover(isPresented: $showEditProfileButton) {
                     EditProfileView(
-                        username: user_data.username,
-                        userDescription: user_data.userDescription,
-                        initialTags: user_data.userInterests
-                            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) },
-                        onSave: { name, bioText, tags in
-                            user_data.username = name
+                        originalImage:       user_data.ProfilePicture,
+                        username:            user_data.username,
+                        userDescription:     user_data.userDescription,
+                        // → make initialTags a [String], not a single String
+                        initialTags:         user_data.userInterests
+                                                .split(separator: ",")
+                                                .map { $0.trimmingCharacters(in: .whitespaces) },
+                        onSave: { name, bioText, tags, newImg in
+                            user_data.username        = name
                             user_data.userDescription = bioText
-                            user_data.userInterests = tags.joined(separator: ", ")
+                            user_data.userInterests   = tags.joined(separator: ", ")
+                            saveUserDataToFirebase(
+                                name:        name,
+                                description: bioText,
+                                interests:   tags
+                            )
 
-                            // Save to Firebase
-                            saveUserDataToFirebase(name: name, description: bioText, interests: tags)
-                            
-                            let tags = user_data.userInterests
-                                .split(separator: ",")
-                                .map { $0.trimmingCharacters(in: .whitespaces) }
-                            
+                            // animate tags…
                             Task {
                                 for (index, tag) in tags.enumerated() {
                                     try? await Task.sleep(for: .milliseconds(200 * index))
@@ -523,11 +543,25 @@ struct ProfileView: View {
                                     }
                                 }
                             }
+
+                            // handle image
+                            guard let img = newImg else {
+                                showEditProfileButton = false
+                                return
+                            }
+                            loadingProfileImage = true
+                            profileImage        = nil
+                            showEditProfileButton     = false
+                            uploadImageToFirebase(img)
+                        },
+                        onCancel: {
+                            showEditProfileButton = false
                         }
                     )
                     .navigationTransition(
-                        .zoom(sourceID: "editProfile", in: transition)
+                        .zoom(sourceID: "editProfileButton", in: transition)
                     )
+                    .interactiveDismissDisabled(true)
                 }
                 .sheet(item: $slotToSelect) { slot in
                     SelectFeaturedRankosView { selected in
@@ -599,7 +633,6 @@ struct ProfileView: View {
                     }
                     loadFollowStats()
                     tryLoadFeaturedRankos()
-                    loadProfileImage(from: user_data.userProfilePicture)
                     loadNumberOfRankos()
                     
                     let tags = user_data.userInterests
@@ -663,39 +696,80 @@ struct ProfileView: View {
         }
     }
     
-    private func loadProfileImage(from path: String) {
-        Storage.storage().reference().child("profilePictures").child(path)
-            .getData(maxSize: Int64(2 * 1024 * 1024)) { data, _ in
-                if let data = data, let ui = UIImage(data: data) {
-                    profileImage = ui
-                }
-            }
-    }
-    
     private func uploadImageToFirebase(_ image: UIImage) {
-        guard let data = image.jpegData(compressionQuality: 0.8) else { return }
+        loadingProfileImage = true
+        guard let data = image.jpegData(compressionQuality: 0.8) else {
+            loadingProfileImage = false
+            return
+        }
+
         let filePath = "\(user_data.userID).jpg"
-        let ref = Storage.storage().reference().child("profilePictures").child(filePath)
-        let metadata = StorageMetadata(); metadata.contentType = "image/jpeg"
-        
-        ref.putData(data, metadata: metadata) { _, error in
-            guard error == nil else {
-                print("❌ Failed to upload image to Firebase Storage: \(error!.localizedDescription)")
+        let storageRef = Storage.storage()
+            .reference()
+            .child("profilePictures")
+            .child(filePath)
+
+        // 1️⃣ Upload
+        storageRef.putData(data, metadata: StorageMetadata()) { _, error in
+            if let e = error {
+                print("Upload failed:", e)
+                DispatchQueue.main.async { loadingProfileImage = false }
                 return
             }
-            saveProfilePicturePathToDatabase(filePath)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                loadProfileImage(from: user_data.userProfilePicture)
+
+            // 2️⃣ Save the new path in Realtime Database
+            let dbRef = Database.database().reference()
+                .child("UserData")
+                .child(user_data.userID)
+                .child("UserProfilePicture")
+            dbRef.setValue(filePath) { _, _ in
+                // 3️⃣ Now download it back and cache
+                downloadAndCacheProfileImage(from: filePath)
             }
+
+            // 4️⃣ Also update your modified timestamp
+            let now = Date()
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
+            fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
+            fmt.dateFormat = "yyyyMMddHHmmss"
+            let ts = fmt.string(from: now)
+            Database.database().reference()
+                .child("UserData")
+                .child(user_data.userID)
+                .child("UserProfilePictureModified")
+                .setValue(ts)
         }
     }
-    
-    private func saveProfilePicturePathToDatabase(_ filePath: String) {
-        let dbRef = Database.database().reference()
-            .child("UserData").child(user_data.userID).child("UserProfilePicture")
-        dbRef.setValue(filePath)
-        
-        profileImage = loadImageFromDisk()
+
+    private func downloadAndCacheProfileImage(from filePath: String) {
+        let storageRef = Storage.storage()
+            .reference()
+            .child("profilePictures")
+            .child(filePath)
+
+        storageRef.getData(maxSize: 2 * 1024 * 1024) { data, error in
+            DispatchQueue.main.async {
+                defer { loadingProfileImage = false }
+                guard let d = data, let ui = UIImage(data: d) else {
+                    print("Download failed:", error ?? "unknown")
+                    return
+                }
+
+                // 1️⃣ Update the in-memory state
+                profileImage = ui
+                user_data.ProfilePicture = ui
+
+                // 2️⃣ Write to disk so next launch can load from cache
+                let url = getProfileImagePath()
+                do {
+                    try d.write(to: url)
+                    print("✅ Cached to disk at", url)
+                } catch {
+                    print("❌ Could not cache:", error)
+                }
+            }
+        }
     }
     
     private func loadFollowStats() {
@@ -1828,310 +1902,6 @@ struct UserGalleryView: View {
     }
 }
 
-struct EditProfileView: View {
-    @Environment(\.dismiss) private var dismiss
-    @StateObject private var user_data = UserInformation.shared
-    let initialTags: [String]
-    let onSave: (String, String, [String]) -> Void
-
-    @State private var name: String
-    @State private var bioText: String
-    @State private var selectedTags: [String]
-    @State private var shakeButton: CGFloat = 0
-
-    private let allTags = Array(ProfileView.interestIconMapping.keys).sorted()
-    private let maxTags = 3
-
-    init(
-        username: String,
-        userDescription: String,
-        initialTags: [String],
-        onSave: @escaping (String, String, [String]) -> Void
-    ) {
-        self.initialTags = initialTags
-        self.onSave = onSave
-        _name = State(initialValue: username)
-        _bioText = State(initialValue: userDescription)
-        _selectedTags = State(initialValue: initialTags)
-    }
-    
-    let localTagIconMapping: [String: String] = [
-        "Sport": "figure.gymnastics",
-        "Animals": "pawprint.fill",
-        "Music": "music.note",
-        "Food": "fork.knife",
-        "Nature": "leaf.fill",
-        "Geography": "globe.europe.africa.fill",
-        "History": "building.columns.fill",
-        "Science": "atom",
-        "Gaming": "gamecontroller.fill",
-        "Celebrities": "star.fill",
-        "Art": "paintbrush.pointed.fill",
-        "Cars": "car.side.roof.cargo.carrier.fill",
-        "Football": "soccerball",
-        "Fruit": "apple.logo",
-        "Soda": "takeoutbag.and.cup.and.straw.fill",
-        "Mammals": "hare.fill",
-        "Flowers": "microbe.fill",
-        "Movies": "movieclapper",
-        "Instruments": "guitars.fill",
-        "Politics": "person.bust.fill",
-        "Basketball": "basketball.fill",
-        "Vegetables": "carrot.fill",
-        "Alcohol": "flame.fill",
-        "Birds": "bird.fill",
-        "Trees": "tree.fill",
-        "Shows": "tv",
-        "Festivals": "hifispeaker.2.fill",
-        "Planets": "circles.hexagonpath.fill",
-        "Tennis": "tennisball.fill",
-        "Pizza": "triangle.lefthalf.filled",
-        "Coffee": "cup.and.heat.waves.fill",
-        "Dogs": "dog.fill",
-        "Social Media": "message.fill",
-        "Albums": "record.circle",
-        "Actors": "theatermasks.fill",
-        "Travel": "airplane",
-        "Motorsport": "steeringwheel",
-        "Eggs": "oval.portrait.fill",
-        "Cats": "cat.fill",
-        "Books": "books.vertical.fill",
-        "Musicians": "music.microphone",
-        "Australian Football": "australian.football.fill",
-        "Fast Food": "takeoutbag.and.cup.and.straw.fill",
-        "Fish": "fish.fill",
-        "Board Games": "dice.fill",
-        "Numbers": "1.square.fill",
-        "Relationships": "heart.fill",
-        "American Football": "american.football.fill",
-        "Pasta": "water.waves",
-        "Reptiles": "lizard.fill",
-        "Card Games": "suit.club.fill",
-        "Letters": "a.square.fill",
-        "Baseball": "baseball.fill",
-        "Ice Cream": "snowflake",
-        "Bugs": "ladybug.fill",
-        "Memes": "camera.fill",
-        "Shapes": "triangle.fill",
-        "Emotions": "face.smiling",
-        "Ice Hockey": "figure.ice.hockey",
-        "Statues": "figure.stand",
-        "Gym": "figure.indoor.cycle",
-        "Running": "figure.run"
-    ]
-    
-    let tags = [
-        "Sport",
-        "Animals",
-        "Music",
-        "Food",
-        "Nature",
-        "Geography",
-        "History",
-        "Science",
-        "Gaming",
-        "Celebrities",
-        "Art",
-        "Cars",
-        "Football",
-        "Fruit",
-        "Soda",
-        "Mammals",
-        "Flowers",
-        "Movies",
-        "Instruments",
-        "Politics",
-        "Basketball",
-        "Vegetables",
-        "Alcohol",
-        "Birds",
-        "Trees",
-        "Shows",
-        "Festivals",
-        "Planets",
-        "Tennis",
-        "Pizza",
-        "Coffee",
-        "Dogs",
-        "Social Media",
-        "Albums",
-        "Actors",
-        "Travel",
-        "Motorsport",
-        "Eggs",
-        "Cats",
-        "Books",
-        "Musicians",
-        "Australian Football",
-        "Fast Food",
-        "Fish",
-        "Board Games",
-        "Numbers",
-        "Relationships",
-        "American Football",
-        "Pasta",
-        "Reptiles",
-        "Card Games",
-        "Letters",
-        "Baseball",
-        "Ice Cream",
-        "Bugs",
-        "Memes",
-        "Shapes",
-        "Emotions",
-        "Ice Hockey",
-        "Statues",
-        "Gym",
-        "Running"
-    ]
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 26) {
-                    // Name field
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("Name").foregroundColor(.secondary)
-                            Text("*").foregroundColor(.red)
-                        }
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .padding(.leading, 6)
-                        HStack {
-                            Image(systemName: "person.fill")
-                                .foregroundColor(.gray)
-                                .padding(.trailing, 1)
-                            TextField("Enter name", text: $name)
-                                .autocorrectionDisabled(true)
-                                .fontWeight(.medium)
-                                .font(.caption)
-                                .onChange(of: name) { _, newValue in
-                                    if newValue.count > 30 {
-                                        name = String(newValue.prefix(30))
-                                    }
-                                }
-                            Spacer()
-                            Text("\(name.count)/30")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .padding(.top, 6)
-                        }
-                        .padding(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .foregroundColor(Color.gray.opacity(0.08))
-                                .allowsHitTesting(false)
-                        )
-                    }
-
-                    // user_data.userDescription field
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Description")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .padding(.leading, 6)
-                        HStack {
-                            Image(systemName: "pencil.line")
-                                .foregroundColor(.gray)
-                                .padding(.trailing, 1)
-                            TextField("Enter user_data.userDescription", text: $bioText)
-                                .autocorrectionDisabled(true)
-                                .fontWeight(.medium)
-                                .font(.caption)
-                                .onChange(of: bioText) { _, newValue in
-                                    if newValue.count > 30 {
-                                        bioText = String(newValue.prefix(30))
-                                    }
-                                }
-                            Spacer()
-                            Text("\(bioText.count)/50")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .padding(.top, 6)
-                        }
-                        .padding(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .foregroundColor(Color.gray.opacity(0.08))
-                                .allowsHitTesting(false)
-                        )
-                    }
-
-                    // user_data.userInterests field
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Interests (1-3)").foregroundColor(.secondary)
-                            Text("*").foregroundColor(.red)
-                        }
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .padding(.leading, 6)
-                        FlexibleView(spacing: 8) {
-                            ForEach(tags, id: \.self) { tag in
-                                let selected = selectedTags.contains(tag)
-                                
-                                ChipView(tag, isSelected: selected, mapping: localTagIconMapping)
-                                    .onTapGesture {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            if selected {
-                                                // Deselect if already selected
-                                                selectedTags.removeAll { $0 == tag }
-                                            } else if selectedTags.count < 3 {
-                                                // Only allow a new selection if fewer than 3 are chosen
-                                                selectedTags.append(tag)
-                                            }
-                                        }
-                                        // Always write back to user_data.userInterests in AppStorage
-                                        user_data.userInterests = selectedTags.joined(separator: ", ")
-                                    }
-                                    .opacity(
-                                        // Dim it if it's not already selected and we've already picked 3
-                                        (!selected && selectedTags.count >= 3) ? 0.4 : 1.0
-                                    )
-                            }
-                        }
-                    }
-
-                    Spacer()
-                }
-            }
-            
-            .padding()
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.red)
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        if isValid {
-                            onSave(name, bioText, selectedTags)
-                            dismiss()
-                        } else {
-                            withAnimation { shakeButton += 1 }
-                        }
-                    } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(isValid ? .green : .gray)
-                    }
-                    .rotation3DEffect(
-                        Angle(degrees: 360 * Double(shakeButton) / 60), axis: (x: 0, y: 1, z: 0)
-                    )
-                    .disabled(!isValid)
-                }
-            }
-        }
-    }
-
-    private var isValid: Bool {
-        name.trimmingCharacters(in: .whitespaces).count >= 2 && (1...maxTags).contains(selectedTags.count)
-    }
-}
-
 struct SearchFollowersView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
@@ -2547,7 +2317,6 @@ struct ProfileSpectateView: View {
     @State private var selectedFeaturedList: RankoList?
     
     @State private var selectedItem: PhotosPickerItem?
-    @State private var selectedImage: UIImage?
     @State private var lists: [RankoList] = []
     
     @State private var topCategories: [String] = []

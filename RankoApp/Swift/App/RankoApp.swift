@@ -32,6 +32,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct RankoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var imageService = ProfileImageService()
     
     var body: some Scene {
         WindowGroup {
@@ -40,6 +41,7 @@ struct RankoApp: App {
                 .onOpenURL { url in
                     GIDSignIn.sharedInstance.handle(url)
                 }
+                .environmentObject(imageService)
         }
     }
 }

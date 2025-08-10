@@ -704,3 +704,29 @@ func ChipView(_ tag: String, isSelected: Bool, mapping: [String: String]) -> som
     }
 }
 
+@ViewBuilder
+func EditProfileChipView(_ tag: String, isSelected: Bool, mapping: [String: String]) -> some View {
+    HStack(spacing: 10) {
+        if let iconName = mapping[tag] {
+            Image(systemName: iconName)
+                .font(.system(size: 13, weight: .heavy))
+                .foregroundStyle(isSelected ? Color(hex: 0xFFFFFF) : Color(hex: 0x857467))
+        }
+        
+        Text(tag)
+            .font(.system(size: 13, weight: .heavy))
+            .foregroundStyle(isSelected ? Color(hex: 0xFFFFFF) : Color(hex: 0x857467))
+        
+        if isSelected {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.white)
+        }
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    .background {
+        Capsule()
+            .fill(isSelected ? Color(hex: 0x857467) : Color(hex: 0xFCF6EA))
+            .shadow(color: .gray.opacity(0.4), radius: 3, y: 1.5)
+    }
+}

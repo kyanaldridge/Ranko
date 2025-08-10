@@ -134,33 +134,6 @@ func loadCachedProfileImage() -> UIImage? {
     return image
 }
 
-struct ProfileIconView: View {
-    @State var size: CGFloat
-    @State private var profileImage: UIImage? = loadCachedProfileImage()
-
-    var body: some View {
-        Group {
-            if let image = profileImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                SkeletonView(Circle())
-            }
-        }
-        .frame(width: size, height: size)
-        .overlay(Circle()
-            .stroke(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFECC5), Color(hex: 0xFECF88)]),
-                                   startPoint: .top,
-                                   endPoint: .bottom), lineWidth: 3
-            )
-        )
-        .clipShape(Circle())
-        .overlay(Circle().stroke(Color.gray.opacity(0.2), lineWidth: 2))
-        .shadow(radius: 3)
-    }
-}
-
 // MARK: - SAMPLE ALGOLIA LOADER -
 class AlgoliaLoader<T: Decodable> {
     
