@@ -444,7 +444,7 @@ struct DefaultListView: View {
             print("❌ Cannot save: no category selected")
             return
         }
-
+        
         let db = Database.database().reference()
         let rawUID = Auth.auth().currentUser?.uid ?? user_data.userID
         let invalidSet = CharacterSet(charactersIn: ".#$[]")
@@ -453,7 +453,7 @@ struct DefaultListView: View {
             print("❌ Cannot save: invalid user ID")
             return
         }
-
+        
         // 2) Build your items payload
         var rankoItemsDict: [String: Any] = [:]
         for item in selectedRankoItems {
@@ -467,16 +467,16 @@ struct DefaultListView: View {
                 "ItemVotes":       0
             ]
         }
-
+        
         // 3) Prepare both AEDT and local timestamps
         let now = Date()
-
+        
         let aedtFormatter = DateFormatter()
         aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
         aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
         aedtFormatter.dateFormat = "yyyyMMddHHmmss"
         let rankoDateTime = aedtFormatter.string(from: now)
-
+        
         // 4) Top-level list payload with both fields
         let listDataForFirebase: [String: Any] = [
             "RankoID":              listUUID,
@@ -490,221 +490,31 @@ struct DefaultListView: View {
             "RankoItems":           rankoItemsDict,
             "RankoDateTime":        rankoDateTime,
         ]
-
+        
         // 5) Write the main list node
         db.child("RankoData")
-          .child(listUUID)
-          .setValue(listDataForFirebase) { error, _ in
-            if let err = error {
-                print("❌ Error saving list: \(err.localizedDescription)")
-            } else {
-                print("✅ List saved successfully")
+            .child(listUUID)
+            .setValue(listDataForFirebase) { error, _ in
+                if let err = error {
+                    print("❌ Error saving list: \(err.localizedDescription)")
+                } else {
+                    print("✅ List saved successfully")
+                }
             }
-        }
-
+        
         // 6) Write the user’s index of lists
         db.child("UserData")
-          .child(safeUID)
-          .child("RankoData")
-          .child(listUUID)
-          .setValue(category.name) { error, _ in
-            if let err = error {
-                print("❌ Error saving list to user: \(err.localizedDescription)")
-            } else {
-                print("✅ List saved successfully to user")
-            }
-        }
-    }
-}
-
-
-
-
-//struct DefaultListViewTabBar: View {
-//    @State private var activeTab: DefaultListTab = .devices
-//    @State private var currentDetent: PresentationDetent = .height(80)
-//    @State private var allDetents: Set<PresentationDetent> = [.height(80), .fraction(0.3), .fraction(0.5), .fraction(0.7), .fraction(0.9), .large]
-//    
-//    var body: some View {
-//        VStack(spacing: 0) {
-//            TabView(selection: $activeTab) {
-//                Tab.init(value: .people) {
-//                    IndividualTabView(.people)
-//                }
-//                
-//                Tab.init(value: .devices) {
-//                    IndividualTabView(.devices)
-//                }
-//                
-//                Tab.init(value: .items) {
-//                    IndividualTabView(.items)
-//                }
-//                
-//                Tab.init(value: .me) {
-//                    IndividualTabView(.me)
-//                }
-//            }
-//            .tabViewStyle(.tabBarOnly)
-//            .background {
-//                TabViewHelper()
-//            }
-//            .compositingGroup()
-//            
-//            CustomTabBar()
-//        }
-//        .ignoresSafeArea(.all)
-//        .interactiveDismissDisabled()
-//        .presentationDetents(allDetents, selection: $currentDetent)
-//        .presentationBackgroundInteraction(.enabled)
-//        .onChange(of: activeTab) { oldValue, newValue in
-//            switch newValue {
-//            case .people: currentDetent = .fraction(0.3)
-//            case .devices: currentDetent = .fraction(0.5)
-//            case .items: currentDetent = .fraction(0.7)
-//            case .me: currentDetent = .fraction(0.9)
-//            case .empty: currentDetent = .height(80)
-//            }
-//        }
-//    }
-//    
-//    /// Individual Tab View
-//    @ViewBuilder
-//    func IndividualTabView(_ tab: DefaultListTab) -> some View {
-//        ScrollView(.vertical) {
-//            VStack {
-//                HStack {
-//                    Text(tab.rawValue)
-//                        .font(.title)
-//                        .fontWeight(.bold)
-//                    
-//                    Spacer(minLength: 0)
-//                    
-//                    Group {
-//                        if #available(iOS 26, *) {
-//                            Button {
-//                                
-//                            } label: {
-//                                Image(systemName: "plus")
-//                                    .font(.title3)
-//                                    .fontWeight(.semibold)
-//                                    .frame(width: 30, height: 30)
-//                            }
-//                            .buttonStyle(.glass)
-//                        } else {
-//                            Button {
-//                                
-//                            } label: {
-//                                Image(systemName: "plus")
-//                                    .font(.title3)
-//                                    .fontWeight(.semibold)
-//                                    .frame(width: 30, height: 30)
-//                            }
-//                        }
-//                    }
-//                    .buttonBorderShape(.circle)
-//                }
-//                .padding(.top, 10)
-//            }
-//            .padding(15)
-//            
-//            /// Your Tab Contents Here...
-//        }
-//        .toolbarVisibility(.hidden, for: .tabBar)
-//        .toolbarBackgroundVisibility(.hidden, for: .tabBar)
-//    }
-//    
-//    /// Custom Tab Bar
-//    @ViewBuilder
-//    func CustomTabBar() -> some View {
-//        HStack(spacing: 0) {
-//            ForEach(DefaultListTab.visibleCases, id: \.rawValue) { tab in
-//                VStack(spacing: 6) {
-//                    Image(systemName: tab.symbolImage)
-//                        .font(.title3)
-//                        .symbolVariant(.fill)
-//                    
-//                    Text(tab.rawValue)
-//                        .font(.caption2)
-//                        .fontWeight(.semibold)
-//                }
-//                .foregroundStyle(activeTab == tab ? .blue : .gray)
-//                .frame(maxWidth: .infinity)
-//                .contentShape(.rect)
-//                .onTapGesture {
-//                    activeTab = tab
-//                }
-//            }
-//        }
-//        .padding(.horizontal, 12)
-//        .padding(.top, 10)
-//        .padding(.bottom, 15)
-//    }
-//}
-
-
-
-
-
-
-
-
-
-
-
-
-
-struct DefaultListExit: View {
-    @Environment(\.dismiss) var dismiss
-    
-    var onSave: () -> Void
-    var onDelete: () -> Void   // NEW closure for delete
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Button {
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                onSave()        // run save in parent
-                dismiss()       // dismiss ExitSheetView
-            } label: {
-                Text("Publish Ranko")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .foregroundColor(.white)
-                    .fontWeight(.bold)
-            }
-            .background(Color.blue.gradient, in: RoundedRectangle(cornerRadius: 8))
-            HStack(spacing: 12) {
-                Button {
-                    print("Cancel tapped")
-                    dismiss() // just dismiss ExitSheetView
-                } label: {
-                    Text("Cancel")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundColor(.white)
-                        .fontWeight(.bold)
+            .child(user_data.userID)
+            .child("UserRankos")
+            .child("UserActiveRankos")
+            .child(listUUID)
+            .setValue(category.name) { error, _ in
+                if let err = error {
+                    print("❌ Error saving list to user: \(err.localizedDescription)")
+                } else {
+                    print("✅ List saved successfully to user")
                 }
-                .background(Color.orange.gradient, in: RoundedRectangle(cornerRadius: 8))
-                
-                Button {
-                    print("Delete tapped")
-                    onDelete()      // trigger delete logic in parent
-                    dismiss()       // close ExitSheetView
-                } label: {
-                    Text("Delete")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundColor(.white)
-                        .fontWeight(.bold)
-                }
-                .background(Color.red.gradient, in: RoundedRectangle(cornerRadius: 8))
             }
-        }
-        .padding(.horizontal, 30)
-        .presentationBackground(Color.white)
-        .presentationDetents([.height(160)])
-        .interactiveDismissDisabled(true)
     }
 }
 
@@ -952,6 +762,178 @@ struct DefaultListEditDetails: View {
 }
 
 
+struct DefaultListReRank: View {
+    @Environment(\.dismiss) private var dismiss
+
+    /// The original items, injected at init
+    private let originalItems: [RankoItem]
+    /// Called when the user taps “Save”
+    private let onSave: ([RankoItem]) -> Void
+
+    /// A mutable copy we reorder in the UI
+    @State private var draftItems: [RankoItem]
+
+    init(
+        items: [RankoItem],
+        onSave: @escaping ([RankoItem]) -> Void
+    ) {
+        self.originalItems = items
+        self.onSave = onSave
+        // seed the draft with the passed-in order
+        _draftItems = State(initialValue: items)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // The re-orderable list
+            List {
+                // Enumerate draftItems so we can display the current index + 1
+                ForEach(Array(draftItems.enumerated()), id: \.element.id) { index, item in
+                    HStack(spacing: 2) {
+                        // Badge 1: current index in the list
+                        Group {
+                            Image(systemName: "\(index + 1).circle.fill")
+                                .foregroundColor(.gray)
+                                .font(.body)
+                                .padding(3)
+                        }
+                        .font(.title2)
+
+                        // Badge 2: the item.rank value
+                        Group {
+                            switch item.rank {
+                            default:
+                                let badgeColor: Color = {
+                                    if item.rank < (index + 1) {
+                                        return .red
+                                    } else if item.rank > (index + 1) {
+                                        return .green
+                                    } else {
+                                        return Color(red: 1, green: 0.65, blue: 0)
+                                    }
+                                }()
+                                Image(systemName: "\(item.rank).circle.fill")
+                                    .foregroundColor(badgeColor)
+                                    .font(.body)
+                                    .padding(3)
+                            }
+                        }
+                        .font(.title2)
+
+                        // Item info
+                        HStack {
+                            HStack {
+                                Text(item.itemName).fontWeight(.bold)
+                                Text("-").foregroundColor(.gray)
+                                Text(item.itemDescription).foregroundColor(.gray)
+                            }
+                                .font(.caption)
+                                .lineLimit(1)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .onMove { indices, newOffset in
+                    draftItems.move(fromOffsets: indices, toOffset: newOffset)
+                }
+            }
+            // Put the list into “edit” mode so drag handles appear
+            .environment(\.editMode, .constant(.active))
+
+            Divider()
+
+            // Cancel / Save buttons
+            HStack(spacing: 12) {
+                
+                Button {
+                    print("Cancel tapped")
+                    onSave(originalItems)
+                    dismiss()
+                } label: {
+                    Text("Cancel")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundColor(.white)
+                        .fontWeight(.bold)
+                }
+                .background(Color.red.gradient, in: RoundedRectangle(cornerRadius: 8))
+                
+                Button {
+                    for idx in draftItems.indices {
+                        draftItems[idx].rank = idx + 1
+                    }
+                    onSave(draftItems)
+                    dismiss()
+                } label: {
+                    Text("Save Changes")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundColor(.white)
+                        .fontWeight(.bold)
+                }
+                .background(Color.orange.gradient, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .padding()
+        }
+        .interactiveDismissDisabled(true)
+    }
+}
+
+struct DefaultListExit: View {
+    @Environment(\.dismiss) var dismiss
+    
+    var onSave: () -> Void
+    var onDelete: () -> Void   // NEW closure for delete
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Button {
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                onSave()        // run save in parent
+                dismiss()       // dismiss ExitSheetView
+            } label: {
+                Text("Publish Ranko")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .foregroundColor(.white)
+                    .fontWeight(.bold)
+            }
+            .background(Color.blue.gradient, in: RoundedRectangle(cornerRadius: 8))
+            HStack(spacing: 12) {
+                Button {
+                    print("Cancel tapped")
+                    dismiss() // just dismiss ExitSheetView
+                } label: {
+                    Text("Cancel")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundColor(.white)
+                        .fontWeight(.bold)
+                }
+                .background(Color.orange.gradient, in: RoundedRectangle(cornerRadius: 8))
+                
+                Button {
+                    print("Delete tapped")
+                    onDelete()      // trigger delete logic in parent
+                    dismiss()       // close ExitSheetView
+                } label: {
+                    Text("Delete")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundColor(.white)
+                        .fontWeight(.bold)
+                }
+                .background(Color.red.gradient, in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding(.horizontal, 30)
+        .presentationBackground(Color.white)
+        .presentationDetents([.height(160)])
+        .interactiveDismissDisabled(true)
+    }
+}
+
 struct DefaultListView_Previews: PreviewProvider {
     // Create 10 sample RankoItem instances representing top destinations
     static var sampleItems: [RankoItem] = [
@@ -1132,133 +1114,3 @@ extension View {
 
 
 
-struct DefaultListReRank: View {
-    @Environment(\.dismiss) private var dismiss
-
-    /// The original items, injected at init
-    private let originalItems: [RankoItem]
-    /// Called when the user taps “Save”
-    private let onSave: ([RankoItem]) -> Void
-
-    /// A mutable copy we reorder in the UI
-    @State private var draftItems: [RankoItem]
-
-    init(
-        items: [RankoItem],
-        onSave: @escaping ([RankoItem]) -> Void
-    ) {
-        self.originalItems = items
-        self.onSave = onSave
-        // seed the draft with the passed-in order
-        _draftItems = State(initialValue: items)
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // The re-orderable list
-            List {
-                // Enumerate draftItems so we can display the current index + 1
-                ForEach(Array(draftItems.enumerated()), id: \.element.id) { index, item in
-                    HStack(spacing: 2) {
-                        // Badge 1: current index in the list
-                        Group {
-                            Image(systemName: "\(index + 1).circle.fill")
-                                .foregroundColor(.gray)
-                                .font(.body)
-                                .padding(3)
-                        }
-                        .font(.title2)
-
-                        // Badge 2: the item.rank value
-                        Group {
-                            switch item.rank {
-                            default:
-                                let badgeColor: Color = {
-                                    if item.rank < (index + 1) {
-                                        return .red
-                                    } else if item.rank > (index + 1) {
-                                        return .green
-                                    } else {
-                                        return Color(red: 1, green: 0.65, blue: 0)
-                                    }
-                                }()
-                                Image(systemName: "\(item.rank).circle.fill")
-                                    .foregroundColor(badgeColor)
-                                    .font(.body)
-                                    .padding(3)
-                            }
-                        }
-                        .font(.title2)
-
-                        // Item info
-                        HStack {
-                            HStack {
-                                Text(item.itemName).fontWeight(.bold)
-                                Text("-").foregroundColor(.gray)
-                                Text(item.itemDescription).foregroundColor(.gray)
-                            }
-                                .font(.caption)
-                                .lineLimit(1)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .onMove { indices, newOffset in
-                    draftItems.move(fromOffsets: indices, toOffset: newOffset)
-                }
-            }
-            // Put the list into “edit” mode so drag handles appear
-            .environment(\.editMode, .constant(.active))
-
-            Divider()
-
-            // Cancel / Save buttons
-            HStack(spacing: 12) {
-                
-                Button {
-                    print("Cancel tapped")
-                    onSave(originalItems)
-                    dismiss()
-                } label: {
-                    Text("Cancel")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundColor(.white)
-                        .fontWeight(.bold)
-                }
-                .background(Color.red.gradient, in: RoundedRectangle(cornerRadius: 8))
-                
-                Button {
-                    for idx in draftItems.indices {
-                        draftItems[idx].rank = idx + 1
-                    }
-                    onSave(draftItems)
-                    dismiss()
-                } label: {
-                    Text("Save Changes")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundColor(.white)
-                        .fontWeight(.bold)
-                }
-                .background(Color.orange.gradient, in: RoundedRectangle(cornerRadius: 8))
-            }
-            .padding()
-        }
-        .interactiveDismissDisabled(true)
-    }
-}
-
-struct RoundedCorner: Shape {
-    var radius: CGFloat
-    var corners: UIRectCorner
-
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(
-            roundedRect: rect,
-            byRoundingCorners: corners,
-            cornerRadii: CGSize(width: radius, height: radius)
-        )
-        return Path(path.cgPath)
-    }
-}

@@ -386,6 +386,7 @@ struct DefaultListSpectate: View {
             .child("UserData")
             .child(creatorID)
             .child("UserProfilePicture")
+            .child("UserProfilePicturePath")
         ref.getData { _, snap in
             if let path = snap?.value as? String {
                 Storage.storage().reference().child(path)
@@ -402,6 +403,7 @@ struct DefaultListSpectate: View {
         let ref = Database.database().reference()
             .child("UserData")
             .child(creatorID)
+            .child("UserDetails")
             .child("UserName")
         ref.observeSingleEvent(of: .value) { snap in
             creatorName = snap.value as? String ?? "Unknown"
@@ -495,68 +497,6 @@ struct DefaultListSpectate: View {
         for index in selectedRankoItems.indices {
             selectedRankoItems[index].rank = index + 1
         }
-    }
-    
-    
-    
-    // MARK: - Firebase Update
-    private func updateListInFirebase() {
-        guard let category = category else { return }
-        
-        let db = Database.database().reference()
-        let safeUID = (Auth.auth().currentUser?.uid ?? user_data.userID)
-            .components(separatedBy: CharacterSet(charactersIn: ".#$[]")).joined()
-        
-        // ✅ Prepare the top-level fields to update
-        let listUpdates: [String: Any] = [
-            "RankoName": rankoName,
-            "RankoDescription": description,
-            "RankoPrivacy": isPrivate,
-            "RankoCategory": category.name
-        ]
-        
-        let listRef = db.child("RankoData").child(listID)
-        
-        // ✅ Update list fields
-        listRef.updateChildValues(listUpdates) { error, _ in
-            if let err = error {
-                print("❌ Failed to update list fields: \(err.localizedDescription)")
-            } else {
-                print("✅ List fields updated successfully")
-            }
-        }
-        
-        // ✅ Prepare all RankoItems
-        var itemsUpdate: [String: Any] = [:]
-        for item in selectedRankoItems {
-            itemsUpdate[item.id] = [
-                "ItemID": item.id,
-                "ItemName": item.record.ItemName,
-                "ItemDescription": item.record.ItemDescription,
-                "ItemImage": item.record.ItemImage,
-                "ItemRank": item.rank,
-                "ItemVotes": item.votes
-            ]
-        }
-        
-        // ✅ Update RankoItems node with the new data
-        listRef.child("RankoItems").setValue(itemsUpdate) { error, _ in
-            if let err = error {
-                print("❌ Failed to update RankoItems: \(err.localizedDescription)")
-            } else {
-                print("✅ RankoItems updated successfully")
-            }
-        }
-        
-        // ✅ Update the user's reference to this list
-        db.child("UserData").child(safeUID).child("RankoData").child(listID)
-            .setValue(category.name) { error, _ in
-                if let err = error {
-                    print("❌ Failed to update user's list reference: \(err.localizedDescription)")
-                } else {
-                    print("✅ User's list reference updated")
-                }
-            }
     }
 
         // MARK: - Algolia Update
@@ -735,7 +675,8 @@ struct DefaultListSpectate2: View {
         let ref = Database.database().reference()
             .child("UserData")
             .child(creatorID)
-            .child("ProfilePicture")
+            .child("UserProfilePicture")
+            .child("UserProfilePicturePath")
         ref.getData { _, snap in
             if let path = snap?.value as? String {
                 Storage.storage().reference().child(path)
@@ -752,6 +693,7 @@ struct DefaultListSpectate2: View {
         let ref = Database.database().reference()
             .child("UserData")
             .child(creatorID)
+            .child("UserDetails")
             .child("UserName")
         ref.observeSingleEvent(of: .value) { snap in
             creatorName = snap.value as? String ?? "Unknown"

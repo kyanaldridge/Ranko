@@ -717,7 +717,8 @@ struct GroupListPersonal: View {
             .reference()
             .child("UserData")
             .child(uid)
-            .child("UserFeatured")
+            .child("UserRankos")
+            .child("UserFeaturedRankos")
 
         // 1) Load all featured slots
         featuredRef.getData { error, snapshot in

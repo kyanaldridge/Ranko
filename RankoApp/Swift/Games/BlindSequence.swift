@@ -198,7 +198,6 @@ struct BlindSequence: View {
                 
                 Spacer()
                 
-                // Logo
                 VStack {
                     // New Game Button
                     Button(action: {
@@ -206,15 +205,17 @@ struct BlindSequence: View {
                         startChallenge()
                     }) {
                         Text("New Game")
-                            .foregroundColor(Color(hex: 0x873F0F))
-                            .fontWeight(.bold)
+                            .font(.system(size: 16, weight: .heavy))
                             .frame(maxWidth: .infinity)
-                            .padding(10)
-                            .background(Color(hex: 0xFFEBBC))
-                            .cornerRadius(40)
-                            .padding(.horizontal)
+                            .padding(.vertical, 15)
                     }
-                    .padding(.bottom, 6)
+                    .foregroundColor(Color(hex: 0x873F0F))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
+                    .padding(.bottom, 8)
                     
                     Button(action: {
                         gameType = .free
@@ -222,14 +223,16 @@ struct BlindSequence: View {
                         freePlayScore = 0
                     }) {
                         Text("Free Play")
-                            .foregroundColor(Color(hex: 0x873F0F))
-                            .fontWeight(.bold)
+                            .font(.system(size: 16, weight: .heavy))
                             .frame(maxWidth: .infinity)
-                            .padding(10)
-                            .background(Color(hex: 0xFFEBBC))
-                            .cornerRadius(40)
-                            .padding(.horizontal)
+                            .padding(.vertical, 15)
                     }
+                    .foregroundColor(Color(hex: 0x873F0F))
+                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                         startPoint: .top,
+                                         endPoint: .bottom
+                                        ))
+                    .buttonStyle(.glassProminent)
                 }
                 .padding(.horizontal, 60)
                 

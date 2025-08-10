@@ -80,17 +80,18 @@ struct ProfileIconView: View {
 }
 
 final class ProfileImageService: ObservableObject {
+    @StateObject private var user_data = UserInformation.shared
+    
     @Published var image: UIImage?
     @Published var isLoading = false
     
-    @AppStorage("user_profile_picture") private var profilePath: String = ""
-    @AppStorage("user_profile_picture_modified") private var profileModified: String = ""
     private var cancellables = Set<AnyCancellable>()
     private let userID: String = UserInformation.shared.userID
     
     init() {
         // Start from cache
         image = loadCachedImage()
+        
         // Whenever the stored path changes, re-download
         NotificationCenter.default
               .publisher(for: UserDefaults.didChangeNotification)
@@ -98,7 +99,8 @@ final class ProfileImageService: ObservableObject {
                 self?.downloadAndCache()
               }
               .store(in: &cancellables)
-        // And do one boot download
+        
+        // Perform initial download if necessary
         downloadAndCache()
     }
     
@@ -124,16 +126,15 @@ final class ProfileImageService: ObservableObject {
             
             // 2️⃣ write new path & timestamp
             DispatchQueue.main.async {
-                self.profilePath = fileName
-                self.profileModified = Self.timestampString()
+                self.user_data.userProfilePicture = fileName
+                self.user_data.userProfilePictureModified = Self.timestampString()
             }
         }
     }
     
     private func downloadAndCache() {
-        guard !profilePath.isEmpty else { return }
+        guard !user_data.userProfilePicture.isEmpty else { return }
         
-        // defer the "loading = true" so it doesn't fire during a view update
         DispatchQueue.main.async { [weak self] in
             self?.isLoading = true
         }
@@ -141,10 +142,9 @@ final class ProfileImageService: ObservableObject {
         let storageRef = Storage.storage()
             .reference()
             .child("profilePictures")
-            .child(profilePath)
+            .child(user_data.userProfilePicture)
         
         storageRef.getData(maxSize: 2 * 1024 * 1024) { [weak self] data, error in
-            // once the network callback comes back, parse + write cache off the main thread
             DispatchQueue.global(qos: .userInitiated).async {
                 var newImage: UIImage? = nil
                 if let d = data, let ui = UIImage(data: d) {
@@ -156,9 +156,8 @@ final class ProfileImageService: ObservableObject {
                     }
                 }
                 
-                // now publish the new image + turn off loading back on the main thread
                 DispatchQueue.main.async { [weak self] in
-                    self?.image     = newImage
+                    self?.image = newImage
                     self?.isLoading = false
                 }
             }
@@ -187,7 +186,6 @@ final class ProfileImageService: ObservableObject {
         return fmt.string(from: Date())
     }
 }
-
 struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var imageService: ProfileImageService

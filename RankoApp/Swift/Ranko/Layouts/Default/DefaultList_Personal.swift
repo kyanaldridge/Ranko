@@ -541,8 +541,9 @@ struct DefaultListPersonal: View {
         let featuredRef = Database.database()
             .reference()
             .child("UserData")
-            .child(uid)
-            .child("UserFeatured")
+            .child(user_data.userID)
+            .child("UserRankos")
+            .child("UserFeaturedRankos")
 
         // 1) Load all featured slots
         featuredRef.getData { error, snapshot in

@@ -25,6 +25,8 @@ struct ProfileView: View {
     @State private var loadingProfileImage = false
     @State private var profileImage: UIImage?
     
+    private var profileImageService = ProfileImageService()
+    
     @State private var rankoCount: Int = 0
     @State private var followersCount: Int = 0
     @State private var followingCount: Int = 0
@@ -577,7 +579,7 @@ struct ProfileView: View {
                                 .reference()
                                 .child("UserData")
                                 .child(user_data.userID)
-                                .child("UserFeatured")
+                                .child("UserFeaturedRankos")
                                 .child("\(slot)")
                             ref.setValue(selected.id)
 
@@ -721,7 +723,7 @@ struct ProfileView: View {
             let dbRef = Database.database().reference()
                 .child("UserData")
                 .child(user_data.userID)
-                .child("UserProfilePicture")
+                .child("UserProfilePicturePath")
             dbRef.setValue(filePath) { _, _ in
                 // 3️⃣ Now download it back and cache
                 downloadAndCacheProfileImage(from: filePath)
@@ -768,6 +770,37 @@ struct ProfileView: View {
                 } catch {
                     print("❌ Could not cache:", error)
                 }
+            }
+        }
+    }
+    
+    private func syncUserDataFromFirebase() {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("❌ No current user logged in. Aborting sync.")
+            return
+        }
+        
+        let dbRef = Database.database().reference().child("UserData").child(uid)
+        dbRef.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Failed to fetch user data from Firebase.")
+                return
+            }
+            
+            user_data.userID = uid
+            user_data.username = value["UserName"] as? String ?? ""
+            user_data.userDescription = value["UserDescription"] as? String ?? ""
+            user_data.userProfilePicture = value["UserProfilePicturePath"] as? String ?? ""
+            let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
+            user_data.userProfilePictureModified = modifiedTimestamp
+            
+            // Check if profile picture needs to be re-downloaded
+            if modifiedTimestamp != self.user_data.userProfilePictureModified {
+                print("🔁 Profile picture modified, re-downloading...")
+                self.downloadAndCacheProfileImage(from: user_data.userProfilePicture)
+            } else {
+                print("✅ Using cached profile image.")
+                self.profileImage = loadImageFromDisk()
             }
         }
     }
@@ -835,7 +868,7 @@ struct ProfileView: View {
             .reference()
             .child("UserData")
             .child(uid)
-            .child("UserFeatured")
+            .child("UserFeaturedRankos")
 
         baseRef.getData { error, snapshot in
             if let error = error {
@@ -953,7 +986,7 @@ struct ProfileView: View {
             .reference()
             .child("UserData")
             .child(user_data.userID)
-            .child("UserFeatured")
+            .child("UserFeaturedRankos")
             .child("\(slot)")
         ref.removeValue { error, _ in
             guard error == nil else { return }
@@ -1835,7 +1868,7 @@ struct SearchUsersView: View {
                 if let userDict = data[id] as? [String: Any],
                    let name = userDict["UserName"] as? String,
                    let desc = userDict["UserDescription"] as? String,
-                   let pic = userDict["UserProfilePicture"] as? String {
+                   let pic = userDict["UserProfilePicturePath"] as? String {
                     let user = RankoUser(id: id, userName: name, userDescription: desc, userProfilePicture: pic)
                     fetched.append(user)
                 }
@@ -2074,7 +2107,7 @@ struct SearchFollowersView: View {
                 if let dict = all[id] as? [String: Any],
                    let name = dict["UserName"] as? String,
                    let desc = dict["UserDescription"] as? String,
-                   let pic  = dict["UserProfilePicture"] as? String {
+                   let pic  = dict["UserProfilePicturePath"] as? String {
                     loaded.append(.init(
                         id: id,
                         userName: name,
@@ -2265,7 +2298,7 @@ struct SearchFollowingView: View {
                 if let dict = all[id] as? [String: Any],
                    let name = dict["UserName"] as? String,
                    let desc = dict["UserDescription"] as? String,
-                   let pic  = dict["UserProfilePicture"] as? String {
+                   let pic  = dict["UserProfilePicturePath"] as? String {
                     loaded.append(.init(
                         id: id,
                         userName: name,
@@ -2861,7 +2894,7 @@ struct ProfileSpectateView: View {
                                 .joined(separator: ",")
                                 .trimmingCharacters(in: .whitespacesAndNewlines)
                             ?? (value["UserInterests"] as? String ?? "")
-            let picPath = value["UserProfilePicture"] as? String ?? ""
+            let picPath = value["UserProfilePicturePath"] as? String ?? ""
 
             DispatchQueue.main.async {
                 // Update all UI state
@@ -2980,7 +3013,7 @@ struct ProfileSpectateView: View {
             .reference()
             .child("UserData")
             .child(userID)
-            .child("UserFeatured")
+            .child("UserFeaturedRankos")
 
         baseRef.getData { error, snapshot in
             if let error = error {
@@ -3665,7 +3698,7 @@ struct AppIconGridItem: View {
 //                        .reference()
 //                        .child("UserData")
 //                        .child(user_data.userID)
-//                        .child("UserFeatured")
+//                        .child("UserFeaturedRankos")
 //                        .child("\(slot)")
 //                    ref.setValue(selected.id)
 //

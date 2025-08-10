@@ -158,27 +158,69 @@ struct TrayView: View {
         // 1) Build Group List Codable Struct
         let listRecord = RankoUserInformation(
             objectID: Auth.auth().currentUser!.uid,
+            UserID: Auth.auth().currentUser!.uid,
             UserName: user_data.username,
             UserDescription: "",
-            UserYear: user_data.userYear,
+            UserPrivacy: true,
             UserInterests: user_data.userInterests,
-            UserProfilePicture: user_data.userProfilePicture,
+            UserJoined: rankoDateTime,
+            UserYear: user_data.userYear,
             UserFoundUs: selectedAction!.title,
-            UserJoined: rankoDateTime
+            UserProfilePicturePath: user_data.userProfilePicture,
+            UserProfilePictureModified: rankoDateTime,
+            UserProfilePictureFile: "image",
+            UserRankoCount: 0,
+            UserFollowerCount: 0,
+            UserFollowingCount: 0,
         )
         
-        let userData: [String: Any?] = [
+        let userDetails: [String: Any] = [
+            "UserID": Auth.auth().currentUser!.uid,
             "UserName": user_data.username,
             "UserDescription": "",
-            "UserYear": user_data.userYear,
+            "UserPrivacy": true,
             "UserInterests": user_data.userInterests,
-            "UserProfilePicture": user_data.userProfilePicture,
-            "UserFoundUs": selectedAction!.title,
-            "UserJoined": rankoDateTime
+            "UserJoined": rankoDateTime,
+            "UserYear": user_data.userYear,
+            "UserFoundUs": selectedAction!.title
+        ]
+        
+        let userProfilePicture: [String: Any] = [
+            "UserProfilePicturePath": "default-profilePicture.jpg",
+            "UserProfilePictureModified": rankoDateTime,
+            "UserProfilePictureFile": "image"
+        ]
+        
+        let userRankos: [String: Any] = [
+            "UserActiveRankos": "",
+            "UserFeaturedRankos": "",
+            "UserSavedRankos": "",
+            "UserArchivedRankos": "",
+            "UserDeletedRankos": ""
+        ]
+        
+        let userSocial: [String: Any] = [
+            "UserFollowRequests": "",
+            "UserFollowers": "",
+            "UserFollowing": ""
+        ]
+        
+        let userStats: [String: Any] = [
+            "UserFollowerCount": 0,
+            "UserFollowingCount": 0,
+            "UserRankoCount": 0
         ]
         
         let db = Database.database().reference()
-        db.child("UserData").child(Auth.auth().currentUser!.uid).setValue(userData)
+        let userRef = db.child("UserData").child(Auth.auth().currentUser!.uid)
+        
+        userRef.child("objectID").setValue(Auth.auth().currentUser!.uid)
+        userRef.child("UserDetails").updateChildValues(userDetails)
+        userRef.child("UserProfilePicture").updateChildValues(userProfilePicture)
+        userRef.child("UserRankos").updateChildValues(userRankos)
+        userRef.child("UserSocial").updateChildValues(userSocial)
+        userRef.child("UserStats").updateChildValues(userStats)
+        
 
         // 3) Upload to Algolia
         let group = DispatchGroup()

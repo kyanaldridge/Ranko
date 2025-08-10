@@ -221,7 +221,7 @@ struct Login: View {
             Button(action: action) {
                 HStack {
                     Spacer()
-                    Image("google_icon.svg") // Add a Google "G" logo asset to your Assets.xcassets
+                    Image("google_icon") // Add a Google "G" logo asset to your Assets.xcassets
                         .resizable()
                         .frame(width: 20, height: 20)
                         .padding(.leading, 4)

@@ -269,7 +269,7 @@ struct HomeView: View {
             user_data.userDescription = value["UserDescription"] as? String ?? ""
             user_data.userYear = value["UserYear"] as? Int ?? 0
             user_data.userInterests = value["UserInterests"] as? String ?? ""
-            user_data.userProfilePicture = value["UserProfilePicture"] as? String ?? ""
+            user_data.userProfilePicture = value["UserProfilePicturePath"] as? String ?? ""
             let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
             user_data.userFoundUs = value["UserFoundUs"] as? String ?? ""
             user_data.userJoined = value["UserJoined"] as? String ?? ""
@@ -707,7 +707,7 @@ struct DefaultListHomeView: View {
             }
 
             self.creatorName = value["UserName"] as? String ?? ""
-            let profilePath = value["UserProfilePicture"] as? String ?? ""
+            let profilePath = value["UserProfilePicturePath"] as? String ?? ""
 
             print("✅ Creator info loaded from Firebase:")
             print("   Name: \(self.creatorName)")

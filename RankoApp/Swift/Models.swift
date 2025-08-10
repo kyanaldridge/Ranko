@@ -11,13 +11,26 @@ import Combine
 
 struct RankoUserInformation: Codable { // Used in Introduction Survey
     let objectID: String
+    
+    // MARK: - UserDetails -
+    let UserID: String
     let UserName: String
     let UserDescription: String
-    let UserYear: Int
+    let UserPrivacy: Bool
     let UserInterests: String
-    let UserProfilePicture: String
-    let UserFoundUs: String
     let UserJoined: String
+    let UserYear: Int
+    let UserFoundUs: String
+    
+    // MARK: - UserProfilePicture -
+    let UserProfilePicturePath: String
+    let UserProfilePictureModified: String
+    let UserProfilePictureFile: String
+    
+    // MARK: - UserStats -
+    let UserRankoCount: Int
+    let UserFollowerCount: Int
+    let UserFollowingCount: Int
 }
 
 final class UserInformation: ObservableObject { // App Wide User Variables

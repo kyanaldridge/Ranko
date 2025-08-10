@@ -638,7 +638,8 @@ struct GroupListView: View {
         // 6) Write the user’s index of lists
         db.child("UserData")
           .child(user_data.userID)
-          .child("RankoData")
+          .child("UserRankos")
+          .child("UserActiveRankos")
           .child(rankoID)
           .setValue(category.name) { error, _ in
             if let err = error {
