@@ -27,9 +27,6 @@ struct ProfileView: View {
     
     private var profileImageService = ProfileImageService()
     
-    @State private var rankoCount: Int = 0
-    @State private var followersCount: Int = 0
-    @State private var followingCount: Int = 0
     @State private var showSearchRankos = false
     @State private var showUserFollowers = false
     @State private var showUserFollowing = false
@@ -228,7 +225,7 @@ struct ProfileView: View {
                         // Followers / Following / Rankos
                         HStack(spacing: 40) {
                             VStack {
-                                Text("\(rankoCount)")
+                                Text("\(user_data.userStatsRankos)")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(Color(hex: 0xFFFADB))
                                 Text("s")
@@ -240,7 +237,7 @@ struct ProfileView: View {
                             }
                             
                             VStack {
-                                Text("\(followersCount)")
+                                Text("\(user_data.userStatsFollowers)")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(Color(hex: 0xFFFADB))
                                 Text("s")
@@ -255,7 +252,7 @@ struct ProfileView: View {
                             }
                             
                             VStack {
-                                Text("\(followingCount)")
+                                Text("\(user_data.userStatsFollowing)")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(Color(hex: 0xFFFADB))
                                 Text("s")
@@ -687,7 +684,7 @@ struct ProfileView: View {
                 switch result {
                 case .success(let response):
                     let totalResults = response.nbHits
-                    rankoCount = totalResults!
+                    user_data.userStatsRankos = totalResults!
                     print("✅ Total Algolia Results: \(String(describing: totalResults))")
                     let db = Database.database().reference()
                     let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserRankoCount")
@@ -707,20 +704,22 @@ struct ProfileView: View {
         }
 
         let filePath = "\(user_data.userID).jpg"
+        
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
         let storageRef = Storage.storage()
             .reference()
             .child("profilePictures")
             .child(filePath)
 
-        // 1️⃣ Upload
-        storageRef.putData(data, metadata: StorageMetadata()) { _, error in
+        storageRef.putData(data, metadata: metadata) { _, error in
             if let e = error {
-                print("Upload failed:", e)
+                print("Upload error:", e)
                 DispatchQueue.main.async { loadingProfileImage = false }
                 return
             }
-
-            // 2️⃣ Save the new path in Realtime Database
+            
             let dbRef = Database.database().reference()
                 .child("UserData")
                 .child(user_data.userID)
@@ -730,8 +729,7 @@ struct ProfileView: View {
                 // 3️⃣ Now download it back and cache
                 downloadAndCacheProfileImage(from: filePath)
             }
-
-            // 4️⃣ Also update your modified timestamp
+            
             let now = Date()
             let fmt = DateFormatter()
             fmt.locale = Locale(identifier: "en_US_POSIX")
@@ -858,10 +856,10 @@ struct ProfileView: View {
         db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowers")
             .observeSingleEvent(of: .value) { snapshot in
                 DispatchQueue.main.async {
-                    self.followersCount = Int(snapshot.childrenCount)
+                    self.user_data.userStatsFollowers = Int(snapshot.childrenCount)
                     let db = Database.database().reference()
                     let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowerCount")
-                    dbRef.setValue(followersCount)
+                    dbRef.setValue(user_data.userStatsFollowers)
                 }
                 group.leave()
             }
@@ -870,10 +868,10 @@ struct ProfileView: View {
         db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowing")
             .observeSingleEvent(of: .value) { snapshot in
                 DispatchQueue.main.async {
-                    self.followingCount = Int(snapshot.childrenCount)
+                    self.user_data.userStatsFollowing = Int(snapshot.childrenCount)
                     let db = Database.database().reference()
                     let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowingCount")
-                    dbRef.setValue(followingCount)
+                    dbRef.setValue(user_data.userStatsFollowing)
                 }
                 group.leave()
             }

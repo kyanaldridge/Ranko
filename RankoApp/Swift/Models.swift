@@ -11,8 +11,13 @@ import Combine
 
 struct RankoUserInformation: Codable { // Used in Introduction Survey
     let objectID: String
+    let userDetails: RankoUserDetails
+    let userProfilePicture: RankoUserProfilePicture
+    let userStats: RankoUserStats
     
-    // MARK: - UserDetails -
+}
+
+struct RankoUserDetails: Codable {
     let UserID: String
     let UserName: String
     let UserDescription: String
@@ -22,13 +27,15 @@ struct RankoUserInformation: Codable { // Used in Introduction Survey
     let UserYear: Int
     let UserFoundUs: String
     let UserSignInMethod: String
-    
-    // MARK: - UserProfilePicture -
+}
+
+struct RankoUserProfilePicture: Codable {
     let UserProfilePicturePath: String
     let UserProfilePictureModified: String
     let UserProfilePictureFile: String
-    
-    // MARK: - UserStats -
+}
+
+struct RankoUserStats: Codable {
     let UserRankoCount: Int
     let UserFollowerCount: Int
     let UserFollowingCount: Int
@@ -97,7 +104,7 @@ struct RankoList: Identifiable, Codable {
     let dateTime: String          // from "RankoDateTime" e.g. "2024-04-06-17-42"
     var items: [RankoItem]
 }
-struct RankoRecord: Codable, Identifiable {
+struct RankoRecord: Codable, Identifiable, Equatable {
     let objectID: String
     let ItemName: String
     let ItemDescription: String
@@ -107,7 +114,7 @@ struct RankoRecord: Codable, Identifiable {
     var id: String { objectID }
 }
 
-struct RankoItem: Identifiable, Codable {
+struct RankoItem: Identifiable, Codable, Equatable {
     let id: String            // ← will hold our random 12-char code
     var rank: Int             // ← selection order
     var votes: Int
@@ -144,6 +151,7 @@ struct RankoListAlgolia: Codable {
 // MARK: - Global Functions
 
 func getProfileImagePath() -> URL {
+    @StateObject var user_data = UserInformation.shared
     let filename = "cached_profile_image.jpg"
     return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(filename)
 }

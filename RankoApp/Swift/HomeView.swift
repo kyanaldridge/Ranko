@@ -346,7 +346,16 @@ struct HomeView: View {
             }
 
             profileImage = uiImage
+            user_data.ProfilePicture = uiImage
             saveImageToDisk(image: uiImage)
+            
+            let url = getProfileImagePath()
+            do {
+                try data.write(to: url)
+                print("✅ Cached to disk at", url)
+            } catch {
+                print("❌ Could not cache:", error)
+            }
         }
     }
 

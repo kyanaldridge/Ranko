@@ -840,14 +840,39 @@ struct AccountView: View {
         print("User logged out.")
         
         try? Auth.auth().signOut()
+        // User Details
         user_data.userID = ""
         user_data.username = ""
         user_data.userDescription = ""
-        user_data.userYear = 0
+        user_data.userPrivacy = ""
         user_data.userInterests = ""
-        user_data.userProfilePicturePath = "default-profilePicture.jpg"
-        user_data.userFoundUs = ""
         user_data.userJoined = ""
+        user_data.userYear = 0
+        user_data.userFoundUs = ""
+        user_data.userLoginService = ""
+        // User Profile Picture
+        user_data.userProfilePictureFile = ""
+        user_data.userProfilePicturePath = "default-profilePicture.jpg"
+        user_data.userProfilePictureModified = ""
+        // User Stats
+        user_data.userStatsFollowers = 0
+        user_data.userStatsFollowing = 0
+        user_data.userStatsRankos = 0
+        // Notifications
+        user_data.notificationRankoLikes = true
+        user_data.notificationRankoClones = true
+        user_data.notificationPersonalizedRecommendations = true
+        user_data.notificationWeeklyProgress = true
+        user_data.notificationAppUpdateAvailable = true
+        user_data.notificationFriendRequests = true
+        user_data.notificationSharedRankos = true
+        user_data.notificationFriendsNewRankos = true
+        user_data.notificationTrendingRankos = true
+        user_data.notificationMiniGameEvents = true
+        // Other
+        user_data.preferencesAutocorrectDisabled = true
+        user_data.ProfilePicture = nil
+        user_data.userRankoCategories = ""
         user_data.logStatus = false
     }
     
@@ -861,14 +886,39 @@ struct AccountView: View {
             print("Error Deleting Account: \(error.localizedDescription)")
           } else {
               print("Account deleted.")
+              // User Details
               user_data.userID = ""
               user_data.username = ""
               user_data.userDescription = ""
-              user_data.userYear = 0
+              user_data.userPrivacy = ""
               user_data.userInterests = ""
-              user_data.userProfilePicturePath = "default-profilePicture.jpg"
-              user_data.userFoundUs = ""
               user_data.userJoined = ""
+              user_data.userYear = 0
+              user_data.userFoundUs = ""
+              user_data.userLoginService = ""
+              // User Profile Picture
+              user_data.userProfilePictureFile = ""
+              user_data.userProfilePicturePath = "default-profilePicture.jpg"
+              user_data.userProfilePictureModified = ""
+              // User Stats
+              user_data.userStatsFollowers = 0
+              user_data.userStatsFollowing = 0
+              user_data.userStatsRankos = 0
+              // Notifications
+              user_data.notificationRankoLikes = true
+              user_data.notificationRankoClones = true
+              user_data.notificationPersonalizedRecommendations = true
+              user_data.notificationWeeklyProgress = true
+              user_data.notificationAppUpdateAvailable = true
+              user_data.notificationFriendRequests = true
+              user_data.notificationSharedRankos = true
+              user_data.notificationFriendsNewRankos = true
+              user_data.notificationTrendingRankos = true
+              user_data.notificationMiniGameEvents = true
+              // Other
+              user_data.preferencesAutocorrectDisabled = true
+              user_data.ProfilePicture = nil
+              user_data.userRankoCategories = ""
               user_data.logStatus = false
           }
         }

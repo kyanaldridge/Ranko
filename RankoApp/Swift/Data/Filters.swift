@@ -427,7 +427,7 @@ var defaultFilterChips: [FilterChip] = [
                         icon: "figure.australian.football",
                         synonyms: "Australian rules football, AFL, footy, Aussie rules, league",
                         nameIndex: "Sports-Athletes",
-                        filter: "ItemCategory:Australian Rules Football",
+                        filter: "ItemCategory:'Australian Rules Football'",
                         children: [],
                         available: true,
                         order: 5
@@ -569,7 +569,7 @@ var defaultFilterChips: [FilterChip] = [
                         icon: "american.football.fill",
                         synonyms: "American football, gridiron, NFL, pigskin, football",
                         nameIndex: "Sport",
-                        filter: "ItemCategory:Club AND ItemCategories.Sport:American Football",
+                        filter: "ItemCategory:Club AND ItemCategories.Sport:'American Football'",
                         children: [],
                         available: true,
                         order: 3
@@ -579,7 +579,7 @@ var defaultFilterChips: [FilterChip] = [
                         icon: "australian.football.fill",
                         synonyms: "Australian rules football, AFL, footy, Aussie rules, league",
                         nameIndex: "Sport",
-                        filter: "ItemCategory:Club AND ItemCategories.Sport:Australian Rules Football",
+                        filter: "ItemCategory:Club AND ItemCategories.Sport:'Australian Rules Football'",
                         children: [],
                         available: true,
                         order: 4
@@ -589,7 +589,7 @@ var defaultFilterChips: [FilterChip] = [
                         icon: "steeringwheel",
                         synonyms: "F1 constructors, racing teams, Formula 1, motorsport, teams",
                         nameIndex: "Sport",
-                        filter: "ItemCategory:Club AND ItemCategories.Sport:Formula 1",
+                        filter: "ItemCategory:Club AND ItemCategories.Sport:'Formula 1'",
                         children: [],
                         available: true,
                         order: 5
@@ -722,7 +722,7 @@ var defaultFilterChips: [FilterChip] = [
                         icon: "takeoutbag.and.cup.and.straw.fill",
                         synonyms: "fast food, chains, franchises, quick service, drive-thru",
                         nameIndex: "Logos",
-                        filter: "ItemCategory:Fast Food Chain",
+                        filter: "ItemCategory:'Fast Food Chain'",
                         children: [],
                         available: true,
                         order: 3
@@ -782,7 +782,7 @@ var defaultFilterChips: [FilterChip] = [
                         icon: "rectangle.portrait.righthalf.inset.filled",
                         synonyms: "cereal, breakfast cereals, grains, oats, granola",
                         nameIndex: "Food",
-                        filter: "ItemCategory:Breakfast Cereal",
+                        filter: "ItemCategory:'Breakfast Cereal'",
                         children: [],
                         available: true,
                         order: 9
@@ -792,7 +792,7 @@ var defaultFilterChips: [FilterChip] = [
                         icon: "snowflake",
                         synonyms: "ice cream, gelato, sorbet, frozen dessert, treats",
                         nameIndex: "Food",
-                        filter: "ItemCategory:Ice Cream Flavour",
+                        filter: "ItemCategory:'Ice Cream Flavour'",
                         children: [],
                         available: true,
                         order: 10
@@ -967,7 +967,7 @@ var defaultFilterChips: [FilterChip] = [
                         icon: "dog.fill",
                         synonyms: "dogs, canines, pups, hounds, pooches",
                         nameIndex: "Animals",
-                        filter: "ItemDescription:Canis Lupus",
+                        filter: "ItemDescription:'Canis Lupus'",
                         children: [],
                         available: true,
                         order: 2
@@ -997,7 +997,7 @@ var defaultFilterChips: [FilterChip] = [
                         icon: "cat.fill",
                         synonyms: "cats, felines, kitties, pussycats, whiskered",
                         nameIndex: "Animals",
-                        filter: "ItemDescription:Felis Catus",
+                        filter: "ItemDescription:'Felis Catus'",
                         children: [],
                         available: true,
                         order: 5
@@ -1299,7 +1299,7 @@ var defaultFilterChips: [FilterChip] = [
                 icon: "circles.hexagonpath.fill",
                 synonyms: "planets, worlds, celestial bodies, orbs, spheres",
                 nameIndex: "Science",
-                filter: "ItemCategory:Planet AND ItemCategory:'Dwarf Planet'",
+                filter: "ItemCategory:Planet OR ItemCategory:'Dwarf Planet'", //CHANGED
                 children: [],
                 available: true,
                 order: 0
@@ -1571,78 +1571,8 @@ var defaultFilterChips: [FilterChip] = [
         synonyms: "miscellaneous, varied, assorted, odds & ends, hodgepodge",
         nameIndex: "",
         filter: "",
-        children: [
-            FilterChip(
-                name: "Models",
-                icon: "camera.fill",
-                synonyms: "models, mannequins, replicas, prototypes, figures",
-                nameIndex: "",
-                filter: "",
-                children: [],
-                available: true,
-                order: 0
-            ),
-            FilterChip(
-                name: "Numbers",
-                icon: "1.square.fill",
-                synonyms: "numbers, digits, numerals, figures, counts",
-                nameIndex: "Other",
-                filter: "ItemCategory:Number",
-                children: [],
-                available: true,
-                order: 1
-            ),
-            FilterChip(
-                name: "Letters",
-                icon: "a.square.fill",
-                synonyms: "letters, alphabets, characters, glyphs, symbols",
-                nameIndex: "Other",
-                filter: "ItemCategory:Letter",
-                children: [],
-                available: true,
-                order: 2
-            ),
-            FilterChip(
-                name: "Shapes",
-                icon: "triangle.fill",
-                synonyms: "shapes, forms, figures, outlines, geometries",
-                nameIndex: "",
-                filter: "",
-                children: [],
-                available: false,
-                order: 3
-            ),
-            FilterChip(
-                name: "Statues",
-                icon: "figure.stand",
-                synonyms: "statues, sculptures, monuments, effigies, figures",
-                nameIndex: "",
-                filter: "",
-                children: [],
-                available: false,
-                order: 4
-            ),
-            FilterChip(
-                name: "Relationships",
-                icon: "heart.fill",
-                synonyms: "relationships, connections, bonds, associations, ties",
-                nameIndex: "",
-                filter: "",
-                children: [],
-                available: false,
-                order: 5
-            ),
-            FilterChip(
-                name: "Emotions",
-                icon: "face.smiling",
-                synonyms: "emotions, feelings, sentiments, moods, affects",
-                nameIndex: "",
-                filter: "",
-                children: [],
-                available: false,
-                order: 6
-            )
-        ],
+        children: [],
+        available: true,
         order: 14
     )
 ]

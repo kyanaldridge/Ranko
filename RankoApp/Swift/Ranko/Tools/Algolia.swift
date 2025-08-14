@@ -68,6 +68,7 @@ class AlgoliaAddRecords<T: Decodable> {
         var algoliaQuery = Query(query)
         algoliaQuery.offset = offset
         algoliaQuery.length = length
+        algoliaQuery.analytics = false
         if let filters = AlgoliaFilters {
             algoliaQuery.filters = filters
         }

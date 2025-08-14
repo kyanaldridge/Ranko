@@ -159,8 +159,9 @@ struct TrayView: View {
         user_data.userProfilePicturePath = "default-profilePicture.jpg"
 
         // 1) Build Group List Codable Struct
-        let listRecord = RankoUserInformation(
-            objectID: Auth.auth().currentUser!.uid,
+        
+        
+        let rankoUserDetails = RankoUserDetails(
             UserID: Auth.auth().currentUser!.uid,
             UserName: user_data.username,
             UserDescription: "",
@@ -169,13 +170,26 @@ struct TrayView: View {
             UserJoined: rankoDateTime,
             UserYear: user_data.userYear,
             UserFoundUs: selectedAction!.title,
-            UserSignInMethod: user_data.userLoginService,
+            UserSignInMethod: user_data.userLoginService
+        )
+        
+        let rankoUserProfilePicture = RankoUserProfilePicture(
             UserProfilePicturePath: user_data.userProfilePicturePath,
             UserProfilePictureModified: rankoDateTime,
-            UserProfilePictureFile: "image",
+            UserProfilePictureFile: "image"
+        )
+        
+        let rankoUserStats = RankoUserStats(
             UserRankoCount: 0,
             UserFollowerCount: 0,
             UserFollowingCount: 0,
+        )
+        
+        let userRecord = RankoUserInformation(
+            objectID: Auth.auth().currentUser!.uid,
+            userDetails: rankoUserDetails,
+            userProfilePicture: rankoUserProfilePicture,
+            userStats: rankoUserStats
         )
         
         let userDetails: [String: Any] = [
@@ -233,7 +247,7 @@ struct TrayView: View {
         let usersIndex = client.index(withName: "RankoUsers")
 
         group.enter()
-        usersIndex.saveObject(listRecord) { result in
+        usersIndex.saveObject(userRecord) { result in
             switch result {
             case .success:
                 print("✅ User information uploaded to Algolia")

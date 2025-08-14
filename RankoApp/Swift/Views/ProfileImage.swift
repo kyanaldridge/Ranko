@@ -80,104 +80,117 @@ struct ProfileIconView: View {
 }
 
 final class ProfileImageService: ObservableObject {
-    @StateObject private var user_data = UserInformation.shared
-    
     @Published var image: UIImage?
     @Published var isLoading = false
-    
+
     private var cancellables = Set<AnyCancellable>()
-    private let userID: String = UserInformation.shared.userID
-    
-    init() {
-        // Start from cache
-        image = loadCachedImage()
-        
-        // Whenever the stored path changes, re-download
+    private let userData: UserInformation   // hold a normal reference, not @StateObject
+
+    // Convenience accessor
+    private var userID: String { userData.userID }
+
+    init(userData: UserInformation = .shared) {
+        self.userData = userData
+
+        // 1) Start from cache
+        self.image = loadCachedImage()
+
+        // 2) Re-download when UserDefaults changes (e.g., path/modified updated)
         NotificationCenter.default
-              .publisher(for: UserDefaults.didChangeNotification)
-              .sink { [weak self] _ in
+            .publisher(for: UserDefaults.didChangeNotification)
+            .sink { [weak self] _ in
                 self?.downloadAndCache()
-              }
-              .store(in: &cancellables)
-        
-        // Perform initial download if necessary
+            }
+            .store(in: &cancellables)
+
+        // 3) Initial download if needed
         downloadAndCache()
     }
-    
+
     func upload(_ newImage: UIImage) {
         guard let data = newImage.jpegData(compressionQuality: 0.8) else { return }
         isLoading = true
-        
+
         let fileName = "\(userID).jpg"
+        
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
         let storageRef = Storage.storage()
             .reference()
             .child("profilePictures")
             .child(fileName)
-        
-        // 1️⃣ upload
-        storageRef.putData(data, metadata: nil) { [weak self] _, err in
+
+        storageRef.putData(data, metadata: metadata) { [weak self] _, err in
             guard let self = self else { return }
-            
+
             if let e = err {
                 print("Upload error:", e)
                 DispatchQueue.main.async { self.isLoading = false }
                 return
             }
-            
-            // 2️⃣ write new path & timestamp
+
+            // Update the stored path & timestamp so observers refresh
             DispatchQueue.main.async {
-                self.user_data.userProfilePicturePath = fileName
-                self.user_data.userProfilePictureModified = Self.timestampString()
+                self.userData.userProfilePicturePath = fileName
+                self.userData.userProfilePictureModified = Self.timestampString()
             }
         }
     }
-    
+
     private func downloadAndCache() {
-        guard !user_data.userProfilePicturePath.isEmpty else { return }
-        
+        let path = userData.userProfilePicturePath
+        guard !path.isEmpty else { return }
+
         DispatchQueue.main.async { [weak self] in
             self?.isLoading = true
         }
-        
+
         let storageRef = Storage.storage()
             .reference()
             .child("profilePictures")
-            .child(user_data.userProfilePicturePath)
-        
+            .child(path)
+
         storageRef.getData(maxSize: 2 * 1024 * 1024) { [weak self] data, error in
+            guard let self = self else { return }
+
             DispatchQueue.global(qos: .userInitiated).async {
                 var newImage: UIImage? = nil
+
                 if let d = data, let ui = UIImage(data: d) {
                     newImage = ui
                     do {
-                        try d.write(to: Self.diskURL())
+                        try d.write(to: self.diskURL())
                     } catch {
                         print("Cache write failed:", error)
                     }
+                } else if let error = error {
+                    print("Download error:", error)
                 }
-                
-                DispatchQueue.main.async { [weak self] in
-                    self?.image = newImage
-                    self?.isLoading = false
+
+                DispatchQueue.main.async {
+                    self.image = newImage
+                    self.isLoading = false
                 }
             }
         }
     }
-    
+
     private func loadCachedImage() -> UIImage? {
-        let url = Self.diskURL()
+        let url = diskURL()
         guard let d = try? Data(contentsOf: url),
               let ui = UIImage(data: d) else { return nil }
         return ui
     }
-    
-    private static func diskURL() -> URL {
+
+    // Now an instance method so it can use self.userID
+    private func diskURL() -> URL {
         let filename = "cached_profile_image.jpg"
         return FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(filename)
     }
-    
+
     private static func timestampString() -> String {
         let fmt = DateFormatter()
         fmt.locale = .init(identifier: "en_US_POSIX")
@@ -186,6 +199,8 @@ final class ProfileImageService: ObservableObject {
         return fmt.string(from: Date())
     }
 }
+
+
 struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var imageService: ProfileImageService
@@ -465,7 +480,8 @@ struct EditProfileView: View {
                                     .font(.system(size: 15, weight: .heavy))
                                     .foregroundColor(Color(hex: 0x857467))
                                     .padding(.trailing, 1)
-                                TextField("Enter name", text: $name)
+                                TextField("Enter name", text: $name, axis: .vertical)
+                                    .lineLimit(1...2)
                                     .autocorrectionDisabled(true)
                                     .font(.system(size: 15, weight: .heavy))
                                     .foregroundColor(Color(hex: 0x857467))
@@ -495,25 +511,29 @@ struct EditProfileView: View {
                                 .font(.system(size: 14, weight: .heavy))
                                 .foregroundColor(Color(hex: 0x857467))
                                 .padding(.leading, 6)
-                            HStack {
+                            HStack(alignment: .top) {
                                 Image(systemName: "pencil.line")
                                     .font(.system(size: 15, weight: .heavy))
                                     .foregroundColor(Color(hex: 0x857467))
                                     .padding(.trailing, 1)
-                                TextField("Enter Description", text: $bioText)
+                                TextField("Enter Description", text: $bioText, axis: .vertical)
+                                    .lineLimit(3...5)
                                     .autocorrectionDisabled(true)
                                     .font(.system(size: 15, weight: .heavy))
                                     .foregroundColor(Color(hex: 0x857467))
                                     .onChange(of: bioText) { _, newValue in
-                                        if newValue.count > 30 {
-                                            bioText = String(newValue.prefix(30))
+                                        if newValue.count > 250 {
+                                            bioText = String(newValue.prefix(250))
                                         }
                                     }
                                 Spacer()
-                                Text("\(bioText.count)/50")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                    .padding(.top, 6)
+                                VStack {
+                                    Spacer()
+                                    Text("\(bioText.count)/250")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .padding(.top, 6)
+                                }
                             }
                             .padding(8)
                             .overlay(

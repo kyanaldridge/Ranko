@@ -582,169 +582,202 @@ struct DefaultListEditDetails: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Header
-            Text("Edit Details")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(Color(hex: 0x6D400F))
-                .padding(.top, 50)
-            
-            // Ranko Name Field
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Ranko Name")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Color(hex: 0x925611))
-                    Text("*")
-                        .foregroundColor(.red)
-                        .font(.system(size: 11, weight: .bold))
-                }
-                HStack {
-                    Image(systemName: "trophy.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(rankoName.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
-                    TextField("", text: $rankoName, prompt: Text("Top 15 Countries").foregroundColor(Color(hex: 0xEDB26E)))
-                        .onChange(of: rankoName) {
-                            if rankoName.count > 50 {
-                                rankoName = String(rankoName.prefix(50))
-                            }
-                        }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(rankoName.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
-                    Spacer()
-                    Text("\(rankoName.count)/50")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(rankoName.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
-                }
-                .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: 0xFFFBF2))
-                        .stroke(Color(hex: 0x925611).opacity(0.4), lineWidth: 1)
-                )
-            }
-            .modifier(ShakeEffect(animatableData: rankoNameShake))
-            
-            // Description Field
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Description, if any")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Color(hex: 0x925611))
-                HStack {
-                    Image(systemName: "pencil.and.list.clipboard")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(description.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
-                    TextField("", text: $description, prompt: Text("my favourite countries to visit").foregroundColor(Color(hex: 0xEDB26E)))
-                        .onChange(of: description) {
-                            if description.count > 100 {
-                                description = String(description.prefix(100))
-                            }
-                        }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(description.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
-                    Spacer()
-                    Text("\(description.count)/100")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(description.isEmpty ? Color(hex: 0xEDB26E) : Color(hex: 0xC28947))
-                }
-                .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: 0xFFFBF2))
-                        .stroke(Color(hex: 0x925611).opacity(0.4), lineWidth: 1)
-                )
-            }
-            
-            // Category & Privacy Toggle
-            HStack(spacing: 12) {
+        NavigationView {
+            VStack(spacing: 16) {
+                // Ranko Name Field
                 VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 3) {
+                        Text("Ranko Name")
+                            .font(.system(size: 14, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x857467))
+                            .padding(.leading, 6)
+                        Text("*")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(hex: 0x4C2C33))
+                    }
                     HStack {
-                        Text("Category")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(Color(hex: 0x925611))
-                        Text("*").foregroundColor(.red)
-                    }
-                    Button {
-                        showCategoryPicker = true
-                    } label: {
-                        HStack {
-                            if let chip = selectedCategoryChip {
-                                Image(systemName: chip.icon)
-                                Text(chip.name).bold()
-                            } else {
-                                Image(systemName: "square.grid.2x2.fill")
-                                Text("Select Category")
-                                    .bold()
-                                    .foregroundColor(.gray)
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x857467))
+                            .padding(.trailing, 1)
+                        TextField("Enter name", text: $rankoName, axis: .vertical)
+                            .lineLimit(1...2)
+                            .autocorrectionDisabled(true)
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x857467))
+                            .onChange(of: rankoName) { _, newValue in
+                                if newValue.count > 30 {
+                                    rankoName = String(newValue.prefix(30))
+                                }
                             }
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                        }
-                        .padding(8)
-                        .foregroundColor(.white)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(
-                                    (categoryChipIconColors[selectedCategoryChip?.name ?? ""] ?? .gray)
-                                )
-                        )
+                        Spacer()
+                        Text("\(rankoName.count)/30")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 6)
                     }
-                    .modifier(ShakeEffect(animatableData: categoryShake))
+                    .padding(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .foregroundColor(Color.gray.opacity(0.08))
+                            .allowsHitTesting(false)
+                    )
                 }
-                .layoutPriority(2)
+                .padding(.top, 30)
+                .modifier(ShakeEffect(animatableData: rankoNameShake))
                 
-                VStack(alignment: .center, spacing: 4) {
-                    Text("Private")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Color(hex: 0x925611))
-                    Toggle("", isOn: $isPrivate)
-                        .tint(.orange)
-                        .padding(.top, 6)
+                // Description Field
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Description")
+                        .font(.system(size: 14, weight: .heavy))
+                        .foregroundColor(Color(hex: 0x857467))
+                        .padding(.leading, 6)
+                    HStack(alignment: .top) {
+                        Image(systemName: "pencil.line")
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x857467))
+                            .padding(.trailing, 1)
+                        TextField("Enter Description", text: $description, axis: .vertical)
+                            .lineLimit(3...5)
+                            .autocorrectionDisabled(true)
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x857467))
+                            .onChange(of: description) { _, newValue in
+                                if newValue.count > 250 {
+                                    description = String(newValue.prefix(250))
+                                }
+                            }
+                        Spacer()
+                        Text("\(description.count)/250")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 6)
+                    }
+                    .padding(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .foregroundColor(Color.gray.opacity(0.08))
+                            .allowsHitTesting(false)
+                    )
                 }
-                .layoutPriority(1)
-            }
-            .padding(.bottom, 10)
-            
-            // Action Buttons
-            HStack(spacing: 12) {
-                Button {
-                    dismiss()
-                } label: {
-                    Text("Cancel")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color(hex: 0xFFFFFF))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .foregroundColor(.white)
-                .background(Color(hex: 0xA26A2A), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.top, 10)
                 
-                Button {
-                    if isValid {
-                        onSave(rankoName, description, isPrivate, selectedCategoryChip)
+                // Category & Privacy Toggle
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 3) {
+                            Text("Category")
+                                .font(.system(size: 14, weight: .heavy))
+                                .foregroundColor(Color(hex: 0x857467))
+                            Text("*")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(Color(hex: 0x4C2C33))
+                        }
+                        .padding(.leading, 6)
+                        Button {
+                            showCategoryPicker = true
+                        } label: {
+                            HStack {
+                                if let chip = selectedCategoryChip {
+                                    Image(systemName: chip.icon)
+                                    Text(chip.name).bold()
+                                } else {
+                                    Image(systemName: "square.grid.2x2.fill")
+                                    Text("Select Category")
+                                        .bold()
+                                        .foregroundColor(.gray)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.down")
+                            }
+                            .padding(8)
+                            .foregroundColor(.white)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(
+                                        (categoryChipIconColors[selectedCategoryChip?.name ?? ""] ?? .gray)
+                                    )
+                            )
+                        }
+                        .modifier(ShakeEffect(animatableData: categoryShake))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Privacy")
+                            .font(.system(size: 14, weight: .heavy))
+                            .foregroundColor(Color(hex: 0x857467))
+                            .padding(.leading, 6)
+                        Button {
+                            withAnimation {
+                                isPrivate.toggle()
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: isPrivate ? "lock.fill" : "globe")
+                                Text(isPrivate ? "Private" : "Public").bold()
+                            }
+                            .padding(8)
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(isPrivate ? Color(hex: 0xFE8C34) : Color(hex: 0x42ADFF))
+                            )
+                        }
+                        .contentTransition(.symbolEffect(.replace))
+                    }
+                }
+                .padding(.bottom, 10)
+                
+                // Action Buttons
+                HStack(spacing: 12) {
+                    Button {
                         dismiss()
-                    } else {
-                        if rankoName.isEmpty {
-                            withAnimation { rankoNameShake += 1 }
-                        }
-                        if selectedCategoryChip == nil {
-                            withAnimation { categoryShake += 1 }
-                        }
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
                     }
-                } label: {
-                    Text("Save Changes")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color(hex: 0xFFFFFF))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .foregroundColor(.white)
+                    .background(Color(hex: 0xA26A2A), in: RoundedRectangle(cornerRadius: 8))
+                    
+                    Button {
+                        if isValid {
+                            onSave(rankoName, description, isPrivate, selectedCategoryChip)
+                            dismiss()
+                        } else {
+                            if rankoName.isEmpty {
+                                withAnimation { rankoNameShake += 1 }
+                            }
+                            if selectedCategoryChip == nil {
+                                withAnimation { categoryShake += 1 }
+                            }
+                        }
+                    } label: {
+                        Text("Save Changes")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color(hex: 0x6D400F), in: RoundedRectangle(cornerRadius: 8))
+                    .opacity(isValid ? 1 : 0.6)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(Color(hex: 0x6D400F), in: RoundedRectangle(cornerRadius: 8))
-                .opacity(isValid ? 1 : 0.6)
+                
+                Spacer(minLength: 0)
             }
-            
-            Spacer(minLength: 0)
+            .toolbar {
+                ToolbarItemGroup(placement: .principal) {
+                    Text("Edit Ranko Details")
+                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .foregroundColor(Color(hex: 0x857467))
+                }
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
         }
-        .padding(.horizontal, 28)
+        .padding(.horizontal, 22)
         // Category picker sheet
         .sheet(isPresented: $showCategoryPicker) {
             CategoryPickerView(
@@ -754,128 +787,177 @@ struct DefaultListEditDetails: View {
             )
         }
         // Use exact height (clamped to a minimum) for our sheet
-        .presentationDetents([.height(350)])
+        .presentationDetents([.height(400)])
         .presentationDragIndicator(.hidden)
         .presentationBackground(Color(hex: 0xFFF5E1))
         .interactiveDismissDisabled(true)
     }
 }
 
+struct TextView: UIViewRepresentable {
+    
+    typealias UIViewType = UITextView
+    var configuration = { (view: UIViewType) in }
+    
+    func makeUIView(context: UIViewRepresentableContext<Self>) -> UIViewType {
+        UIViewType()
+    }
+    
+    func updateUIView(_ uiView: UIViewType, context: UIViewRepresentableContext<Self>) {
+        configuration(uiView)
+    }
+}
 
 struct DefaultListReRank: View {
     @Environment(\.dismiss) private var dismiss
 
-    /// The original items, injected at init
+    // Immutable source passed in
     private let originalItems: [RankoItem]
-    /// Called when the user taps “Save”
     private let onSave: ([RankoItem]) -> Void
 
-    /// A mutable copy we reorder in the UI
+    // Mutable working copy that the List will reorder
     @State private var draftItems: [RankoItem]
+    // Used only to trigger/propagate animation when order changes
+    @State private var reorderTick: Int = 0
 
-    init(
-        items: [RankoItem],
-        onSave: @escaping ([RankoItem]) -> Void
-    ) {
+    init(items: [RankoItem], onSave: @escaping ([RankoItem]) -> Void) {
         self.originalItems = items
         self.onSave = onSave
-        // seed the draft with the passed-in order
         _draftItems = State(initialValue: items)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // The re-orderable list
-            List {
-                // Enumerate draftItems so we can display the current index + 1
-                ForEach(Array(draftItems.enumerated()), id: \.element.id) { index, item in
-                    HStack(spacing: 2) {
-                        // Badge 1: current index in the list
-                        Group {
-                            Image(systemName: "\(index + 1).circle.fill")
-                                .foregroundColor(.gray)
-                                .font(.body)
-                                .padding(3)
-                        }
-                        .font(.title2)
-
-                        // Badge 2: the item.rank value
-                        Group {
-                            switch item.rank {
-                            default:
-                                let badgeColor: Color = {
-                                    if item.rank < (index + 1) {
-                                        return .red
-                                    } else if item.rank > (index + 1) {
-                                        return .green
-                                    } else {
-                                        return Color(red: 1, green: 0.65, blue: 0)
-                                    }
-                                }()
-                                Image(systemName: "\(item.rank).circle.fill")
-                                    .foregroundColor(badgeColor)
-                                    .font(.body)
-                                    .padding(3)
-                            }
-                        }
-                        .font(.title2)
-
-                        // Item info
-                        HStack {
-                            HStack {
-                                Text(item.itemName).fontWeight(.bold)
-                                Text("-").foregroundColor(.gray)
-                                Text(item.itemDescription).foregroundColor(.gray)
-                            }
-                                .font(.caption)
-                                .lineLimit(1)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .onMove { indices, newOffset in
-                    draftItems.move(fromOffsets: indices, toOffset: newOffset)
-                }
+        NavigationStack {
+            // iOS 17+: List with a *binding* to your array
+            List($draftItems, editActions: .move) { $item in
+                // Find the current index for badges/logic
+                let index = draftItems.firstIndex(where: { $0.id == item.id }) ?? 0
+                row(item: $item, index: index)
             }
-            // Put the list into “edit” mode so drag handles appear
+            .listRowSeparator(.hidden)
+            .listRowSpacing(5)
+            .listRowBackground(
+                Capsule()
+                    .stroke(Color(hex: 0xFFEBC2), lineWidth: 2)
+                    .shadow(color: Color(hex: 0xFFEBC2), radius: 12)
+            )
+            .listItemTint(Color(hex: 0xFFF9EE))
             .environment(\.editMode, .constant(.active))
-
-            Divider()
-
-            // Cancel / Save buttons
-            HStack(spacing: 12) {
-                
-                Button {
-                    print("Cancel tapped")
-                    onSave(originalItems)
-                    dismiss()
-                } label: {
-                    Text("Cancel")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundColor(.white)
-                        .fontWeight(.bold)
-                }
-                .background(Color.red.gradient, in: RoundedRectangle(cornerRadius: 8))
-                
-                Button {
-                    for idx in draftItems.indices {
-                        draftItems[idx].rank = idx + 1
+            .scrollContentBackground(.hidden)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") {
+                        for i in draftItems.indices { draftItems[i].rank = i + 1 }
+                        onSave(draftItems)
+                        dismiss()
                     }
-                    onSave(draftItems)
-                    dismiss()
-                } label: {
-                    Text("Save Changes")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundColor(.white)
-                        .fontWeight(.bold)
                 }
-                .background(Color.orange.gradient, in: RoundedRectangle(cornerRadius: 8))
+                ToolbarItemGroup(placement: .principal) {
+                    Text("Edit Order")
+                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .foregroundColor(Color(hex: 0x857467))
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", systemImage: "xmark") {
+                        onSave(originalItems) // discard changes
+                        dismiss()
+                    }
+                }
             }
-            .padding()
         }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .presentationBackground(Color(hex: 0xFFF5E1))
         .interactiveDismissDisabled(true)
+    }
+
+    // MARK: - Row
+    private func row(item: Binding<RankoItem>, index: Int) -> some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 5) {
+                // Badge 1: current index (SFSymbols numbered circles exist up to ~50)
+                if index == 0 {
+                    Image(systemName: "1.circle.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color(red: 1, green: 0.65, blue: 0))
+                } else if index == 1 {
+                    Image(systemName: "2.circle.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color(red: 0.635, green: 0.7, blue: 0.698))
+                } else if index == 2 {
+                    Image(systemName: "3.circle.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color(red: 0.56, green: 0.33, blue: 0))
+                } else {
+                    Image(systemName: "\(min(index + 1, 50)).circle.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color(hex: 0xFF9864))
+                }
+
+                // Badge 2: compare original rank to current position (animated)
+                let currentRank = item.wrappedValue.rank
+                let delta = currentRank - (index + 1)
+
+                Group {
+                    if delta != 0 {
+                        let goingUp = delta > 0
+                        HStack(spacing: 2) {
+                            Image(systemName: goingUp ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                                .font(.system(size: 12, weight: .black))
+                                .foregroundStyle(goingUp ? .green : .red)
+                            Text(goingUp ? "\(delta)" : "\(delta * -1)")
+                                .font(.system(size: 15, weight: .black))
+                                .foregroundStyle(goingUp ? .green : .red)
+                        }
+                    }
+                }
+            }
+
+            // Item info
+            HStack(spacing: 4) {
+                AsyncImage(url: URL(string: item.wrappedValue.itemImage)) { phase in
+                    switch phase {
+                    case .empty:
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(UIColor.systemGray5))
+                                .frame(width: 35, height: 35)
+                            Image(systemName: "photo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 16, height: 16)
+                                .foregroundColor(.gray)
+                        }
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 35, height: 35)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    case .failure:
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(UIColor.systemGray5))
+                                .frame(width: 35, height: 35)
+                            Image(systemName: "xmark.octagon")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 16, height: 16)
+                                .foregroundColor(.gray)
+                        }
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+                .padding(.trailing, 8)
+
+                Text("\(item.wrappedValue.itemName)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Color(hex: 0x6D400F))
+            }
+            .lineLimit(1)
+        }
+        .padding(.vertical, 0)
     }
 }
 
