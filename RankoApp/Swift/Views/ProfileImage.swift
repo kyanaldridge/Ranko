@@ -571,8 +571,6 @@ struct EditProfileView: View {
                                                     localSelectedTags.append(tag)
                                                 }
                                             }
-                                            // Always write back to user_data.userInterests in AppStorage
-                                            user_data.userInterests = localSelectedTags.joined(separator: ", ")
                                         }
                                         .opacity(
                                             // Dim it if it's not already selected and we've already picked 3
