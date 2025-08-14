@@ -836,12 +836,8 @@ struct DefaultListReRank: View {
             }
             .listRowSeparator(.hidden)
             .listRowSpacing(5)
-            .listRowBackground(
-                Capsule()
-                    .stroke(Color(hex: 0xFFEBC2), lineWidth: 2)
-                    .shadow(color: Color(hex: 0xFFEBC2), radius: 12)
-            )
-            .listItemTint(Color(hex: 0xFFF9EE))
+            .listRowInsets(.init(top: 0, leading: 20, bottom: 0, trailing: 20))
+            .listSectionMargins(.horizontal, 0)
             .environment(\.editMode, .constant(.active))
             .scrollContentBackground(.hidden)
             .toolbar {
@@ -864,9 +860,12 @@ struct DefaultListReRank: View {
                     }
                 }
             }
+            .padding(.top, 50)
+            .padding(.horizontal, -10)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .ignoresSafeArea()
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
         .presentationBackground(Color(hex: 0xFFF5E1))
         .interactiveDismissDisabled(true)
     }
@@ -903,10 +902,10 @@ struct DefaultListReRank: View {
                         let goingUp = delta > 0
                         HStack(spacing: 2) {
                             Image(systemName: goingUp ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                                .font(.system(size: 12, weight: .black))
+                                .font(.system(size: 9, weight: .black))
                                 .foregroundStyle(goingUp ? .green : .red)
                             Text(goingUp ? "\(delta)" : "\(delta * -1)")
-                                .font(.system(size: 15, weight: .black))
+                                .font(.system(size: 9, weight: .black))
                                 .foregroundStyle(goingUp ? .green : .red)
                         }
                     }
@@ -957,7 +956,11 @@ struct DefaultListReRank: View {
             }
             .lineLimit(1)
         }
-        .padding(.vertical, 0)
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(hex: 0xFFF9EE))
+        )
+        .padding(.vertical, -8)
     }
 }
 

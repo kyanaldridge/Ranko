@@ -1313,10 +1313,10 @@ struct PreferencesView: View {
                         
                         VStack(alignment: .leading) {
                             HStack {
-                                Image(systemName: "party.popper.fill")
+                                Image(systemName: "capslock.fill")
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundColor(Color(hex: 0x857467))
-                                Text("Mini Game Events")
+                                Text("Autocapitalise Ranko Titles")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(Color(hex: 0x857467))
                                 Spacer()
@@ -1324,7 +1324,67 @@ struct PreferencesView: View {
                                     .tint(Color(hex: 0x857467))
                                     .labelsHidden()
                             }
-                            Text("Receive alerts for upcoming in-app mini game events.")
+                            Text("Enable Ranko Titles to have automatic proper casing.")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                .padding(.top, 6)
+                        }
+                        .padding(20)
+                        
+                        Divider()
+                            .padding(.horizontal, 30)
+                        
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Image(systemName: "waveform.path")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Text("Haptics")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Spacer()
+                                Toggle("", isOn: $user_data.preferencesHaptics)
+                                    .tint(Color(hex: 0x857467))
+                                    .labelsHidden()
+                            }
+                            Text("Receive haptic feedback.")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                .padding(.top, 6)
+                        }
+                        .padding(20)
+                        
+                        Divider()
+                            .padding(.horizontal, 30)
+                        
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Image(systemName: "waveform")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Text("Haptic Intensity")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(hex: 0x857467))
+                                Spacer()
+                                Text(user_data.preferencesHapticIntensity == 1 ? "Low" : (user_data.preferencesHapticIntensity == 2 ? "Normal" : (user_data.preferencesHapticIntensity == 3 ? "High" : "Very High")))
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(hex: 0x857467))
+                            }
+                            Slider(
+                                value: Binding(
+                                    get: { Double(user_data.preferencesHapticIntensity) },
+                                    set: { newValue in
+                                        let newIndex = Int(newValue.rounded())
+                                        user_data.preferencesHapticIntensity = newIndex
+                                    }
+                                ),
+                                in: 1...4,
+                                step: 1
+                            )
+                            .sensoryFeedback(.impact(intensity: Double(user_data.preferencesHapticIntensity / 2)), trigger: user_data.preferencesHapticIntensity)
+                            .padding(.top, 6)
+                            
+                            Text("Customise the intensity of haptic feedback.")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(Color(hex: 0x857467).opacity(0.7))
                                 .padding(.top, 6)
@@ -1353,30 +1413,214 @@ struct PrivacySecurityView: View {
             Color(hex: 0xFFF5E2)
                 .ignoresSafeArea()
             
-            VStack(alignment: .leading, spacing: 20) {
-                // Title
-                HStack {
-                    Text("Privacy & Security")
-                        .font(.system(size: 32, weight: .black))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Title
+                    HStack {
+                        Text("Privacy & Security")
+                            .font(.system(size: 32, weight: .black))
+                            .foregroundColor(Color(hex: 0x857467))
+                        Spacer()
+                        Button { dismiss() } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 16, weight: .black))
+                                .frame(width: 30, height: 30)
+                        }
                         .foregroundColor(Color(hex: 0x857467))
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .black))
-                            .frame(width: 30, height: 30)
+                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                             startPoint: .top,
+                                             endPoint: .bottom
+                                            ))
+                        .buttonStyle(.glassProminent)
                     }
-                    .foregroundColor(Color(hex: 0x857467))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
-                    .buttonStyle(.glassProminent)
+                    .padding(.horizontal, 25)
+                    .padding(.top, 40)
+                    
+                    Divider()
+                    
+                    VStack {
+                        VStack(spacing: 0) {
+                            VStack(alignment: .leading) {
+                                HStack {
+                                    Image(systemName: "key.fill")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Text("Private Account")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                    Toggle("", isOn: $user_data.privacyPrivateAccount)
+                                        .tint(Color(hex: 0x857467))
+                                        .labelsHidden()
+                                }
+                                Text("Make your account fully private.")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .padding(.top, 6)
+                            }
+                            .padding(20)
+                            
+                            Divider()
+                                .padding(.horizontal, 30)
+                            
+                            VStack(alignment: .leading) {
+                                HStack {
+                                    Image(systemName: "figure.2.arms.open")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Text("Allow Friend Requests")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                    Toggle("", isOn: $user_data.privacyAllowFriendRequests)
+                                        .tint(Color(hex: 0x857467))
+                                        .labelsHidden()
+                                        .disabled(user_data.privacyPrivateAccount)
+                                }
+                                Text("Allow friend requests from other users.")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .padding(.top, 6)
+                            }
+                            .padding(20)
+                            
+                            Divider()
+                                .padding(.horizontal, 30)
+                            
+                            VStack(alignment: .leading) {
+                                HStack {
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Text("Show Featured Lists Publicly")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                    Toggle("", isOn: $user_data.privacyDisplayFeaturedLists)
+                                        .tint(Color(hex: 0x857467))
+                                        .labelsHidden()
+                                        .disabled(user_data.privacyPrivateAccount)
+                                }
+                                Text("Show all your featured lists to people who visit your profile.")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .padding(.top, 6)
+                            }
+                            .padding(20)
+                            
+                            Divider()
+                                .padding(.horizontal, 30)
+                            
+                            VStack(alignment: .leading) {
+                                HStack {
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Text("Display Username Publicly")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                    Toggle("", isOn: $user_data.privacyDisplayUsername)
+                                        .tint(Color(hex: 0x857467))
+                                        .labelsHidden()
+                                        .disabled(user_data.privacyPrivateAccount)
+                                }
+                                Text("Display your username on leaderboards and to people who visit your profile.")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .padding(.top, 6)
+                            }
+                            .padding(20)
+                            
+                            Divider()
+                                .padding(.horizontal, 30)
+                            
+                            VStack(alignment: .leading) {
+                                HStack {
+                                    Image(systemName: "text.word.spacing")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Text("Display Description Publicly")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                    Toggle("", isOn: $user_data.privacyDisplayBio)
+                                        .tint(Color(hex: 0x857467))
+                                        .labelsHidden()
+                                        .disabled(user_data.privacyPrivateAccount)
+                                }
+                                Text("Display your bio to people who visit your profile.")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .padding(.top, 6)
+                            }
+                            .padding(20)
+                            
+                            Divider()
+                                .padding(.horizontal, 30)
+                            
+                            VStack(alignment: .leading) {
+                                HStack {
+                                    Image(systemName: "person.crop.square")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Text("Display Profile Picture Publicly")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                    Toggle("", isOn: $user_data.privacyDisplayProfilePicture)
+                                        .tint(Color(hex: 0x857467))
+                                        .labelsHidden()
+                                        .disabled(user_data.privacyPrivateAccount)
+                                }
+                                Text("Display your profile picture on leaderboards and to people who visit your profile.")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .padding(.top, 6)
+                            }
+                            .padding(20)
+                            
+                            Divider()
+                                .padding(.horizontal, 30)
+                            
+                            VStack(alignment: .leading) {
+                                HStack {
+                                    Image(systemName: "square.fill.on.square.fill")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Text("Allow Users to Clone Your Rankos")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Color(hex: 0x857467))
+                                    Spacer()
+                                    Toggle("", isOn: $user_data.privacyAllowClones)
+                                        .tint(Color(hex: 0x857467))
+                                        .labelsHidden()
+                                        .disabled(user_data.privacyPrivateAccount)
+                                }
+                                Text("Allow users when they visit your profile to clone your rankos to create their own versions.")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .padding(.top, 6)
+                            }
+                            .padding(20)
+                        }
+                        .background(
+                            RoundedRectangle(cornerRadius: 24)
+                                .fill(Color(hex: 0xFFFCF2))
+                                .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                        )
+                        .padding(.horizontal, 25)
+                    }
+                    Spacer()
                 }
-                .padding(.horizontal, 25)
-                .padding(.top, 40)
-                
-                Divider()
-                Spacer()
+            }
+            .onChange(of: user_data.privacyPrivateAccount) {
+                user_data.privacyAllowFriendRequests = true
+                user_data.privacyDisplayFeaturedLists = true
+                user_data.privacyDisplayUsername = true
+                user_data.privacyDisplayBio = true
+                user_data.privacyDisplayProfilePicture = true
+                user_data.privacyAllowClones = true
             }
         }
     }
@@ -1452,9 +1696,67 @@ struct DataStorageView: View {
                 .padding(.top, 40)
                 
                 Divider()
+                
+                Button {
+                    clearAllCache()
+                } label: {
+                    HStack(spacing: 10) {
+                        Spacer()
+                        Image(systemName: "")
+                            .font(.system(size: 19, weight: .heavy, design: .default))
+                            .foregroundColor(Color(hex: 0x857467))
+                        Text("Clear Cache")
+                            .font(.system(size: 17, weight: .heavy, design: .default))
+                            .foregroundColor(Color(hex: 0x857467))
+                        Spacer()
+                    }
+                    .padding(.vertical, 10)
+                }
+                .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                     startPoint: .top,
+                                     endPoint: .bottom
+                                    ))
+                .buttonStyle(.glassProminent)
+                .padding(.horizontal, 25)
+                
                 Spacer()
             }
         }
+    }
+    private func clearAllCache() {
+        // 1. Remove URLCache entries
+        let urlCache = URLCache.shared
+        urlCache.removeAllCachedResponses()
+        
+        // 2. Reset its capacities
+        URLCache.shared = URLCache(memoryCapacity: 0, diskCapacity: 0, diskPath: nil)
+        
+        // 3. Clear out everything in Caches directory
+        if let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            do {
+                let contents = try FileManager.default.contentsOfDirectory(at: cachesURL,
+                                                                           includingPropertiesForKeys: nil)
+                for file in contents {
+                    try FileManager.default.removeItem(at: file)
+                }
+            } catch {
+                print("⚠️ Failed to clear Caches directory:", error)
+            }
+        }
+        
+        // 4. Clear out the tmp directory
+        let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        do {
+            let tmpContents = try FileManager.default.contentsOfDirectory(at: tmpURL,
+                                                                          includingPropertiesForKeys: nil)
+            for file in tmpContents {
+                try FileManager.default.removeItem(at: file)
+            }
+        } catch {
+            print("⚠️ Failed to clear tmp directory:", error)
+        }
+        
+        print("✅ All caches cleared")
     }
 }
 

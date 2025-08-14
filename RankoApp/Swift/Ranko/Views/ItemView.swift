@@ -23,6 +23,7 @@ struct ItemDetailView: View {
     @State private var backgroundColor: Color = .white
     @State private var currentCenteredIndex: Int = 0
     @State private var selectedType: String = ItemDetailView.types.first!
+    @State private var hapticFeedback: Bool = false
     
     // Animation / layout constants
     private let pageWidth: CGFloat = 250
@@ -33,196 +34,137 @@ struct ItemDetailView: View {
     @Namespace private var tabNamespace
     private let carouselAnimation: Animation = .default
     
-    @State private var backgroundUIImage: UIImage? = nil
-    
     var body: some View {
         let flatItems = itemsArray.flatMap { $0 }
         let widthDiff = UIScreen.main.bounds.width - pageWidth
         
         NavigationView {
-            ZStack {
-                GeometryReader { geo in
-                    ZStack {
-                        if let bgImage = backgroundUIImage {
-                            Image(uiImage: bgImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: geo.size.width, height: geo.size.height)
-                                .clipped()
-                                .blur(radius: 35)
-                                .ignoresSafeArea()
-                        } else {
-                            Color.gray.opacity(0.15)
-                                .frame(width: geo.size.width, height: geo.size.height)
-                                .ignoresSafeArea()
-                        }
-                    }
-                }
-
-                VStack(spacing: 20) {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: spacing) {
-                            ForEach(0..<flatItems.count, id: \.self) { idx in
-                                let item = flatItems[idx]
-                                VStack(spacing: 12) {
-                                    VStack {
-                                        ZStack(alignment: .bottom) {
-                                            AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
-                                                switch phase {
-                                                case .empty:
-                                                    ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                                case .success(let image):
-                                                    image.resizable().scaledToFill()
-                                                        .frame(
-                                                            width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
-                                                            height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
-                                                        )
-                                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                                        .onAppear {
-                                                            if idx % items.count == currentCenteredIndex {
-                                                                Task {
-                                                                    if let uiImage = try? await loadUIImage(from: item.record.ItemImage) {
-                                                                        extractAndEnhanceColor(from: uiImage)
-                                                                        backgroundUIImage = uiImage
-                                                                    } else {
-                                                                        backgroundUIImage = nil
-                                                                    }
-                                                                }
+            VStack(spacing: 20) {
+                ScrollView(.horizontal) {
+                    HStack(spacing: spacing) {
+                        ForEach(0..<flatItems.count, id: \.self) { idx in
+                            let item = flatItems[idx]
+                            VStack(spacing: 12) {
+                                VStack {
+                                    ZStack(alignment: .bottom) {
+                                        AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
+                                            switch phase {
+                                            case .empty:
+                                                ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                            case .success(let image):
+                                                image.resizable().scaledToFill()
+                                                    .frame(
+                                                        width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
+                                                        height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
+                                                    )
+                                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            case .failure:
+                                                Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                            @unknown default:
+                                                EmptyView()
+                                            }
+                                        }
+                                        
+                                        VStack(spacing: 8) {
+                                            Text(item.record.ItemName)
+                                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                                .foregroundColor(Color(hex: 0x857467))
+                                                .multilineTextAlignment(.center)
+                                                .textCase(.uppercase)
+                                            
+                                            ScrollView(.horizontal, showsIndicators: false) {
+                                                HStack(spacing: 12) {
+                                                    ForEach(ItemDetailView.types, id: \.self) { type in
+                                                        Group {
+                                                            if type == "Camera" {
+                                                                Image(systemName: "camera")
+                                                                    .font(.system(size: 12, weight: .bold))
+                                                            } else {
+                                                                Text(type)
+                                                                    .font(.system(size: 10, weight: .bold))
                                                             }
                                                         }
-                                                case .failure:
-                                                    Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                                @unknown default:
-                                                    EmptyView()
-                                                }
-                                            }
-
-                                            VStack(spacing: 8) {
-                                                Text(item.record.ItemName)
-                                                    .font(.caption).fontWeight(.bold)
-                                                    .multilineTextAlignment(.center)
-                                                    .textCase(.uppercase)
-
-                                                ScrollView(.horizontal, showsIndicators: false) {
-                                                    HStack(spacing: 12) {
-                                                        ForEach(ItemDetailView.types, id: \.self) { type in
-                                                            Group {
-                                                                if type == "Camera" {
-                                                                    Image(systemName: "camera")
-                                                                        .font(.system(size: 12, weight: .bold))
-                                                                } else {
-                                                                    Text(type)
-                                                                        .font(.system(size: 10, weight: .bold))
-                                                                }
-                                                            }
-                                                            .padding(.vertical, 7)
-                                                            .foregroundColor(selectedType == type ? .orange : .gray.opacity(0.35))
-                                                            .contentShape(Rectangle())
-                                                            .onTapGesture {
-                                                                withAnimation(.snappy) {
-                                                                    selectedType = type
-                                                                }
+                                                        .padding(.vertical, 7)
+                                                        .foregroundColor(selectedType == type ? Color(hex: 0x857467) : .gray.opacity(0.35))
+                                                        .contentShape(Rectangle())
+                                                        .onTapGesture {
+                                                            withAnimation(.snappy) {
+                                                                selectedType = type
                                                             }
                                                         }
                                                     }
                                                 }
-                                                
-                                                if selectedType == "Camera" {
-                                                    
-                                                } else {
-                                                    Divider()
-                                                }
-                                                
-
-                                                tabContent(for: item)
                                             }
-                                            .padding()
-                                            .frame(width: pageWidth)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .fill(Color.white)
-                                                    .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
-                                            )
-                                            .offset(y: selectedType == "Camera" ? 120 : 90)
+                                            
+                                            if selectedType == "Camera" {
+                                                
+                                            } else {
+                                                Divider()
+                                            }
+                                            
+                                            
+                                            tabContent(for: item)
                                         }
-                                        .frame(width: pageWidth, height: pageHeight)
-                                        .padding(.bottom, 30)
+                                        .padding()
+                                        .frame(width: pageWidth)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .fill(Color.white)
+                                                .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
+                                        )
+                                        .offset(y: selectedType == "Camera" ? 120 : 90)
                                     }
-                                }
-                                .shadow(color: .black.opacity(0.2), radius: 15)
-                                .frame(width: pageWidth, height: pageHeight)
-                                .scrollTransition { content, phase in
-                                    content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
+                                    .frame(width: pageWidth, height: pageHeight)
+                                    .padding(.bottom, 30)
                                 }
                             }
-                        }.scrollTargetLayout()
-                            .padding(.bottom, 60)
-                    }
-                    
-                    .contentMargins(widthDiff / 2, for: .scrollContent)
-                    .scrollTargetBehavior(.viewAligned)
-                    .frame(height: pageHeight * 1.3)
-                    .scrollPosition(id: $scrollPosition, anchor: .center)
-                    .scrollIndicators(.hidden)
-                    .onAppear { setupCarousel() }
-                    .onChange(of: scrollPosition) { newPos, pos in
-                        guard let pos = pos else { return }
-                        currentCenteredIndex = pos % items.count
-                        handleWrap(at: pos)
-                        scheduleAutoScroll(from: pos)
-                        Task {
-                            let item = items[currentCenteredIndex]
-                            if let uiImage = try? await loadUIImage(from: item.record.ItemImage) {
-                                extractAndEnhanceColor(from: uiImage)
+                            .shadow(color: .black.opacity(0.2), radius: 15)
+                            .frame(width: pageWidth, height: pageHeight)
+                            .scrollTransition { content, phase in
+                                content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
                             }
                         }
-                    }
-                    
-                    
-                    HStack(spacing: 10) {
-                        ForEach(0..<items.count, id: \.self) { i in
-                            let isSelected = i == currentCenteredIndex
-                            let item = items[i]
-                            let rankColor: Color = {
-                                switch item.rank {
-                                case 1: return Color(red: 1, green: 0.65, blue: 0)
-                                case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
-                                case 3: return Color(red: 0.56, green: 0.33, blue: 0)
-                                default: return .white.opacity(0.8)
-                                }
-                            }()
-                            
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected ? rankColor : Color.white.opacity(0.3))
-                                    .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
-                                    .animation(.easeInOut(duration: 0.1), value: currentCenteredIndex)
-                                
-                                if isSelected {
-                                    if item.rank > 3 {
-                                        Text("\(item.rank)")
-                                            .font(.caption.bold())
-                                            .foregroundColor(.black)
-                                            .transition(.opacity.combined(with: .scale))
-                                            .animation(.bouncy(duration: 1), value: currentCenteredIndex)
-                                    } else {
-                                        Text("\(item.rank)")
-                                            .font(.caption.bold())
-                                            .foregroundColor(.white)
-                                            .transition(.opacity.combined(with: .scale))
-                                    }
-                                    
-                                }
-                            }
-                            .onTapGesture {
-                                withAnimation {
-                                    scrollPosition = i + items.count
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, 8)
+                    }.scrollTargetLayout()
+                        .padding(.bottom, 60)
                 }
+                
+                .contentMargins(widthDiff / 2, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned)
+                .frame(height: pageHeight * 1.3)
+                .scrollPosition(id: $scrollPosition, anchor: .center)
+                .scrollIndicators(.hidden)
+                .onAppear { setupCarousel() }
+                .onChange(of: scrollPosition) { newPos, pos in
+                    guard let pos = pos else { return }
+                    currentCenteredIndex = pos % items.count
+                    handleWrap(at: pos)
+                    scheduleAutoScroll(from: pos)
+                }
+                
+                if let pos = scrollPosition {
+                    Image(systemName: "\((pos % items.count) + 1).circle.fill")
+                        .font(.system(size: 25, weight: .regular, design: .default))
+                        .foregroundColor(Color(hex: 0x857467))
+                        .padding(.top, 40)
+                }
+                
+                Slider(
+                    value: Binding(
+                        get: { Double(currentCenteredIndex) },
+                        set: { newValue in
+                            let newIndex = Int(newValue.rounded())
+                            currentCenteredIndex = newIndex
+                            withAnimation {
+                                scrollPosition = newIndex + items.count // keep middle copy in focus
+                            }
+                        }
+                    ),
+                    in: 0...Double(items.count - 1),
+                    step: 1
+                )
+                .sensoryFeedback(.increase, trigger: scrollPosition)
+                .padding(.horizontal, 50)
+                .accentColor(Color(hex: 0x857467))
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -231,9 +173,6 @@ struct ItemDetailView: View {
                     }
                 }
             }
-            .onAppear(perform: {
-                
-            })
             .sheet(isPresented: $showEditSheet) {
                 // Determine which item is centered
                 let centerIdx = (scrollPosition ?? 0) % items.count
@@ -286,53 +225,6 @@ struct ItemDetailView: View {
         }
     }
     
-    // MARK: - Carousel Setup
-    private func extractColor(from uiImage: UIImage) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let uiColors = try uiImage.extractColors(numberOfColors: 1)
-                if let prominent = uiColors.first {
-                    let newColor = Color(prominent)
-                    DispatchQueue.main.async {
-                        withAnimation {
-                            backgroundColor = newColor
-                        }
-                    }
-                }
-            } catch {
-                print("Color extraction failed: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    private func extractAndEnhanceColor(from uiImage: UIImage) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let colors = try uiImage.extractColors(numberOfColors: 1)
-                if let dominant = colors.first {
-                    var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
-                    dominant.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-                    
-                    // Boost saturation and brightness
-                    let vibrant = UIColor(
-                        hue: hue,
-                        saturation: min(1.0, saturation * 1.5 + 0.2),
-                        brightness: min(1.0, brightness * 1.5 + 0.1),
-                        alpha: 1.0
-                    )
-                    
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            backgroundColor = Color(vibrant)
-                        }
-                    }
-                }
-            } catch {
-                print("Failed to extract colors: \(error.localizedDescription)")
-            }
-        }
-    }
-    
     func loadUIImage(from urlString: String) async throws -> UIImage? {
         guard let url = URL(string: urlString) else { return nil }
         let (data, _) = try await URLSession.shared.data(from: url)
@@ -380,35 +272,6 @@ struct ItemDetailView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + secondsPerSlide) {
             withAnimation(carouselAnimation) { scrollPosition = pos + 1 }
         }
-    }
-    
-    @ViewBuilder
-    private func badgeView(for rank: Int) -> some View {
-        Group {
-            if rank == 1 {
-                Image(systemName: "1.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 1, green: 0.65, blue: 0))
-            } else if rank == 2 {
-                Image(systemName: "2.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698))
-            } else if rank == 3 {
-                Image(systemName: "3.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0))
-            } else {
-                Text("\(rank)")
-                    .font(.title2)
-                    .fontWeight(.heavy)
-                    .padding(5)
-            }
-        }
-        .background(Circle().fill(Color.white))
-        .offset(x: 7, y: 7)
     }
 }
 
@@ -823,305 +686,6 @@ fileprivate enum Colors: String, CaseIterable, Identifiable {
     }
 }
 
-
-
-struct ImageCarousel: View {
-    
-    private let colors: [Colors] = Colors.allCases
-    
-    @State private var scrollPosition: Int?
-    @State private var itemsArray: [[Colors]] = []
-    @State private var autoScrollEnabled: Bool = false
-    private let pageWidth: CGFloat = 250
-    private let pageHeight: CGFloat = 350
-    private let animationDuration: CGFloat = 0.3
-    private let secondsPerSlide: CGFloat = 1.0
-    private let animation: Animation = .default
-
-    var body: some View {
-        let itemsTemp = itemsArray.flatMap { $0.map { $0 } }
-        let widthDifference = UIScreen.main.bounds.width - pageWidth
-        
-        VStack(spacing: 20) {
-            Button(action: {
-                let isEnabled = autoScrollEnabled
-                autoScrollEnabled.toggle()
-                // going from false to true
-                if !isEnabled {
-                    guard let scrollPosition = scrollPosition else {return}
-                    DispatchQueue.main.asyncAfter(deadline: .now(), execute: {
-                        withAnimation(animation) {
-                            self.scrollPosition = scrollPosition + 1
-                        }
-                    })
-                }
-            }, label: {
-                Text(autoScrollEnabled ? "Stop" : "Start")
-                    .padding()
-                    .foregroundStyle(.white)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(.black))
-            })
-                
-            ScrollView(.horizontal) {
-                HStack(spacing: 25) {
-                        ForEach(0..<itemsTemp.count, id: \.self) { index in
-                            let item = itemsTemp[index]
-
-                        Text(item.rawValue)
-                            .foregroundStyle(.black)
-                            .font(.system(size: 24, weight: .bold))
-                            .frame(width: pageWidth, height: 360)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(item.color)
-                            )
-                            .scrollTransition{ content, phase in
-                                content
-                                    .scaleEffect(y: phase.isIdentity ? 1 : 0.7)
-                            }
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .contentMargins(widthDifference/2, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-            .frame(height: pageHeight * 1.3)
-            .scrollPosition(id: $scrollPosition, anchor: .center)
-            .scrollIndicators(.hidden)
-            .onAppear {
-                self.itemsArray = [colors, colors, colors]
-                // start at the first item of the second colors array
-                scrollPosition = colors.count
-            }
-            .onChange(of: scrollPosition) {
-                guard let scrollPosition = scrollPosition else {return}
-                print(scrollPosition)
-                
-                let itemCount = colors.count
-                // last item of the first colors Array
-                if scrollPosition / itemCount == 0 && scrollPosition % itemCount == itemCount - 1  {
-                    print("last item of the first colors")
-                    // append colors array before the first and remove the curren last color array
-                    DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
-                        itemsArray.removeLast()
-                        itemsArray.insert(colors, at: 0)
-                        self.scrollPosition = scrollPosition + colors.count
-                    }
-                    return
-                }
-                
-                // first item of the last colors Array
-                if scrollPosition / itemCount == 2 && scrollPosition % itemCount == 0  {
-                    print("first item of the last colors")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration) {
-                        itemsArray.removeFirst()
-                        itemsArray.append(colors)
-                        self.scrollPosition = scrollPosition - colors.count
-                    }
-
-                    return
-                }
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + secondsPerSlide, execute: {
-                    if autoScrollEnabled {
-                        withAnimation(animation) {
-                            self.scrollPosition = scrollPosition + 1
-                        }
-                    }
-                })
-            }
-
-            HStack {
-                ForEach(0..<colors.count, id: \.self) { index in
-                    Button(action: {
-                        withAnimation(animation) {
-                            scrollPosition = index + colors.count
-                        }
-                    }, label: {
-                        Circle()
-                            .fill(Color.gray.opacity(
-                                (index == (scrollPosition ?? 0) % colors.count) ? 0.8 : 0.3
-                            ))
-                            .frame(width: 15)
-                    })
-                }
-            }
-            
-        }
-    }
-}
-
-#Preview {
-    ImageCarousel()
-}
-
-
-
-
-extension UIImage {
-    
-    /// Extracts the most prominent and unique colors from the image.
-    ///
-    /// - Parameter numberOfColors: The number of prominent colors to extract (default is 4).
-    /// - Returns: An array of UIColors representing the prominent colors.
-    func extractColors(numberOfColors: Int = 4) throws -> [UIColor] {
-        // Ensure the image has a CGImage
-        guard let _ = self.cgImage else {
-            throw NSError(domain: "Invalid image", code: 0, userInfo: nil)
-        }
-        
-        let size = CGSize(width: 200, height: 200 * self.size.height / self.size.width)
-        UIGraphicsBeginImageContext(size)
-        self.draw(in: CGRect(origin: .zero, size: size))
-        guard let resizedImage = UIGraphicsGetImageFromCurrentImageContext() else {
-            UIGraphicsEndImageContext()
-            throw NSError(domain: "Failed to resize image", code: 0, userInfo: nil)
-        }
-        UIGraphicsEndImageContext()
-        
-        guard let inputCGImage = resizedImage.cgImage else {
-            throw NSError(domain: "Invalid resized image", code: 0, userInfo: nil)
-        }
-        
-        let width = inputCGImage.width
-        let height = inputCGImage.height
-        let bytesPerPixel = 4
-        let bytesPerRow = bytesPerPixel * width
-        let bitsPerComponent = 8
-        
-        guard let data = calloc(height * width, MemoryLayout<UInt32>.size) else {
-            throw NSError(domain: "Failed to allocate memory", code: 0, userInfo: nil)
-        }
-        
-        defer { free(data) }
-        
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
-        
-        guard let context = CGContext(data: data, width: width, height: height,
-                                      bitsPerComponent: bitsPerComponent,
-                                      bytesPerRow: bytesPerRow,
-                                      space: colorSpace,
-                                      bitmapInfo: bitmapInfo) else {
-            throw NSError(domain: "Failed to create CGContext", code: 0, userInfo: nil)
-        }
-        
-        context.draw(inputCGImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-        
-        let pixelBuffer = data.bindMemory(to: UInt8.self, capacity: width * height * bytesPerPixel)
-        var pixelData = [PixelData]()
-        for y in 0..<height {
-            for x in 0..<width {
-                let offset = ((width * y) + x) * bytesPerPixel
-                let r = pixelBuffer[offset]
-                let g = pixelBuffer[offset + 1]
-                let b = pixelBuffer[offset + 2]
-                pixelData.append(PixelData(red: Double(r), green: Double(g), blue: Double(b)))
-            }
-        }
-        
-        let clusters = kMeansCluster(pixels: pixelData, k: numberOfColors)
-        
-        let colors = clusters.map { cluster -> UIColor in
-            UIColor(red: CGFloat(cluster.center.red / 255.0),
-                    green: CGFloat(cluster.center.green / 255.0),
-                    blue: CGFloat(cluster.center.blue / 255.0),
-                    alpha: 1.0)
-        }
-        
-        return colors
-    }
-    
-    private struct PixelData {
-        let red: Double
-        let green: Double
-        let blue: Double
-    }
-    
-    private struct Cluster {
-        var center: PixelData
-        var points: [PixelData]
-    }
-    
-    private func kMeansCluster(pixels: [PixelData], k: Int, maxIterations: Int = 10) -> [Cluster] {
-        var clusters = [Cluster]()
-        for _ in 0..<k {
-            if let randomPixel = pixels.randomElement() {
-                clusters.append(Cluster(center: randomPixel, points: []))
-            }
-        }
-        
-        for _ in 0..<maxIterations {
-            for clusterIndex in 0..<clusters.count {
-                clusters[clusterIndex].points.removeAll()
-            }
-            
-            for pixel in pixels {
-                var minDistance = Double.greatestFiniteMagnitude
-                var closestClusterIndex = 0
-                for (index, cluster) in clusters.enumerated() {
-                    let distance = euclideanDistance(pixel1: pixel, pixel2: cluster.center)
-                    if distance < minDistance {
-                        minDistance = distance
-                        closestClusterIndex = index
-                    }
-                }
-                clusters[closestClusterIndex].points.append(pixel)
-            }
-            
-            for clusterIndex in 0..<clusters.count {
-                let cluster = clusters[clusterIndex]
-                if cluster.points.isEmpty { continue }
-                let sum = cluster.points.reduce(PixelData(red: 0, green: 0, blue: 0)) { (result, pixel) -> PixelData in
-                    return PixelData(red: result.red + pixel.red, green: result.green + pixel.green, blue: result.blue + pixel.blue)
-                }
-                let count = Double(cluster.points.count)
-                clusters[clusterIndex].center = PixelData(red: sum.red / count, green: sum.green / count, blue: sum.blue / count)
-            }
-        }
-        
-        return clusters
-    }
-    
-    private func euclideanDistance(pixel1: PixelData, pixel2: PixelData) -> Double {
-        let dr = pixel1.red - pixel2.red
-        let dg = pixel1.green - pixel2.green
-        let db = pixel1.blue - pixel2.blue
-        return sqrt(dr * dr + dg * dg + db * db)
-    }
-}
-
-
-struct ColorPaletteView: View {
-    let colors: [UIColor]
-    
-    let columns = [GridItem(.flexible()), GridItem(.flexible())]
-    
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(0..<colors.count, id: \.self) { index in
-                    let uiColor = colors[index]
-                    let color = Color(uiColor)
-                    let hex = uiColor.toHexString()
-                    
-                    VStack {
-                        Rectangle()
-                            .fill(color)
-                            .frame(height: 60)
-                            .cornerRadius(12)
-                        
-                        Text(hex)
-                            .font(.caption)
-                            .foregroundColor(.primary)
-                    }
-                }
-            }
-            .padding()
-        }
-    }
-}
-
 extension UIColor {
     func toHexString() -> String {
         var rFloat: CGFloat = 0
@@ -1138,43 +702,6 @@ extension UIColor {
         return String(format: "#%02X%02X%02X", rInt, gInt, bInt)
     }
 }
-
-struct ProminentColorsView: View {
-    @State private var colors: [UIColor] = []
-    @State private var errorMessage: String?
-    private let image =  UIImage(named: "SignInBG")!
-    
-    var body: some View {
-        VStack {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .cornerRadius(16)
-                .padding(.horizontal)
-            
-            if !colors.isEmpty {
-                ColorPaletteView(colors: colors)
-            }
-            
-            if let errorMessage = errorMessage {
-                Text("Error: \(errorMessage)")
-                    .foregroundColor(.red)
-            }
-        }
-        .task {
-            do {
-                colors = try image.extractColors(numberOfColors: 1)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-}
-
-#Preview {
-    ProminentColorsView()
-}
-
 
 // MARK: - Detail sheet for a single item
 struct ItemDetailViewSpectate: View {
@@ -1232,15 +759,6 @@ struct ItemDetailViewSpectate: View {
                                                             height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
                                                         )
                                                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                                                        .onAppear {
-                                                            if idx % items.count == currentCenteredIndex {
-                                                                Task {
-                                                                    if let uiImage = try? await loadUIImage(from: item.record.ItemImage) {
-                                                                        extractAndEnhanceColor(from: uiImage)
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
                                                 case .failure:
                                                     Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
                                                 @unknown default:
@@ -1321,12 +839,6 @@ struct ItemDetailViewSpectate: View {
                         currentCenteredIndex = pos % items.count
                         handleWrap(at: pos)
                         scheduleAutoScroll(from: pos)
-                        Task {
-                            let item = items[currentCenteredIndex]
-                            if let uiImage = try? await loadUIImage(from: item.record.ItemImage) {
-                                extractAndEnhanceColor(from: uiImage)
-                            }
-                        }
                     }
                     
                     
@@ -1405,53 +917,6 @@ struct ItemDetailViewSpectate: View {
         }
     }
     
-    // MARK: - Carousel Setup
-    private func extractColor(from uiImage: UIImage) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let uiColors = try uiImage.extractColors(numberOfColors: 1)
-                if let prominent = uiColors.first {
-                    let newColor = Color(prominent)
-                    DispatchQueue.main.async {
-                        withAnimation {
-                            backgroundColor = newColor
-                        }
-                    }
-                }
-            } catch {
-                print("Color extraction failed: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    private func extractAndEnhanceColor(from uiImage: UIImage) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let colors = try uiImage.extractColors(numberOfColors: 1)
-                if let dominant = colors.first {
-                    var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
-                    dominant.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-                    
-                    // Boost saturation and brightness
-                    let vibrant = UIColor(
-                        hue: hue,
-                        saturation: min(1.0, saturation * 1.5 + 0.2),
-                        brightness: min(1.0, brightness * 1.5 + 0.1),
-                        alpha: 1.0
-                    )
-                    
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            backgroundColor = Color(vibrant)
-                        }
-                    }
-                }
-            } catch {
-                print("Failed to extract colors: \(error.localizedDescription)")
-            }
-        }
-    }
-    
     func loadUIImage(from urlString: String) async throws -> UIImage? {
         guard let url = URL(string: urlString) else { return nil }
         let (data, _) = try await URLSession.shared.data(from: url)
@@ -1499,35 +964,6 @@ struct ItemDetailViewSpectate: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + secondsPerSlide) {
             withAnimation(carouselAnimation) { scrollPosition = pos + 1 }
         }
-    }
-    
-    @ViewBuilder
-    private func badgeView(for rank: Int) -> some View {
-        Group {
-            if rank == 1 {
-                Image(systemName: "1.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 1, green: 0.65, blue: 0))
-            } else if rank == 2 {
-                Image(systemName: "2.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698))
-            } else if rank == 3 {
-                Image(systemName: "3.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0))
-            } else {
-                Text("\(rank)")
-                    .font(.title2)
-                    .fontWeight(.heavy)
-                    .padding(5)
-            }
-        }
-        .background(Circle().fill(Color.white))
-        .offset(x: 7, y: 7)
     }
 }
 
@@ -1587,15 +1023,6 @@ struct GroupItemDetailView: View {
                                                             height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
                                                         )
                                                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                                                        .onAppear {
-                                                            if idx % items.count == currentCenteredIndex {
-                                                                Task {
-                                                                    if let uiImage = try? await loadUIImage(from: item.record.ItemImage) {
-                                                                        extractAndEnhanceColor(from: uiImage)
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
                                                 case .failure:
                                                     Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
                                                 @unknown default:
@@ -1676,12 +1103,6 @@ struct GroupItemDetailView: View {
                         currentCenteredIndex = pos % items.count
                         handleWrap(at: pos)
                         scheduleAutoScroll(from: pos)
-                        Task {
-                            let item = items[currentCenteredIndex]
-                            if let uiImage = try? await loadUIImage(from: item.record.ItemImage) {
-                                extractAndEnhanceColor(from: uiImage)
-                            }
-                        }
                     }
                     
                     HStack(spacing: 10) {
@@ -1816,53 +1237,6 @@ struct GroupItemDetailView: View {
         }
     }
     
-    // MARK: - Carousel Setup
-    private func extractColor(from uiImage: UIImage) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let uiColors = try uiImage.extractColors(numberOfColors: 1)
-                if let prominent = uiColors.first {
-                    let newColor = Color(prominent)
-                    DispatchQueue.main.async {
-                        withAnimation {
-                            backgroundColor = newColor
-                        }
-                    }
-                }
-            } catch {
-                print("Color extraction failed: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    private func extractAndEnhanceColor(from uiImage: UIImage) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let colors = try uiImage.extractColors(numberOfColors: 1)
-                if let dominant = colors.first {
-                    var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
-                    dominant.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-                    
-                    // Boost saturation and brightness
-                    let vibrant = UIColor(
-                        hue: hue,
-                        saturation: min(1.0, saturation * 1.5 + 0.2),
-                        brightness: min(1.0, brightness * 1.5 + 0.1),
-                        alpha: 1.0
-                    )
-                    
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            backgroundColor = Color(vibrant)
-                        }
-                    }
-                }
-            } catch {
-                print("Failed to extract colors: \(error.localizedDescription)")
-            }
-        }
-    }
-    
     func loadUIImage(from urlString: String) async throws -> UIImage? {
         guard let url = URL(string: urlString) else { return nil }
         let (data, _) = try await URLSession.shared.data(from: url)
@@ -1910,35 +1284,6 @@ struct GroupItemDetailView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + secondsPerSlide) {
             withAnimation(carouselAnimation) { scrollPosition = pos + 1 }
         }
-    }
-    
-    @ViewBuilder
-    private func badgeView(for rank: Int) -> some View {
-        Group {
-            if rank == 1 {
-                Image(systemName: "1.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 1, green: 0.65, blue: 0))
-            } else if rank == 2 {
-                Image(systemName: "2.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698))
-            } else if rank == 3 {
-                Image(systemName: "3.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0))
-            } else {
-                Text("\(rank)")
-                    .font(.title2)
-                    .fontWeight(.heavy)
-                    .padding(5)
-            }
-        }
-        .background(Circle().fill(Color.white))
-        .offset(x: 7, y: 7)
     }
 }
 
@@ -1998,15 +1343,6 @@ struct GroupItemDetailViewSpectate: View {
                                                             height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
                                                         )
                                                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                                                        .onAppear {
-                                                            if idx % items.count == currentCenteredIndex {
-                                                                Task {
-                                                                    if let uiImage = try? await loadUIImage(from: item.record.ItemImage) {
-                                                                        extractAndEnhanceColor(from: uiImage)
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
                                                 case .failure:
                                                     Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
                                                 @unknown default:
@@ -2087,12 +1423,6 @@ struct GroupItemDetailViewSpectate: View {
                         currentCenteredIndex = pos % items.count
                         handleWrap(at: pos)
                         scheduleAutoScroll(from: pos)
-                        Task {
-                            let item = items[currentCenteredIndex]
-                            if let uiImage = try? await loadUIImage(from: item.record.ItemImage) {
-                                extractAndEnhanceColor(from: uiImage)
-                            }
-                        }
                     }
                     
                     HStack(spacing: 10) {
@@ -2192,53 +1522,6 @@ struct GroupItemDetailViewSpectate: View {
         }
     }
     
-    // MARK: - Carousel Setup
-    private func extractColor(from uiImage: UIImage) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let uiColors = try uiImage.extractColors(numberOfColors: 1)
-                if let prominent = uiColors.first {
-                    let newColor = Color(prominent)
-                    DispatchQueue.main.async {
-                        withAnimation {
-                            backgroundColor = newColor
-                        }
-                    }
-                }
-            } catch {
-                print("Color extraction failed: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    private func extractAndEnhanceColor(from uiImage: UIImage) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let colors = try uiImage.extractColors(numberOfColors: 1)
-                if let dominant = colors.first {
-                    var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
-                    dominant.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-                    
-                    // Boost saturation and brightness
-                    let vibrant = UIColor(
-                        hue: hue,
-                        saturation: min(1.0, saturation * 1.5 + 0.2),
-                        brightness: min(1.0, brightness * 1.5 + 0.1),
-                        alpha: 1.0
-                    )
-                    
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.4)) {
-                            backgroundColor = Color(vibrant)
-                        }
-                    }
-                }
-            } catch {
-                print("Failed to extract colors: \(error.localizedDescription)")
-            }
-        }
-    }
-    
     func loadUIImage(from urlString: String) async throws -> UIImage? {
         guard let url = URL(string: urlString) else { return nil }
         let (data, _) = try await URLSession.shared.data(from: url)
@@ -2286,34 +1569,5 @@ struct GroupItemDetailViewSpectate: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + secondsPerSlide) {
             withAnimation(carouselAnimation) { scrollPosition = pos + 1 }
         }
-    }
-    
-    @ViewBuilder
-    private func badgeView(for rank: Int) -> some View {
-        Group {
-            if rank == 1 {
-                Image(systemName: "1.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 1, green: 0.65, blue: 0))
-            } else if rank == 2 {
-                Image(systemName: "2.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698))
-            } else if rank == 3 {
-                Image(systemName: "3.circle.fill")
-                    .font(.largeTitle)
-                    .padding(3)
-                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0))
-            } else {
-                Text("\(rank)")
-                    .font(.title2)
-                    .fontWeight(.heavy)
-                    .padding(5)
-            }
-        }
-        .background(Circle().fill(Color.white))
-        .offset(x: 7, y: 7)
     }
 }

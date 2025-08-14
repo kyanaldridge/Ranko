@@ -84,6 +84,18 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     
     // MARK: - PREFERENCES -
     @AppStorage("user_preferences_autocorrectDisabled") var preferencesAutocorrectDisabled: Bool = true
+    @AppStorage("user_preferences_haptics") var preferencesHaptics: Bool = true
+    @AppStorage("user_preferences_hapticIntensity") var preferencesHapticIntensity: Int = 2
+    
+    // MARK: - PRIVACY -
+    @AppStorage("user_privacy_privateAccount") var privacyPrivateAccount: Bool = false
+    @AppStorage("user_privacy_allowFriendRequests") var privacyAllowFriendRequests: Bool = false
+    @AppStorage("user_privacy_displayFeaturedLists") var privacyDisplayFeaturedLists: Bool = false
+    @AppStorage("user_privacy_displayUsername") var privacyDisplayUsername: Bool = false
+    @AppStorage("user_privacy_displayBio") var privacyDisplayBio: Bool = false
+    @AppStorage("user_privacy_displayProfilePicture") var privacyDisplayProfilePicture: Bool = false
+    @AppStorage("user_privacy_allowClones") var privacyAllowClones: Bool = false
+    
     
     @Published var ProfilePicture: UIImage? = loadCachedProfileImage()
     

@@ -36,12 +36,14 @@ struct DefaultListPersonal: View {
     // Sheets & states
     @State private var showTabBar = true
     @State private var tabBarPresent = false
+    @State private var possiblyEdited = false
     @State var showEditDetailsSheet = false
     @State var showAddItemsSheet = false
     @State var showReorderSheet = false
     @State var showEditItemSheet = false
     @State var showExitSheet = false
     @State var showDeleteAlert = false
+    @State var showLeaveAlert = false
 
     @State private var activeTab: DefaultListPersonalTab = .addItems
     @State private var selectedRankoItems: [RankoItem] = []
@@ -84,23 +86,85 @@ struct DefaultListPersonal: View {
             ScrollView {
                 VStack(spacing: 7) {
                     HStack {
-                        Text(rankoName)
-                            .font(.system(size: 28, weight: .black, design: .default))
-                            .foregroundColor(Color(hex: 0x6D400F))
-                        Spacer()
+                        VStack(spacing: 7) {
+                            HStack {
+                                Text(rankoName)
+                                    .font(.system(size: 28, weight: .black, design: .default))
+                                    .foregroundColor(Color(hex: 0x6D400F))
+                                Spacer()
+                            }
+                            .padding(.top, 20)
+                            .padding(.leading, 20)
+                            
+                            HStack {
+                                Text(description.isEmpty ? "No description yet…" : description)
+                                    .lineLimit(3)
+                                    .font(.system(size: 12, weight: .bold, design: .default))
+                                    .foregroundColor(Color(hex: 0x925611))
+                                Spacer()
+                            }
+                            .padding(.top, 5)
+                            .padding(.leading, 20)
+                        }
+                        Spacer(minLength: 0)
+                        Button {
+                            if possiblyEdited {
+                                showLeaveAlert = true
+                            } else {
+                                showTabBar = false
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 28, weight: .heavy, design: .default))
+                                .padding(.vertical, 6)
+                        }
+                        .foregroundColor(Color(hex: 0x6D400F))
+                        .tint(Color(hex: 0xFFF9EE))
+                        .buttonStyle(.glassProminent)
+                        .padding(.trailing, 30)
                     }
-                    .padding(.top, 20)
-                    .padding(.leading, 20)
-                    
-                    HStack {
-                        Text(description.isEmpty ? "No description yet…" : description)
-                            .lineLimit(3)
-                            .font(.system(size: 12, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0x925611))
-                        Spacer()
+                    .alert(isPresented: $showLeaveAlert) {
+                        CustomDialog(
+                            title: "Leave Without Saving?",
+                            content: "Are you sure you want to leave your Ranko without saving? All your changes will be lost.",
+                            image: .init(
+                                content: "figure.walk.departure",
+                                background: .orange,
+                                foreground: .white
+                            ),
+                            button1: .init(
+                                content: "Leave",
+                                background: .orange,
+                                foreground: .white,
+                                action: { _ in
+                                    showLeaveAlert = false
+                                    showTabBar = false
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                        dismiss()
+                                    }
+                                }
+                            ),
+                            button2: .init(
+                                content: "Cancel",
+                                background: .red,
+                                foreground: .white,
+                                action: { _ in
+                                    showLeaveAlert = false
+                                    showTabBar = false
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                        showTabBar = true
+                                    }
+                                }
+                            )
+                        )
+                        .transition(.blurReplace.combined(with: .push(from: .bottom)))
+                    } background: {
+                        Rectangle()
+                            .fill(.primary.opacity(0.35))
                     }
-                    .padding(.top, 5)
-                    .padding(.leading, 20)
                     
                     HStack(spacing: 8) {
                         HStack(spacing: 4) {
@@ -152,7 +216,10 @@ struct DefaultListPersonal: View {
                         ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
                             DefaultListItemRow(item: item)
                                 .onTapGesture {
-                                    selectedItem = item
+                                    showTabBar = false
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                        selectedItem = item
+                                    }
                                 }
                                 .contextMenu {
                                     Button(action: {
@@ -241,6 +308,7 @@ struct DefaultListPersonal: View {
                 isPrivate: isPrivate,
                 category: category
             ) { newName, newDescription, newPrivate, newCategory in
+                possiblyEdited = true
                 rankoName    = newName
                 description  = newDescription
                 isPrivate    = newPrivate
@@ -252,6 +320,7 @@ struct DefaultListPersonal: View {
                 items: selectedRankoItems,
                 onSave: { newOrder in
                     selectedRankoItems = newOrder
+                    possiblyEdited = true
                 }
             )
         }
@@ -334,6 +403,18 @@ struct DefaultListPersonal: View {
             Rectangle()
                 .fill(.primary.opacity(0.35))
         }
+        .sheet(item: $selectedItem) { tapped in
+            ItemDetailView(
+                items: selectedRankoItems,
+                initialItem: tapped,
+                listID: listID
+            ) { updated in
+                // replace the old item with the updated one
+                if let idx = selectedRankoItems.firstIndex(where: { $0.id == updated.id }) {
+                    selectedRankoItems[idx] = updated
+                }
+            }
+        }
         .sheet(isPresented: $showTabBar) {
             VStack {
                 HStack(spacing: 0) {
@@ -356,6 +437,7 @@ struct DefaultListPersonal: View {
                             switch tab {
                             case .addItems:
                                 showAddItemsSheet = true
+                                possiblyEdited = true
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     tabBarPresent = false
                                 }
@@ -466,6 +548,7 @@ struct DefaultListPersonal: View {
     private func delete(_ item: RankoItem) {
         selectedRankoItems.removeAll { $0.id == item.id }
         normalizeRanks()
+        possiblyEdited = true
     }
 
     private func moveToTop(_ item: RankoItem) {
@@ -473,6 +556,7 @@ struct DefaultListPersonal: View {
         let moved = selectedRankoItems.remove(at: idx)
         selectedRankoItems.insert(moved, at: 0)
         normalizeRanks()
+        possiblyEdited = true
     }
 
     private func moveToBottom(_ item: RankoItem) {
@@ -480,6 +564,7 @@ struct DefaultListPersonal: View {
         let moved = selectedRankoItems.remove(at: idx)
         selectedRankoItems.append(moved)
         normalizeRanks()
+        possiblyEdited = true
     }
 
     private func normalizeRanks() {
@@ -695,91 +780,90 @@ struct DefaultListPersonalExit: View {
     var onDelete: () -> Void
 
     var body: some View {
-        VStack {
-            HStack {
+        NavigationView {
+            VStack(spacing: 10) {
+                HStack {
+                    Button {
+                        print("Save Tapped")
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.success)
+                        onSave()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 16, weight: .bold, design: .default))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("Save")
+                                .font(.system(size: 16, weight: .bold, design: .default))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Spacer()
+                        }
+                        .padding(.vertical, 10)
+                    }
+                    .foregroundColor(Color(hex: 0xFFFFFF))
+                    .tint(Color(hex: 0x42ADFF))
+                    .buttonStyle(.glassProminent)
+                    Button {
+                        print("Don't Save Tapped")
+                        let generator = UINotificationFeedbackGenerator()
+                        generator.notificationOccurred(.warning)
+                        onLeave()
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 16, weight: .bold, design: .default))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("Don't Save")
+                                .font(.system(size: 16, weight: .bold, design: .default))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Spacer()
+                        }
+                        .padding(.vertical, 10)
+                    }
+                    .foregroundColor(Color(hex: 0xFFFFFF))
+                    .tint(Color(hex: 0xFE8C34))
+                    .buttonStyle(.glassProminent)
+                }
                 Button {
                     print("Delete Tapped")
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.warning)
                     onDelete()
                     dismiss()
                 } label: {
-                    VStack {
+                    HStack {
+                        Spacer()
                         Image(systemName: "trash.fill")
-                            .font(.system(size: 22, weight: .bold, design: .default))
+                            .font(.system(size: 16, weight: .bold, design: .default))
                             .foregroundColor(Color(hex: 0xFFFFFF))
                         Text("Delete")
-                            .font(.system(size: 22, weight: .bold, design: .default))
+                            .font(.system(size: 16, weight: .bold, design: .default))
                             .foregroundColor(Color(hex: 0xFFFFFF))
+                        Spacer()
                     }
+                    .padding(.vertical, 10)
                 }
                 .foregroundColor(Color(hex: 0xFFFFFF))
-                .tint(Color(hex: 0xFEF4E7))
-                .buttonStyle(.glassProminent)
-                
-                Button {
-                    print("Save Tapped")
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.success)
-                    onSave()
-                    dismiss()
-                } label: {
-                    VStack {
-                        Image(systemName: "square.and.arrow.down.fill")
-                            .font(.system(size: 22, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                        Text("Save")
-                            .font(.system(size: 22, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                    }
-                }
-                .foregroundColor(Color(hex: 0xFFFFFF))
-                .tint(Color(hex: 0xFEF4E7))
+                .tint(Color(hex: 0xE93B3D))
                 .buttonStyle(.glassProminent)
             }
-            
-            VStack {
-                Button {
-                    print("Cancel Tapped")
-                    dismiss()
-                } label: {
-                    HStack {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 22, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                        Text("Cancel")
-                            .font(.system(size: 22, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
+            .padding(.horizontal, 40)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Cancel", systemImage: "xmark") {
+                        dismiss()
+                        print("Cancel Exit Tapped")
                     }
                 }
-                .foregroundColor(Color(hex: 0xFFFFFF))
-                .tint(Color(hex: 0xFEF4E7))
-                .buttonStyle(.glassProminent)
-                
-                Button {
-                    print("Leave Tapped")
-                    onLeave()
-                    dismiss()
-                } label: {
-                    HStack {
-                        Image(systemName: "door.left.hand.open")
-                            .font(.system(size: 22, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                        Text("Leave")
-                            .font(.system(size: 22, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                    }
-                }
-                .foregroundColor(Color(hex: 0xFFFFFF))
-                .tint(Color(hex: 0xFEF4E7))
-                .buttonStyle(.glassProminent)
             }
         }
-        .padding(.horizontal, 30)
         .presentationBackground(Color.white)
-        .presentationDetents([.height(160)])
-        .interactiveDismissDisabled(true)
-        
-        
-        
+        .presentationDetents([.height(300)])
+        .ignoresSafeArea()
     }
 }
 
