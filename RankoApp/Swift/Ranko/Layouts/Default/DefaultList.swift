@@ -71,6 +71,8 @@ struct DefaultListView: View {
 
     // Active tab
     @State private var selectedTab: TabType? = nil
+    
+    @State private var imageReloadToken = UUID()
 
     enum TabType {
         case edit, add, reorder
@@ -168,63 +170,66 @@ struct DefaultListView: View {
                 
                 VStack {
                     ScrollView {
-                        ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
-                            DefaultListItemRow(item: item)
-                                .onTapGesture {
-                                    selectedItem = item
-                                }
-                                .contextMenu {
-                                    Button(action: {
-                                        itemToEdit = item
-                                    }) {
-                                        Label("Edit", systemImage: "pencil")
+                        Group {
+                            ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
+                                DefaultListItemRow(item: item)
+                                    .onTapGesture {
+                                        selectedItem = item
                                     }
-                                    .foregroundColor(.orange)
-                                    
-                                    Divider()
-                                    
-                                    Button(action: { moveToTop(item) }) {
-                                        Label("Move to Top", systemImage: "arrow.up.to.line.compact")
+                                    .contextMenu {
+                                        Button(action: {
+                                            itemToEdit = item
+                                        }) {
+                                            Label("Edit", systemImage: "pencil")
+                                        }
+                                        .foregroundColor(.orange)
+                                        
+                                        Divider()
+                                        
+                                        Button(action: { moveToTop(item) }) {
+                                            Label("Move to Top", systemImage: "arrow.up.to.line.compact")
+                                        }
+                                        
+                                        Button(action: { moveToBottom(item) }) {
+                                            Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        Button(role: .destructive) {
+                                            delete(item)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
                                     }
-                                    
-                                    Button(action: { moveToBottom(item) }) {
-                                        Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
+                                    .sheet(isPresented: $showEditItemSheet) {
+                                        // Determine which item is centered
+                                        EditItemView(
+                                            item: item,
+                                            listID: listUUID
+                                        ) { newName, newDesc in
+                                            // build updated record & item
+                                            let rec = item.record
+                                            let updatedRecord = RankoRecord(
+                                                objectID: rec.objectID,
+                                                ItemName: newName,
+                                                ItemDescription: newDesc,
+                                                ItemCategory: "",
+                                                ItemImage: rec.ItemImage
+                                            )
+                                            let updatedItem = RankoItem(
+                                                id: item.id,
+                                                rank: item.rank,
+                                                votes: item.votes,
+                                                record: updatedRecord
+                                            )
+                                            // callback to parent
+                                            onSave(updatedItem)
+                                        }
                                     }
-                                    
-                                    Divider()
-                                    
-                                    Button(role: .destructive) {
-                                        delete(item)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                                .sheet(isPresented: $showEditItemSheet) {
-                                    // Determine which item is centered
-                                    EditItemView(
-                                        item: item,
-                                        listID: listUUID
-                                    ) { newName, newDesc in
-                                        // build updated record & item
-                                        let rec = item.record
-                                        let updatedRecord = RankoRecord(
-                                            objectID: rec.objectID,
-                                            ItemName: newName,
-                                            ItemDescription: newDesc,
-                                            ItemCategory: "",
-                                            ItemImage: rec.ItemImage
-                                        )
-                                        let updatedItem = RankoItem(
-                                            id: item.id,
-                                            rank: item.rank,
-                                            votes: item.votes,
-                                            record: updatedRecord
-                                        )
-                                        // callback to parent
-                                        onSave(updatedItem)
-                                    }
-                                }
+                            }
                         }
+                        .id(imageReloadToken)
                         .padding(.top, 5)
                         .padding(.bottom, 70)
                     }
@@ -244,6 +249,12 @@ struct DefaultListView: View {
             }
             .ignoresSafeArea()
             
+        }
+        .refreshable {
+            refreshItemImages()
+        }
+        .onAppear {
+            refreshItemImages()
         }
         .sheet(isPresented: $showAddItemsSheet) {
             FilterChipPickerView(
@@ -354,6 +365,10 @@ struct DefaultListView: View {
                 }
             }
         }
+    }
+    private func refreshItemImages() {
+        guard !selectedRankoItems.isEmpty else { return }
+        imageReloadToken = UUID() // change identity → rows/images rebuild
     }
     
     // Item Helpers
