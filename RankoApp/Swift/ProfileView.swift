@@ -1165,7 +1165,7 @@ struct SearchRankosView: View {
                             .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
                         Spacer()
                         if !searchText.isEmpty {
-                            Image(systemName: "xmark.circle.fill")
+                            Image(systemName: "xmark")
                                 .font(.system(size: 16, weight: .heavy))
                                 .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
                                 .onTapGesture {searchText = ""}
@@ -1188,7 +1188,7 @@ struct SearchRankosView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "xmark")
                             .fontWeight(.heavy)
                     }
                     .foregroundColor(Color(hex: 0x7E5F46))
@@ -1488,7 +1488,7 @@ struct SelectFeaturedRankosView: View {
                             .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
                         Spacer()
                         if !searchText.isEmpty {
-                            Image(systemName: "xmark.circle.fill")
+                            Image(systemName: "xmark")
                                 .font(.system(size: 16, weight: .heavy))
                                 .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
                                 .onTapGesture {searchText = ""}
@@ -1511,7 +1511,7 @@ struct SelectFeaturedRankosView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "xmark")
                             .fontWeight(.heavy)
                     }
                     .foregroundColor(Color(hex: 0x7E5F46))
@@ -1753,6 +1753,7 @@ struct SelectFeaturedRankosView: View {
 struct SearchUsersView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
+    
     @State private var users: [RankoUser] = []
     @State private var selectedFacet: String? = nil
     @State private var isLoading: Bool = false
@@ -1779,7 +1780,7 @@ struct SearchUsersView: View {
                             .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
                         Spacer()
                         if !searchText.isEmpty {
-                            Image(systemName: "xmark.circle.fill")
+                            Image(systemName: "xmark")
                                 .font(.system(size: 16, weight: .heavy))
                                 .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
                                 .onTapGesture {searchText = ""}
@@ -1802,7 +1803,7 @@ struct SearchUsersView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "xmark")
                             .fontWeight(.heavy)
                     }
                     .foregroundColor(Color(hex: 0x7E5F46))
@@ -1815,10 +1816,13 @@ struct SearchUsersView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     if isLoading {
                         ProgressView("Loading Users...").padding()
+                            .frame(maxWidth: .infinity)
                     }
                     
                     if let error = errorMessage {
-                        Text(error).foregroundColor(.red).padding()
+                        Text(error)
+                            .foregroundColor(.red)
+                            .padding()
                     }
                     
                     VStack(spacing: 8) {
@@ -1897,30 +1901,46 @@ struct SearchUsersView: View {
     }
 
     private func fetchFromFirebase(using objectIDs: [String]) {
-        let ref = Database.database().reference().child("UserData")
-        ref.observeSingleEvent(of: .value) { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                self.errorMessage = "❌ No user data in Firebase."
-                self.isLoading = false
-                return
-            }
-
-            var fetched: [RankoUser] = []
-
-            for id in objectIDs {
-                if let userDict = data[id] as? [String: Any],
-                   let name = userDict["UserName"] as? String,
-                   let desc = userDict["UserDescription"] as? String,
-                   let pic = userDict["UserProfilePicturePath"] as? String {
-                    let user = RankoUser(id: id, userName: name, userDescription: desc, userProfilePicture: pic)
-                    fetched.append(user)
+        let group = DispatchGroup()
+        var loaded: [RankoUser] = []
+        let appendQueue = DispatchQueue(label: "followers.append.queue") // serialize appends
+        
+        for fid in objectIDs {
+            group.enter()
+            let userRef = Database.database().reference()
+                .child("UserData")
+                .child(fid)
+            
+            userRef.observeSingleEvent(of: .value) { snapshot in
+                defer { group.leave() }
+                
+                guard let root = snapshot.value as? [String: Any] else { return }
+                
+                let details = root["UserDetails"] as? [String: Any]
+                let pfp     = root["UserProfilePicture"] as? [String: Any]
+                
+                let name = (details?["UserName"] as? String) ?? "Unknown"
+                let desc = (details?["UserDescription"] as? String) ?? ""
+                let pic  = (pfp?["UserProfilePicturePath"] as? String) ?? ""
+                
+                let user = RankoUser(
+                    id: fid,
+                    userName: name,
+                    userDescription: desc,
+                    userProfilePicture: pic
+                )
+                
+                appendQueue.sync {
+                    loaded.append(user)
                 }
             }
-
-            DispatchQueue.main.async {
-                self.users = fetched
-                self.isLoading = false
-            }
+        }
+        
+        group.notify(queue: .main) {
+            // Replace `self.followers` with your actual target property
+            self.users = loaded
+            self.errorMessage = loaded.isEmpty ? "No users found." : nil
+            self.isLoading = false
         }
     }
 }
@@ -2010,7 +2030,7 @@ struct SearchFollowersView: View {
                             .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
                         Spacer()
                         if !searchText.isEmpty {
-                            Image(systemName: "xmark.circle.fill")
+                            Image(systemName: "xmark")
                                 .font(.system(size: 16, weight: .heavy))
                                 .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
                                 .onTapGesture {searchText = ""}
@@ -2033,7 +2053,7 @@ struct SearchFollowersView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "xmark")
                             .fontWeight(.heavy)
                     }
                     .foregroundColor(Color(hex: 0x7E5F46))
@@ -2043,7 +2063,7 @@ struct SearchFollowersView: View {
                     .buttonStyle(.glassProminent)
                 }
                 
-                ScrollView {
+                ScrollView(.vertical, showsIndicators: false) {
                     if isLoading {
                         ProgressView("Loading Followers…")
                             .frame(maxWidth: .infinity)
@@ -2055,26 +2075,28 @@ struct SearchFollowersView: View {
                             .padding()
                     }
                     
-                    LazyVStack(spacing: 8) {
+                    VStack(spacing: 8) {
                         ForEach(filteredUsers) { user in
-                            Button {
-                                selectedUser = user
-                            } label: {
-                                UserGalleryView(user: user)
-                                
-                            }
-                            .foregroundColor(Color(hex: 0xFF9864))
-                            .tint(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
+                            HStack {
+                                Button {
+                                    selectedUser = user
+                                } label: {
+                                    UserGalleryView(user: user)
+                                }
+                                .foregroundColor(Color(hex: 0xFF9864))
+                                .tint(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
                                 )
-                            )
-                            .buttonStyle(.glassProminent)
-                            Spacer()
+                                .buttonStyle(.glassProminent)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
+                        Spacer()
                     }
                     .padding(.bottom, 30)
                     .frame(minHeight: geo.size.height)
@@ -2122,80 +2144,96 @@ struct SearchFollowersView: View {
             .child("UserSocial")
             .child("UserFollowers")
 
-        // 1) Fetch the map of timestamp → followerID
         followersRef.observeSingleEvent(of: .value) { snap in
-            guard let map = snap.value as? [String: String], !map.isEmpty else {
+            // Handle "no followers" represented as "" or null
+            if snap.value is NSNull || (snap.value as? String) == "" {
                 self.errorMessage = "No followers found."
                 self.isLoading = false
                 return
             }
 
-            // If your timestamps are strings like "yyyyMMddHHmmss", sorting numerically works.
-            let sortedPairs: [(Int, String)] = map.compactMap { (tsStr, fid) in
-                if let ts = Int(tsStr) { return (ts, fid) }
-                return nil
+            // Expected shape: followerID -> timestampString
+            if let map = snap.value as? [String: Any], !map.isEmpty {
+                // Build (timestampInt, followerID) pairs
+                let sortedPairs: [(Int, String)] = map.compactMap { (fid, tsAny) in
+                    if let s = tsAny as? String, let t = Int(s) { return (t, fid) }
+                    if let t = tsAny as? Int { return (t, fid) }
+                    return nil
+                }
+                .sorted(by: { $0.0 > $1.0 }) // newest first
+
+                // Fallback: if timestamps were non-numeric for some reason, just use keys
+                let ids: [String] = sortedPairs.isEmpty
+                    ? Array(map.keys)
+                    : sortedPairs.map { $0.1 }
+
+                guard !ids.isEmpty else {
+                    self.errorMessage = "No followers found."
+                    self.isLoading = false
+                    return
+                }
+
+                self.followerIDs = ids
+                self.fetchFollowerProfiles(ids: ids) // will set isLoading=false when done
+            } else {
+                self.errorMessage = "No followers found."
+                self.isLoading = false
             }
-            .sorted(by: { $0.0 > $1.0 }) // newest first
-
-            followerIDs = sortedPairs.map { $0.1 }
-            self.fetchFollowerProfiles(ids: followerIDs)
-        }
-    }
-
-    private func fetchFollowerProfiles(ids: [String]) {
-        // Build RankoUser for each followerID by reading: UserData/{id}/(UserDetails, UserProfilePicture)
-        let group = DispatchGroup()
-        var loaded: [RankoUser] = []
-        let appendQueue = DispatchQueue(label: "followers.append")
-
-        for fid in followerIDs {
-            group.enter()
-            fetchUserCard(uid: fid) { user in
-                if let user = user { appendQueue.sync { loaded.append(user) } }
-                group.leave()
-            }
-        }
-
-        group.notify(queue: .main) {
-            self.users = loaded
-            self.filteredUsers = loaded
-            self.isLoading = false
         }
     }
     
-    func fetchUserCard(uid: String, completion: @escaping (RankoUser?) -> Void) {
-        let base = Database.database().reference().child("UserData").child(uid)
-        let detailsRef = base.child("UserDetails")
-        let pfpRef     = base.child("UserProfilePicture")
-
-        var name: String = "Unknown"
-        var desc: String = ""
-        var pic:  String = ""
-
+    func fetchFollowerProfiles(ids: [String]) {
         let group = DispatchGroup()
-
-        group.enter()
-        detailsRef.observeSingleEvent(of: .value) { snap in
-            defer { group.leave() }
-            if let d = snap.value as? [String: Any] {
-                name = (d["UserName"] as? String) ?? name
-                desc = (d["UserDescription"] as? String) ?? desc
+        var loaded: [RankoUser] = []
+        let appendQueue = DispatchQueue(label: "followers.append.queue") // serialize appends
+        
+        for fid in ids {
+            group.enter()
+            let userRef = Database.database().reference()
+                .child("UserData")
+                .child(fid)
+            
+            userRef.observeSingleEvent(of: .value) { snapshot in
+                defer { group.leave() }
+                
+                guard let root = snapshot.value as? [String: Any] else { return }
+                
+                let details = root["UserDetails"] as? [String: Any]
+                let pfp     = root["UserProfilePicture"] as? [String: Any]
+                
+                let name = (details?["UserName"] as? String) ?? "Unknown"
+                let desc = (details?["UserDescription"] as? String) ?? ""
+                let pic  = (pfp?["UserProfilePicturePath"] as? String) ?? ""
+                
+                let user = RankoUser(
+                    id: fid,
+                    userName: name,
+                    userDescription: desc,
+                    userProfilePicture: pic
+                )
+                
+                appendQueue.sync {
+                    loaded.append(user)
+                }
             }
         }
-
-        group.enter()
-        pfpRef.observeSingleEvent(of: .value) { snap in
-            defer { group.leave() }
-            if let p = snap.value as? [String: Any] {
-                pic = (p["UserProfilePicturePath"] as? String) ?? ""
-            }
-        }
-
+        
         group.notify(queue: .main) {
-            completion(RankoUser(id: uid, userName: name, userDescription: desc, userProfilePicture: pic))
+            self.users = loaded
+
+            if self.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                self.filteredUsers = loaded
+            } else {
+                let lc = self.searchText.lowercased()
+                self.filteredUsers = loaded.filter { $0.userName.lowercased().contains(lc) }
+            }
+
+            self.errorMessage = loaded.isEmpty ? "No followers found." : nil
+            self.isLoading = false
         }
     }
 }
+
 
 struct SearchFollowingView: View {
     @Environment(\.dismiss) private var dismiss
@@ -2229,7 +2267,7 @@ struct SearchFollowingView: View {
                             .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
                         Spacer()
                         if !searchText.isEmpty {
-                            Image(systemName: "xmark.circle.fill")
+                            Image(systemName: "xmark")
                                 .font(.system(size: 16, weight: .heavy))
                                 .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
                                 .onTapGesture {searchText = ""}
@@ -2252,7 +2290,7 @@ struct SearchFollowingView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
+                        Image(systemName: "xmark")
                             .fontWeight(.heavy)
                     }
                     .foregroundColor(Color(hex: 0x7E5F46))
@@ -2262,7 +2300,7 @@ struct SearchFollowingView: View {
                     .buttonStyle(.glassProminent)
                 }
                 
-                ScrollView {
+                ScrollView(.vertical, showsIndicators: false) {
                     if isLoading {
                         ProgressView("Loading Following…")
                             .frame(maxWidth: .infinity)
@@ -2274,26 +2312,28 @@ struct SearchFollowingView: View {
                             .padding()
                     }
                     
-                    LazyVStack(spacing: 8) {
+                    VStack(spacing: 8) {
                         ForEach(filteredUsers) { user in
-                            Button {
-                                selectedUser = user
-                            } label: {
-                                UserGalleryView(user: user)
-                                
-                            }
-                            .foregroundColor(Color(hex: 0xFF9864))
-                            .tint(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                    startPoint: .top,
-                                    endPoint: .bottom
+                            HStack {
+                                Button {
+                                    selectedUser = user
+                                } label: {
+                                    UserGalleryView(user: user)
+                                }
+                                .foregroundColor(Color(hex: 0xFF9864))
+                                .tint(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
                                 )
-                            )
-                            .buttonStyle(.glassProminent)
-                            Spacer()
+                                .buttonStyle(.glassProminent)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
+                        Spacer()
                     }
                     .padding(.bottom, 30)
                     .frame(minHeight: geo.size.height)
@@ -2333,85 +2373,100 @@ struct SearchFollowingView: View {
     private func loadFollowing() {
         isLoading = true
         errorMessage = nil
-
+        
         let followingRef = Database.database()
             .reference()
             .child("UserData")
             .child(userID)
             .child("UserSocial")
             .child("UserFollowing")
-
-        // 1) Fetch the map of timestamp → followingID
+        
         followingRef.observeSingleEvent(of: .value) { snap in
-            guard let map = snap.value as? [String: String], !map.isEmpty else {
+            // Handle "no following" represented as "" or null
+            if snap.value is NSNull || (snap.value as? String) == "" {
                 self.errorMessage = "No following found."
                 self.isLoading = false
                 return
             }
 
-            // If your timestamps are strings like "yyyyMMddHHmmss", sorting numerically works.
-            let sortedPairs: [(Int, String)] = map.compactMap { (tsStr, fid) in
-                if let ts = Int(tsStr) { return (ts, fid) }
-                return nil
+            // Expected shape: followingID -> timestampString
+            if let map = snap.value as? [String: Any], !map.isEmpty {
+                // Build (timestampInt, followingID) pairs
+                let sortedPairs: [(Int, String)] = map.compactMap { (fid, tsAny) in
+                    if let s = tsAny as? String, let t = Int(s) { return (t, fid) }
+                    if let t = tsAny as? Int { return (t, fid) }
+                    return nil
+                }
+                .sorted(by: { $0.0 > $1.0 }) // newest first
+
+                // Fallback: if timestamps were non-numeric for some reason, just use keys
+                let ids: [String] = sortedPairs.isEmpty
+                    ? Array(map.keys)
+                    : sortedPairs.map { $0.1 }
+
+                guard !ids.isEmpty else {
+                    self.errorMessage = "No following found."
+                    self.isLoading = false
+                    return
+                }
+
+                self.followingIDs = ids
+                self.fetchFollowingProfiles(ids: ids) // will set isLoading=false when done
+            } else {
+                self.errorMessage = "No following found."
+                self.isLoading = false
             }
-            .sorted(by: { $0.0 > $1.0 }) // newest first
-
-            followingIDs = sortedPairs.map { $0.1 }
-            self.fetchFollowingProfiles(ids: followingIDs)
-        }
-    }
-
-    private func fetchFollowingProfiles(ids: [String]) {
-        // Build RankoUser for each followingID by reading: UserData/{id}/(UserDetails, UserProfilePicture)
-        let group = DispatchGroup()
-        var loaded: [RankoUser] = []
-        let appendQueue = DispatchQueue(label: "following.append")
-
-        for fid in followingIDs {
-            group.enter()
-            fetchUserCard(uid: fid) { user in
-                if let user = user { appendQueue.sync { loaded.append(user) } }
-                group.leave()
-            }
-        }
-
-        group.notify(queue: .main) {
-            self.users = loaded
-            self.filteredUsers = loaded
-            self.isLoading = false
         }
     }
     
-    func fetchUserCard(uid: String, completion: @escaping (RankoUser?) -> Void) {
-        let base = Database.database().reference().child("UserData").child(uid)
-        let detailsRef = base.child("UserDetails")
-        let pfpRef     = base.child("UserProfilePicture")
-
-        var name: String = "Unknown"
-        var desc: String = ""
-        var pic:  String = ""
-
+    private func fetchFollowingProfiles(ids: [String]) {
         let group = DispatchGroup()
-
-        group.enter()
-        detailsRef.observeSingleEvent(of: .value) { snap in
-            defer { group.leave() }
-            if let d = snap.value as? [String: Any] {
-                name = (d["UserName"] as? String) ?? name
-                desc = (d["UserDescription"] as? String) ?? desc
+        var loaded: [RankoUser] = []
+        let appendQueue = DispatchQueue(label: "following.append.queue") // serialize appends
+        
+        for fid in ids {
+            group.enter()
+            let userRef = Database.database().reference()
+                .child("UserData")
+                .child(fid)
+            
+            userRef.observeSingleEvent(of: .value) { snapshot in
+                defer { group.leave() }
+                
+                guard let root = snapshot.value as? [String: Any] else { return }
+                
+                let details = root["UserDetails"] as? [String: Any]
+                let pfp     = root["UserProfilePicture"] as? [String: Any]
+                
+                let name = (details?["UserName"] as? String) ?? "Unknown"
+                let desc = (details?["UserDescription"] as? String) ?? ""
+                let pic  = (pfp?["UserProfilePicturePath"] as? String) ?? ""
+                
+                let user = RankoUser(
+                    id: fid,
+                    userName: name,
+                    userDescription: desc,
+                    userProfilePicture: pic
+                )
+                
+                appendQueue.sync {
+                    loaded.append(user)
+                }
             }
         }
-
-        group.enter()
-        pfpRef.observeSingleEvent(of: .value) { snap in
-            defer { group.leave() }
-            if let p = snap.value as? [String: Any] {
-                pic = (p["UserProfilePicturePath"] as? String) ?? ""
-            }
-        }
-
+        
         group.notify(queue: .main) {
-            completion(RankoUser(id: uid, userName: name, userDescription: desc, userProfilePicture: pic))
+            self.users = loaded
+
+            if self.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                self.filteredUsers = loaded
+            } else {
+                let lc = self.searchText.lowercased()
+                self.filteredUsers = loaded.filter { $0.userName.lowercased().contains(lc) }
+            }
+
+            self.errorMessage = loaded.isEmpty ? "No following found." : nil
+            self.isLoading = false
         }
     }
 }

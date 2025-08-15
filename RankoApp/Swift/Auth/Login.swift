@@ -196,6 +196,7 @@ struct Login: View {
                 user_data.userLoginService = "Apple"
                 user_data.logStatus = true
                 isLoading = false
+                user_data.userID = Auth.auth().currentUser!.uid
                 Analytics.logEvent(AnalyticsEventLogin, parameters: [
                     AnalyticsParameterMethod: "Apple"
                 ])
@@ -226,6 +227,7 @@ struct Login: View {
                 user_data.userLoginService = "Google"
                 user_data.logStatus = true
                 isLoading = false
+                user_data.userID = Auth.auth().currentUser!.uid
             }
         }
     }
