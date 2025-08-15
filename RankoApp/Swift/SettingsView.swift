@@ -245,7 +245,7 @@ struct SettingsView: View {
         .sheet(isPresented: $accountView) {
             AccountView()
         }
-        .sheet(isPresented: $rankoProView) {
+        .fullScreenCover(isPresented: $rankoProView) {
             ProSubscriptionView()
         }
         .sheet(isPresented: $notificationsView) {
@@ -358,93 +358,98 @@ enum IAPImage: String, CaseIterable {
 
 struct ProSubscriptionView: View {
     @State private var loadingStatus: (Bool, Bool) = (false, false)
+    @State private var snappedItem = 0.0
+    @State private var draggingItem = 0.0
+    @State var activeIndex: Int = 0
+    
+    let subscriptionFeatures: [SubscriptionFeatures] = [
+        .init(id: 1, title: "Unlimited Items & Rankos", icon: "infinity", description: "Create as many Rankos and items in Rankos as you want!"),
+        .init(id: 2, title: "Create New Blank Items", icon: "rectangle.dashed", description: "Add blank items to your Rankos!"),
+        .init(id: 3, title: "Add Custom Images to Items", icon: "photo.fill", description: "Add custom photos from your camera roll to your items!"),
+        .init(id: 4, title: "Download & Export Rankos", icon: "arrow.down.circle.fill", description: "Download your Rankos for Offline Use and also export via csv and soon other formats!"),
+        .init(id: 5, title: "New Folders & Tags", icon: "square.grid.3x1.folder.fill.badge.plus", description: "Organise all your Rankos into folders and tags, seperate a series of Rankos by categories or anything practically!"),
+        .init(id: 6, title: "Unlock Pro App Icons", icon: "apps.iphone", description: "Unlock all pro app icons in the Customise App section!"),
+        .init(id: 7, title: "Pin 20 Rankos", icon: "pin.fill", description: "Pin 20 Rankos to your Feature View for quick access and to show friends and the community!"),
+        .init(id: 8, title: "Clone Rankos", icon: "square.fill.on.square.fill", description: "Copy other users Rankos and create your very own version of their creation!")
+    ]
+    
     var body: some View {
-        GeometryReader {
-            let size = $0.size
-            let isSmalleriPhone = size.height < 700
-            
-            VStack(spacing: 0) {
-                Group {
-                    if isSmalleriPhone {
-                        SubscriptionStoreView(productIDs: Self.productIDs, marketingContent: {
-                            CustomMarketingView()
-                        })
-                        .subscriptionStoreControlStyle(.compactPicker, placement: .bottomBar)
-                    } else {
-                        SubscriptionStoreView(productIDs: Self.productIDs, marketingContent: {
-                            CustomMarketingView()
-                        })
-                        .subscriptionStoreControlStyle(.pagedProminentPicker, placement: .bottomBar)
-                    }
-                }
-                .subscriptionStorePickerItemBackground(.ultraThinMaterial)
-                .storeButton(.visible, for: .restorePurchases)
-                .storeButton(.hidden, for: .policies)
-                .onInAppPurchaseStart { product in
-                    print("Show Loading Screen")
-                    print("Purchasing \(product.displayName)")
-                }
-                .onInAppPurchaseCompletion { product, result in
+        
+        VStack(spacing: 0) {
+            SubscriptionStoreView(productIDs: Self.productIDs, marketingContent: {
+                CustomMarketingView()
+            })
+            .subscriptionStoreControlStyle(.pagedProminentPicker, placement: .bottomBar)
+            .subscriptionStorePickerItemBackground(.ultraThinMaterial)
+            .storeButton(.visible, for: .restorePurchases)
+            .storeButton(.hidden, for: .policies)
+            .onInAppPurchaseStart { product in
+                print("Show Loading Screen")
+                print("Purchasing \(product.displayName)")
+            }
+            .onInAppPurchaseCompletion { product, result in
+                switch result {
+                case .success(let result):
                     switch result {
-                    case .success(let result):
-                        switch result {
-                        case .success(_): print("Success and verify purchase using verification result")
-                        case .pending: print("Pending Action")
-                        case .userCancelled: print("User Cancelled")
-                        @unknown default:
-                            fatalError()
-                        }
-                    case .failure(let error):
-                        print(error.localizedDescription)
+                    case .success(_): print("Success and verify purchase using verification result")
+                    case .pending: print("Pending Action")
+                    case .userCancelled: print("User Cancelled")
+                    @unknown default:
+                        fatalError()
                     }
-                    
-                    print("Hide Loading Screen")
-                }
-                .subscriptionStatusTask(for: "4205BB53") {
-                    if let result = $0.value {
-                        let premiumUser = !result.filter({ $0.state == .subscribed }).isEmpty
-                        print("User Subscribed = \(premiumUser)")
-                        
-                    }
-                    
-                    print("[subscriptionStatusTask] Subscription status checked")
-                    loadingStatus.1 = true
+                case .failure(let error):
+                    print(error.localizedDescription)
                 }
                 
-                /// Privacy Policy & Terms of Service
-                HStack(spacing: 3) {
-                    Link("Terms of Service", destination: URL(string: "https://apple.com")!)
-                    
-                    Text("And")
-                    
-                    Link("Privacy Policy", destination: URL(string: "https://apple.com")!)
-                }
-                .font(.caption)
-                .padding(.bottom, 10)
+                print("Hide Loading Screen")
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .opacity(isLoadingCompleted ? 1 : 0)
-            .background(BackdropView())
-            .overlay {
-                if !isLoadingCompleted {
-                    ProgressView()
-                        .font(.largeTitle)
+            .subscriptionStatusTask(for: "4205BB53") {
+                if let result = $0.value {
+                    let premiumUser = !result.filter({ $0.state == .subscribed }).isEmpty
+                    print("User Subscribed = \(premiumUser)")
+                    
                 }
+                
+                print("[subscriptionStatusTask] Subscription status checked")
+                loadingStatus.1 = true
             }
-            .animation(.easeInOut(duration: 0.35), value: isLoadingCompleted)
-            .storeProductsTask(for: Self.productIDs) { @MainActor collection in
-                if let products = collection.products, products.count == Self.productIDs.count {
-                    try? await Task.sleep(for: .seconds(0.1))
-                    print("[storeProductsTask] Products loaded successfully")
-                    loadingStatus.0 = true
-                }
+            
+            /// Privacy Policy & Terms of Service
+            HStack(alignment: .center, spacing: 3) {
+                Link("Terms of Service", destination: URL(string: "https://apple.com")!)
+                
+                Text("&")
+                
+                Link("Privacy Policy", destination: URL(string: "https://apple.com")!)
+            }
+            .font(.caption)
+            .padding(.bottom, 30)
+            .padding(.top, 15)
+        }
+        .padding(.top, 50)
+        .ignoresSafeArea()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .opacity(isLoadingCompleted ? 1 : 0)
+        .background(BackdropView())
+        .overlay {
+            if !isLoadingCompleted {
+                ProgressView()
+                    .font(.largeTitle)
+            }
+        }
+        .animation(.easeInOut(duration: 0.35), value: isLoadingCompleted)
+        .storeProductsTask(for: Self.productIDs) { @MainActor collection in
+            if let products = collection.products, products.count == Self.productIDs.count {
+                try? await Task.sleep(for: .seconds(0.1))
+                print("[storeProductsTask] Products loaded successfully")
+                loadingStatus.0 = true
             }
         }
         .accentColor(.white)
         .environment(\.colorScheme, .dark)
         .tint(.white)
         .statusBarHidden()
-        
+        .ignoresSafeArea()
     }
     
     var isLoadingCompleted: Bool {
@@ -480,72 +485,57 @@ struct ProSubscriptionView: View {
     @ViewBuilder
     func CustomMarketingView() -> some View {
         VStack(spacing: 15) {
-            /// App Screenshots View
-            HStack(spacing: 25) {
-                ScreenshotsView([.one, .two, .three], offset: -200)
-                ScreenshotsView([.four, .one, .two], offset: -350)
-                ScreenshotsView([.two, .three, .one], offset: -250)
-                    .overlay(alignment: .trailing) {
-                        ScreenshotsView([.four, .two, .one], offset: -150)
-                            .visualEffect { content, proxy in
-                                content
-                                    .offset(x: proxy.size.width + 25)
-                            }
-                    }
-            }
-            .frame(maxHeight: .infinity)
-            .offset(x: 20)
-            /// Progress Blur Mask
-            .mask {
-                LinearGradient(colors: [
-                    .white,
-                    .white.opacity(0.9),
-                    .white.opacity(0.7),
-                    .white.opacity(0.4),
-                    .clear
-                ], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-                .padding(.bottom, -40)
-            }
-            
             /// Replace with your App Information
-            VStack(spacing: 6) {
-                Text("Ranko")
-                    .font(.title3)
-                    .fontWeight(.black)
-                
-                Text("Supporter")
-                    .font(.largeTitle.bold())
-                    .padding(.bottom, 10)
-                
-                Text("Please support us by purchasing the Pro version. We need your help to keep the databases running and to keep adding new features.")
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 10)
-                
-                Text("Features")
-                    .font(.headline)
-                    .fontWeight(.black)
-                    .padding(.bottom, 10)
-                
-                Text("• Unlock All App Icons")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                
-                Text("• Create Blank Custom List Items")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                
-                Text("• Experience Dark Mode")
-                    .font(.caption2)
-                    .fontWeight(.bold)
+            VStack(spacing: 18) {
+                HStack(spacing: 16) {
+                    ThreeRectanglesAnimation(rectangleWidth: 14, rectangleMaxHeight: 40, rectangleSpacing: 3, rectangleCornerRadius: 2, animationDuration: 0.8)
+                        .frame(height: 60)
+                    
+                    Text("Ranko Pro")
+                        .font(.system(size: 28, weight: .black, design: .default))
+                        .padding(.top, 25)
+                        .padding(.trailing, 20)
+                }
+                .frame(height: 60)
             }
             .foregroundStyle(.white)
-            .padding(.top, 15)
-            .padding(.bottom, 18)
-            .padding(.horizontal, 15)
+            ZStack {
+                ForEach(subscriptionFeatures) { item in
+                    
+                    // article view
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(.ultraThinMaterial)
+                        VStack {
+                            HStack {
+                                Image(systemName: item.icon)
+                                    .font(.system(size: 18, weight: .heavy, design: .default))
+                                Text(item.title)
+                                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                            }
+                            Text(item.description)
+                                .font(.system(size: 12, weight: .regular, design: .default))
+                                .multilineTextAlignment(.leading)
+                                .padding(.top, 8)
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .frame(width: 350, height: 150)
+                    .scaleEffect(1.0 - abs(distance(item.id)) * 0.2 )
+                    .opacity(1.0 - abs(distance(item.id)) * 0.3 )
+                    .offset(x: myXOffset(item.id), y: 0)
+                    .zIndex(1.0 - abs(distance(item.id)) * 0.1)
+                    .onTapGesture {
+                        withAnimation {
+                            draggingItem = Double(item.id)
+                        }
+                    }
+                }
+            }
+            .gesture(getDragGesture())
+            .padding(.top, 50)
         }
+        .padding(.top, -60)
     }
     
     @ViewBuilder
@@ -565,8 +555,43 @@ struct ProSubscriptionView: View {
         .rotationEffect(.init(degrees: -30), anchor: .bottom)
         .scrollClipDisabled()
     }
+    private func getDragGesture() -> some Gesture {
+        
+        DragGesture()
+            .onChanged { value in
+                draggingItem = snappedItem + value.translation.width / 400
+            }
+            .onEnded { value in
+                withAnimation {
+                    draggingItem = snappedItem + value.predictedEndTranslation.width / 400
+                    draggingItem = round(draggingItem).remainder(dividingBy: Double(subscriptionFeatures.count))
+                    snappedItem = draggingItem
+                    
+                    //Get the active Item index
+                    self.activeIndex = subscriptionFeatures.count + Int(draggingItem)
+                    if self.activeIndex > subscriptionFeatures.count || Int(draggingItem) >= 0 {
+                        self.activeIndex = Int(draggingItem)
+                    }
+                }
+            }
+    }
+    
+    func distance(_ item: Int) -> Double {
+        return (draggingItem - Double(item)).remainder(dividingBy: Double(subscriptionFeatures.count))
+    }
+    
+    func myXOffset(_ item: Int) -> Double {
+        let angle = Double.pi * 2 / Double(subscriptionFeatures.count) * distance(item)
+        return sin(angle) * 200
+    }
 }
 
+struct SubscriptionFeatures: Identifiable {
+    let id: Int
+    let title: String
+    let icon: String
+    let description: String
+}
 
 // used in HomeView
 struct SubscriptionStatusManager {

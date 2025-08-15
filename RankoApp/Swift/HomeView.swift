@@ -623,7 +623,7 @@ struct DefaultListHomeView: View {
                 }
                 badgeView(for: item.rank)
             }
-            Text(item.itemName)
+            Text(item.itemName.count > 25 ? "\(item.itemName.prefix(23))..." : item.itemName)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(Color(hex: 0x7E5F46))
                 .lineLimit(1)
