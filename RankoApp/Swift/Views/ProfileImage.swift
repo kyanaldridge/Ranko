@@ -68,14 +68,8 @@ struct ProfileIconView: View {
         .clipShape(Circle())
         .overlay(
             Circle()
-                .stroke(LinearGradient(
-                    gradient: Gradient(colors: [Color(hex: 0xFFECC5), Color(hex: 0xFECF88)]),
-                    startPoint: .top,
-                    endPoint: .bottom),
-                    lineWidth: 3
-                )
+                .stroke(Color(hex: 0xFECF88), lineWidth: 3)
         )
-        .shadow(radius: 3)
     }
 }
 

@@ -116,6 +116,7 @@ struct RankoList: Identifiable, Codable {
     let dateTime: String          // from "RankoDateTime" e.g. "2024-04-06-17-42"
     var items: [RankoItem]
 }
+
 struct RankoRecord: Codable, Identifiable, Equatable {
     let objectID: String
     let ItemName: String
@@ -158,6 +159,15 @@ struct RankoListAlgolia: Codable {
     let RankoLikes: Int
     let RankoComments: Int
     let RankoVotes: Int
+}
+
+struct ClonedRankoList: Codable {
+    let listName: String
+    let listDescription: String
+    let type: String
+    let category: String
+    let isPrivate: String
+    var items: [RankoItem]
 }
 
 // MARK: - Global Functions

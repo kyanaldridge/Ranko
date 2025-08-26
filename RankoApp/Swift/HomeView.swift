@@ -41,7 +41,454 @@ let isSimulator: Bool = {
     return isSim
 }()
 
+struct MyView: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(hex: 0xF76000), Color(hex: 0xD84A00), Color(hex: 0xBB3300), Color(hex: 0x9E1C00), Color(hex: 0x800100)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {} label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 24, weight: .black, design: .default))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.horizontal, 1)
+                            .padding(.vertical, 6)
+                    }
+                    .tint(Color(hex: 0xC03700))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                }
+                .padding(.horizontal, 30)
+                Spacer()
+                HStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("B")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("L")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("I")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("N")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("D")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                }
+                HStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("S")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("E")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("Q")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("U")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("E")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("N")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("C")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("E")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                }
+                Spacer()
+                HStack(spacing: 3) {
+                    Button {} label: {
+                        Image(systemName: "trophy.fill")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 6)
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                    
+                    Button {} label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 6)
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                    
+                    Button {} label: {
+                        Spacer()
+                        Text("Challenge")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 2)
+                            .frame(maxWidth: .infinity)
+                        Spacer()
+                        VStack(spacing: -5) {
+                            Text("SCORE")
+                                .font(.custom("Nunito-Black", size: 10))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("51")
+                                .font(.custom("Nunito-Black", size: 24))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        }
+                        .padding(.trailing, 10)
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                }
+                .padding(.horizontal)
+                
+                HStack(spacing: 3) {
+                    Button {} label: {
+                        HStack {
+                            Image(systemName: "paintbrush.pointed.fill")
+                                .font(.custom("Nunito-Black", size: 24))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("Themes")
+                                .font(.custom("Nunito-Black", size: 24))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .padding(.vertical, 5)
+                                .padding(.horizontal, 5)
+                        }
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                    
+                    Button {} label: {
+                        Spacer()
+                        Text("Classic")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 2)
+                            .frame(maxWidth: .infinity)
+                        Spacer()
+                        VStack(spacing: -5) {
+                            Text("LEVEL")
+                                .font(.custom("Nunito-Black", size: 10))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("13")
+                                .font(.custom("Nunito-Black", size: 24))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        }
+                        .padding(.trailing, 10)
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                }
+                .padding(.horizontal)
+                Spacer()
+                Spacer()
+                Spacer()
+            }
+        }
+    }
+}
+
+struct MyView2: View {
+    @State private var score: Int = 140
+    @State private var time: Int = 337291
+    @State private var boxes: CGFloat = 13
+
+    // customize: count → array of "boxes per row" (i.e., columns in that row)
+    var layoutForCount: [Int: [Int]] = [
+        1: [1],
+        2: [2],
+        3: [3],
+        4: [4],
+        5: [2, 3],
+        6: [3, 3],
+        7: [3, 4],
+        8: [4, 4],
+        9: [4, 5],
+        10: [5, 5],
+        11: [3, 4, 4],
+        12: [4, 4, 4],
+        13: [4, 5, 4],
+        14: [4, 5, 5],
+        15: [5, 5, 5],
+        16: [4, 4, 4, 4],
+        17: [4, 4, 4, 5],
+        18: [4, 4, 5, 5],
+        19: [4, 5, 5, 5],
+        20: [5, 5, 5, 5],
+        21: [4, 4, 4, 4, 5],
+        22: [4, 4, 4, 5, 5],
+        23: [4, 4, 5, 5, 5],
+        24: [4, 5, 5, 5, 5],
+        25: [5, 5, 5, 5, 5]
+    ]
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(hex: 0xF76000),
+                    Color(hex: 0xD84A00), Color(hex: 0xBB3300), Color(hex: 0x9E1C00),
+                    Color(hex: 0x800100)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            VStack {
+                Text("\(score)")
+                    .font(.system(size: 28, weight: .black, design: .default))
+                    .foregroundColor(Color(hex: 0xFFFFFF))
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color(hex: 0x650E02))
+                        )
+
+                Spacer()
+                
+                VStack(spacing: 20) {
+                    
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 160, height: 160)
+                        .overlay(
+                            Text("L")
+                                .font(.custom("Nunito-Black", size: 90))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    
+                    ZStack {
+                        HStack {
+                            Spacer()
+                            Text("\(time)s")
+                                .font(.custom("Nunito-Black", size: 15))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(Color(hex: 0x650E02))
+                                    )
+                            Spacer()
+                            Spacer()
+                            Spacer()
+                            Spacer()
+                            Spacer()
+                            Spacer()
+                        }
+                        HStack {
+                            Spacer()
+                            Spacer()
+                            Spacer()
+                            Spacer()
+                            Spacer()
+                            Spacer()
+                            HStack(spacing: 5) {
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(Color(hex: 0xAD0303))
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(Color(hex: 0xAD0303))
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(Color(hex: 0xAD0303))
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(Color(hex: 0x696969))
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(Color(hex: 0x696969))
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(Color(hex: 0x650E02))
+                                )
+                            Spacer()
+                        }
+                    }
+                    
+                    // 🔽🔽🔽 replaced grid logic starts here
+                    let count = max(0, Int(boxes))
+                    let pattern = layoutForCount[count] ?? defaultPattern(for: count)
+                    
+                    VStack(spacing: 10) {
+                        ForEach(0..<pattern.count, id: \.self) { row in
+                            let rowCount = pattern[row]
+                            let gridItems = Array(
+                                repeating: GridItem(.flexible(), spacing: 10),
+                                count: rowCount
+                            )
+                            
+                            LazyVGrid(columns: gridItems, alignment: .center, spacing: 10) {
+                                let start = pattern.prefix(row).reduce(0, +)
+                                let end = min(start + rowCount, count)
+                                ForEach(start..<end, id: \.self) { idx in
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(Color(hex: 0x8E0F00))
+                                        .frame(minWidth: 65, minHeight: 65)
+                                        .overlay(
+                                            Text("D")
+                                                .font(.custom("Nunito-Black", size: 38))
+                                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                        )
+                                        .accessibilityLabel("box \(idx + 1)")
+                                }
+                            }
+                        }
+                    }
+                    // 🔼🔼🔼 replaced grid logic ends here
+                }
+
+                Spacer()
+                Spacer()
+                Spacer()
+
+                HStack {
+                    Spacer()
+                    Button {} label: {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 20, weight: .black, design: .default))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 3)
+                    }
+                    .buttonStyle(.glass)
+
+                    Spacer()
+                    Button {} label: {
+                        Image(systemName: "house.fill")
+                            .font(.system(size: 24, weight: .black, design: .default))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.glass)
+
+                    Spacer()
+                    Button {} label: {
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 18, weight: .regular, design: .default))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.glass)
+                    Spacer()
+                }
+                .padding(.vertical, -10)
+                .padding(.horizontal, 10)
+            }
+            .padding()
+        }
+    }
+
+    // fallback layout if not customized above
+    // tweak this to your taste (e.g., prefer rows of 4, then remainder)
+    private func defaultPattern(for n: Int) -> [Int] {
+        guard n > 0 else { return [] }
+        if n <= 4 { return [n] }
+        if n == 5 { return [2, 3] }
+        if n == 6 { return [3, 3] }
+
+        // generic: fill rows of 5 until done (change 5 to whatever you like)
+        let perRow = 5
+        var res: [Int] = []
+        var remaining = n
+        while remaining > 0 {
+            let take = min(perRow, remaining)
+            res.append(take)
+            remaining -= take
+        }
+        return res
+    }
+}
+
+#Preview {
+    MyView()
+}
+
 // MARK: - HomeView
+
 struct HomeView: View {
     // MARK: - Variables
     @StateObject private var user_data = UserInformation.shared
@@ -64,105 +511,61 @@ struct HomeView: View {
         return isSim
     }()
     
+    static var popularCategories: [String] {
+        return ["Songs", "Science", "Basketball", "Countries", "Movies", "Food", "Mammals"]
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
-                LinearGradient(gradient: Gradient(colors: [Color(hex: 0xDBC252), Color(hex: 0xFF9864), Color(hex: 0xFF9864), Color(hex: 0xFF9864), Color(hex: 0xFF9864), Color(hex: 0xFF9864)]),
-                               startPoint: .top,
-                               endPoint: .bottom)
+                Color(hex: 0xFFFFFF)
                     .ignoresSafeArea()
-                
-                if isSimulator {
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            // MARK: - Header
-                            HStack {
-                                Text("Home")
-                                    .font(.system(size: 32, weight: .black))
-                                    .foregroundColor(.white)
-                                Spacer()
-                                ProfileIconView(diameter: CGFloat(50))
+                ScrollView(.vertical) {
+                    VStack {
+                        HStack {
+                            Text("Home")
+                                .font(.custom("Nunito-Black", size: 36))
+                                .foregroundStyle(Color(hex: 0x514343))
+                            Spacer()
+                            ProfileIconView(diameter: CGFloat(50))
+                        }
+                        .padding(.horizontal, 35)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(Self.popularCategories, id: \.self) { category in
+                                    Circle()
+                                        .foregroundColor(categoryChipIconColors[category]?.opacity(0.6))
+                                        .frame(width: 60, height: 60)
+                                        .overlay(
+                                            Image(systemName: FilterChip.icon(named: category, in: defaultFilterChips) ?? "circle.fill")
+                                                .resizable()
+                                                .scaledToFit()
+                                                .frame(maxWidth: 30, maxHeight: 30)
+                                                .fontWeight(.black)
+                                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                        )
+                                }
                             }
-                            .padding(.top, 20)
-                            .padding(.bottom, 20)
-                            .padding(.horizontal, 30)
+                            .padding(.horizontal, 20)
+                        }
+                        if isLoadingLists {
+                            // Show 4 skeleton cards
                             VStack(spacing: 16) {
-                                ForEach(0..<2, id: \.self) { _ in
+                                ForEach(0..<4, id: \.self) { _ in
                                     HomeListSkeletonViewRow()
                                 }
                             }
                             .padding(.top, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 15)
-                                    .fill(
-                                        LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                                       startPoint: .top,
-                                                       endPoint: .bottom
-                                                      )
-                                    )
-                                )
-                            
-                        }
-                    }
-                    
-                } else {
-                    // Now a single ScrollView + our single-column MyListsView
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(spacing: 0) {
-                                // MARK: - Header
-                                HStack {
-                                    Text("Home")
-                                        .font(.system(size: 32, weight: .black))
-                                        .foregroundColor(.white)
-                                        .fontDesign(.rounded)
-                                    Spacer()
-                                    ProfileIconView(diameter: CGFloat(50))
-                                }
-                                .padding(.top, 20)
-                                .padding(.bottom, 20)
-                                .padding(.horizontal, 30)
-                                
-                                if isLoadingLists {
-                                    // Show 4 skeleton cards
-                                    VStack(spacing: 16) {
-                                        ForEach(0..<4, id: \.self) { _ in
-                                            HomeListSkeletonViewRow()
-                                        }
-                                    }
-                                    .padding(.top, 23)
-                                    .padding(.horizontal)
-                                    .padding(.bottom, 60)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 25)
-                                            .fill(
-                                                LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                                               startPoint: .top,
-                                                               endPoint: .bottom
-                                                              )
-                                            )
-                                    )
-                                } else {
-                                    HomeListsDisplay(
-                                      showToast: $showToast,
-                                      toastMessage: $toastMessage,
-                                      showToastHelper: showComingSoonToast
-                                    )
-                                        .padding(.top)
-                                        .padding(.bottom)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 25)
-                                                .fill(
-                                                    LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                                                   startPoint: .top,
-                                                                   endPoint: .bottom
-                                                                  )
-                                                )
-                                        )
-                                }
-                                
-                            }
-                            
+                            .padding(.bottom, 60)
+                            .padding(.leading)
+                        } else {
+                            HomeListsDisplay(
+                                presentFakeRankos: false,
+                                showToast: $showToast,
+                                toastMessage: $toastMessage,
+                                showToastHelper: showComingSoonToast
+                            )
                         }
                     }
                 }
@@ -388,7 +791,6 @@ struct HomeView: View {
     }
 }
 
-
 struct DefaultListHomeView: View {
     let listData: RankoList
     @StateObject private var user_data = UserInformation.shared
@@ -431,26 +833,107 @@ struct DefaultListHomeView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            creatorRow
-            Text(listData.listName)
-                .font(.system(size: 16, weight: .heavy))
-                .foregroundColor(Color(hex: 0x7E5F46))
-            Divider()
-            itemsSection
-            Divider()
-            likeCommentShareSection
-            descriptionSection
+        VStack {
+            Rectangle()
+                .fill(Color(hex: 0x707070))
+                .opacity(0.15)
+                .frame(maxWidth: .infinity)
+                .frame(height: 2)
+                .padding(.bottom, 10)
+                .padding(.horizontal, 10)
+            HStack(alignment: .top) {
+                Group {
+                    if let img = profileImage {
+                        Image(uiImage: img)
+                            .resizable()
+                    } else {
+                        SkeletonView(RoundedRectangle(cornerRadius: 10))
+                            .frame(width: 42, height: 42)
+                    }
+                }
+                .frame(width: 42, height: 42)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                
+                VStack(alignment: .leading) {
+                    HStack(spacing: 4) {
+                        Text(creatorName)
+                            .font(.custom("Nunito-Black", size: 13))
+                            .foregroundColor(Color(hex: 0x000000))
+                        Text("•")
+                            .font(.custom("Nunito-Black", size: 11))
+                            .foregroundColor(Color(hex: 0x818181))
+                        Text(timeAgo(from: String(listData.dateTime)))
+                            .font(.custom("Nunito-Black", size: 11))
+                            .foregroundColor(Color(hex: 0x818181))
+                        Spacer()
+                    }
+                    Text(listData.listName)
+                        .font(.custom("Nunito-Black", size: 18))
+                        .foregroundColor(Color(hex: 0x666666))
+                        .padding(.bottom, -15)
+                }
+                .padding(.leading, 8)
+                Spacer()
+            }
+            ZStack {
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 42)
+                    itemsSection
+                }
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 42)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color(hex: 0x707070))
+                                .frame(width: 2)
+                                .opacity(0.3)
+                        )
+                    Spacer()
+                }
+            }
+            HStack {
+                ZStack {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 42)
+                    HomeCategoryBadge1(text: listData.category)
+                }
+                
+                HStack(spacing: 4) {
+                    LikeButton(isLiked: hasLiked, onTap: handleLikeTap)
+                    Text("\(likes.count)")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(Color(hex: 0x666666))
+                }
+                .padding(.horizontal, 8)
+                
+                Button {
+                    // pass a custom message or a static one:
+                    onCommentTap("Interacting on Friends & Community Rankos Are Coming Soon!")
+                } label: {
+                    Image(systemName: "bubble.fill")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                    Text("\(commentsCount)")
+                        .font(.system(size: 12, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                }
+                .padding(.trailing, 8)
+                
+                Button {
+                    openShareView = true
+                } label: {
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                }
+                Spacer()
+            }
         }
-        .padding()
-        .background(
-            LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFEF4E7), Color(hex: 0xFFFBF1)]),
-                           startPoint: .top,
-                           endPoint: .bottom
-                          )
-        )
-        .cornerRadius(25)
-        .shadow(color: Color(hex: 0xD0BD91).opacity(0.6), radius: 6, x: 0, y: -3)
         .overlay(
             Group {
                 if showToast {
@@ -476,67 +959,39 @@ struct DefaultListHomeView: View {
         }
     }
     
-    // Badge builder with white circle background and inset offset
+    
     @ViewBuilder
     private func badgeView(for rank: Int) -> some View {
         Group {
             if rank == 1 {
-                Image(systemName: "1.circle.fill").foregroundColor(Color(red: 1, green: 0.65, blue: 0)).font(.body).padding(3)
+                Image(systemName: "1.circle.fill")
+                    .foregroundColor(Color(red: 1, green: 0.65, blue: 0))
+                    .font(.system(size: 15, weight: .black, design: .default))
+                    .padding(2)
             } else if rank == 2 {
-                Image(systemName: "2.circle.fill").foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698)).font(.body).padding(3)
+                Image(systemName: "2.circle.fill")
+                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698))
+                    .font(.system(size: 15, weight: .black, design: .default))
+                    .padding(2)
             } else if rank == 3 {
-                Image(systemName: "3.circle.fill").foregroundColor(Color(red: 0.56, green: 0.33, blue: 0)).font(.body).padding(3)
+                Image(systemName: "3.circle.fill")
+                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0))
+                    .font(.system(size: 15, weight: .black, design: .default))
+                    .padding(2)
             } else {
-                Image(systemName: "\(rank).circle.fill").foregroundColor(Color(hex: 0xFF9864)).font(.body).padding(3)
+                Image(systemName: "\(rank).circle.fill")
+                    .foregroundColor(Color(hex: 0x000000))
+                    .font(.system(size: 15, weight: .black, design: .default))
+                    .padding(2)
             }
         }
         .background(Circle().fill(Color.white))
         .offset(x: 7, y: 7)
     }
     
-    private var creatorRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                Group {
-                    if let img = profileImage {
-                        Image(uiImage: img)
-                            .resizable()
-                    } else {
-                        SkeletonView(RoundedRectangle(cornerRadius: 10))
-                            .frame(width: 50, height: 50)
-                    }
-                }
-                .frame(width: 50, height: 50)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .top, spacing: 4) {
-                        Text(creatorName)
-                            .font(.system(size: 13, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x7E5F46))
-                        Text("•")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundColor(Color(hex: 0xA3A3A3))
-                            .padding(.top, 2)
-                        Text(timeAgo(from: String(listData.dateTime)))
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundColor(Color(hex: 0xA3A3A3))
-                            .padding(.top, 2)
-                        Spacer()
-                    }
-                    HomeCategoryBadge(text: listData.category)
-                }
-                Spacer()
-            }
-        }
-        .onTapGesture {
-            spectateProfile.toggle()
-        }
-    }
-    
     private var itemsSection: some View {
         GeometryReader { geometry in
-            let halfWidth = geometry.size.width * 0.5
+            let halfWidth = geometry.size.width * 0.4
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 24) {
                     // pass halfWidth as the minimum
@@ -588,19 +1043,21 @@ struct DefaultListHomeView: View {
                             badgeView(for: item10.rank)
                         }
                         Text(item10.itemName)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: 0x7E5F46))
+                            .font(.custom("Nunito-Black", size: 14))
+                            .foregroundColor(Color(hex: 0x666666))
                             .lineLimit(1)
                             .padding(.leading, 6)
                     }
                 } else {
                     // >10 items → show “+N” where N = total-9
-                    Text("+\(listData.items.count - 9) more itemz")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Color(hex: 0x7E5F46))
-                        .frame(maxWidth: .infinity, maxHeight: 50, alignment: .center)
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 6)).foregroundColor(.clear)
+                    Color.gray.opacity(0.2)
+                        .frame(width: 47, height: 47)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            Text("+\(listData.items.count - 9)")
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(Color(hex: 0x666666))
+                        )
                 }
             }
         }
@@ -613,67 +1070,23 @@ struct DefaultListHomeView: View {
                     if let img = phase.image {
                         img.resizable()
                             .scaledToFill()
-                            .frame(width: 50, height: 50)
+                            .frame(width: 47, height: 47)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     } else {
                         Color.gray.opacity(0.2)
-                            .frame(width: 50, height: 50)
+                            .frame(width: 47, height: 47)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                 }
                 badgeView(for: item.rank)
             }
             Text(item.itemName.count > 25 ? "\(item.itemName.prefix(23))..." : item.itemName)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(hex: 0x7E5F46))
+                .font(.custom("Nunito-Black", size: 14))
+                .foregroundColor(Color(hex: 0x666666))
                 .lineLimit(1)
                 .padding(.leading, 6)
         }
     }
-    
-    private var likeCommentShareSection: some View {
-        HStack(spacing: 18) {
-            HStack(spacing: 4) {
-                LikeButton(isLiked: hasLiked, onTap: handleLikeTap)
-                Text("\(likes.count)")
-                    .font(.system(size: 16, weight: .heavy))
-                    .foregroundColor(Color(hex: 0x7E5F46))
-            }
-            
-            Button {
-                // pass a custom message or a static one:
-                onCommentTap("Interacting on Friends & Community Rankos Are Coming Soon!")
-            } label: {
-                Image(systemName: "bubble.right")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(Color(hex: 0x7E5F46))
-                Text("\(commentsCount)")
-                    .font(.system(size: 16, weight: .heavy))
-                    .foregroundColor(Color(hex: 0x7E5F46))
-            }
-            Button {
-                openShareView = true
-            } label: {
-                Image(systemName: "paperplane")
-                    .font(.system(size: 18, weight: .heavy))
-                    .foregroundColor(Color(hex: 0x7E5F46))
-            }
-            
-            
-            Spacer()
-        }
-    }
-    
-    private var descriptionSection: some View {
-        Group {
-            if !listData.listDescription.isEmpty {
-                Text(listData.listDescription)
-                    .font(.system(size: 13, weight: .heavy))
-                    .foregroundColor(Color(hex: 0x7E5F46))
-            }
-        }
-    }
-    
     
     // MARK: — Like handling (unchanged)
     private func handleLikeTap() {
@@ -899,7 +1312,7 @@ struct DefaultListHomeView: View {
             } label: {
                 ZStack {
                     image(Image(systemName: "heart.fill"), show: isLiked)
-                    image(Image(systemName: "heart"),      show: !isLiked)
+                    image(Image(systemName: "heart.fill"),      show: !isLiked)
                 }
             }
             
@@ -907,12 +1320,60 @@ struct DefaultListHomeView: View {
         
         private func image(_ image: Image, show: Bool) -> some View {
             image
-                .tint(isLiked ? .red : Color(hex: 0x7E5F46))
-                .font(.system(size: 20, weight: .semibold))
+                .tint(isLiked ? Color(hex: 0xDA0D0D) : Color(hex: 0x666666))
+                .font(.system(size: 16, weight: .black))
                 .scaleEffect(show ? 1 : 0)
                 .opacity(show ? 1 : 0)
                 .animation(.interpolatingSpring(stiffness: 170, damping: 15), value: show)
         }
+    }
+}
+
+
+struct DefaultListHomeView_Previews: PreviewProvider {
+
+    // Mock items 1…10
+    static let mockItems: [RankoItem] = [
+        .init(id: "1hewhlehwlhcx", rank: 1, votes: 103, record: RankoRecord(objectID: "1hewhlehwlhcx", ItemName: "Love Sick", ItemDescription: "Don Toliver", ItemCategory: "", ItemImage: "https://store.warnermusic.com.au/cdn/shop/files/20221202_DON-T_LP.jpg?v=1683766183&width=800")),
+        .init(id: "h1ewhlehwlhcx", rank: 2, votes: 97, record: RankoRecord(objectID: "h1ewhlehwlhcx", ItemName: "Man On The Moon III: The Chosen", ItemDescription: "Kid Cudi", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/e/e2/Man_on_the_Moon_III.png")),
+        .init(id: "he1whlehwlhcx", rank: 3, votes: 72, record: RankoRecord(objectID: "he1whlehwlhcx", ItemName: "HEROES & VILLAINS", ItemDescription: "Metro Boomin", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/5/5f/Metro_Boomin_-_Heroes_%26_Villains.png")),
+        .init(id: "hew1hlehwlhcx", rank: 4, votes: 56, record: RankoRecord(objectID: "hew1hlehwlhcx", ItemName: "Death Race For Love", ItemDescription: "Juice WRLD", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/0/04/Juice_Wrld_-_Death_Race_for_Love.png")),
+        .init(id: "hewh1lehwlhcx", rank: 5, votes: 53, record: RankoRecord(objectID: "hewh1lehwlhcx", ItemName: "TIMELESS", ItemDescription: "KAYTRANADA", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/1/17/Album_cover_for_Timeless_by_Kaytranada.webp")),
+        .init(id: "hewhl1ehwlhcx", rank: 6, votes: 49, record: RankoRecord(objectID: "hewhl1ehwlhcx", ItemName: "Hurry Up Tomorrow", ItemDescription: "The Weeknd", ItemCategory: "", ItemImage: "https://preview.redd.it/hut-full-album-theory-v0-wxtp9tt4ayie1.jpeg?auto=webp&s=476e8ed57a870940a855525e09bb1f87a5779a81")),
+        .init(id: "hewhle1hwlhcx", rank: 7, votes: 32, record: RankoRecord(objectID: "hewhle1hwlhcx", ItemName: "The Life Of Pablo", ItemDescription: "Kanye West", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/4/4d/The_life_of_pablo_alternate.jpg")),
+        .init(id: "hewhleh1wlhcx", rank: 8, votes: 29, record: RankoRecord(objectID: "hewhleh1wlhcx", ItemName: "beerbongs & bentleys", ItemDescription: "Post Malone", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/634175-Product-0-I_1024x1024.jpg")),
+        .init(id: "hewhlehw1lhcx", rank: 9, votes: 28, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Manic", ItemDescription: "Halsey", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/c/ce/Halsey_-_Manic.png")),
+        .init(id: "hewhlehwl1hcx", rank: 10, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg")),
+        .init(id: "hewhlehwl1hcx", rank: 11, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg"))
+    ]
+    // Mock list that matches your model usage inside the view
+    static let mockList = RankoList(
+        id: "list_123",
+        listName: "Top 10 Albums This Decade",
+        listDescription: "My current fave bangers — argue with your mum 😌",
+        type: "default",
+        category: "Songs",
+        isPrivate: "Public",
+        userCreator: "user_abc123",
+        dateTime: "20250815123045", // yyyyMMddHHmmss
+        items: mockItems
+    )
+
+    static var previews: some View {
+        // Wrap in a layout you like (card-ish)
+        ScrollView {
+            VStack(spacing: 0) {
+                DefaultListHomeView(
+                    listData: mockList,
+                    onCommentTap: { msg in
+                        print("Comment tapped with message: \(msg)")
+                    }
+                )
+            }
+        }
+        .background(Color.white)
+        .environmentObject(UserInformation.shared) // if your view expects it
+        .previewDisplayName("DefaultListHomeView – Mock")
     }
 }
 
@@ -922,13 +1383,79 @@ struct HomeListsDisplay: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var selectedList: RankoList? = nil
+    @State var presentFakeRankos: Bool
     @Binding var showToast: Bool
     @Binding var toastMessage: String
     
     var showToastHelper: (String) -> Void
     
+    static let mockItems1: [RankoItem] = [
+        .init(id: "1hewhlehwlhcx", rank: 1, votes: 103, record: RankoRecord(objectID: "1hewhlehwlhcx", ItemName: "Love Sick", ItemDescription: "Don Toliver", ItemCategory: "", ItemImage: "https://store.warnermusic.com.au/cdn/shop/files/20221202_DON-T_LP.jpg?v=1683766183&width=800")),
+        .init(id: "h1ewhlehwlhcx", rank: 2, votes: 97, record: RankoRecord(objectID: "h1ewhlehwlhcx", ItemName: "Man On The Moon III: The Chosen", ItemDescription: "Kid Cudi", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/e/e2/Man_on_the_Moon_III.png")),
+        .init(id: "he1whlehwlhcx", rank: 3, votes: 72, record: RankoRecord(objectID: "he1whlehwlhcx", ItemName: "HEROES & VILLAINS", ItemDescription: "Metro Boomin", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/5/5f/Metro_Boomin_-_Heroes_%26_Villains.png")),
+        .init(id: "hew1hlehwlhcx", rank: 4, votes: 56, record: RankoRecord(objectID: "hew1hlehwlhcx", ItemName: "Death Race For Love", ItemDescription: "Juice WRLD", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/0/04/Juice_Wrld_-_Death_Race_for_Love.png")),
+        .init(id: "hewh1lehwlhcx", rank: 5, votes: 53, record: RankoRecord(objectID: "hewh1lehwlhcx", ItemName: "TIMELESS", ItemDescription: "KAYTRANADA", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/1/17/Album_cover_for_Timeless_by_Kaytranada.webp")),
+        .init(id: "hewhl1ehwlhcx", rank: 6, votes: 49, record: RankoRecord(objectID: "hewhl1ehwlhcx", ItemName: "Hurry Up Tomorrow", ItemDescription: "The Weeknd", ItemCategory: "", ItemImage: "https://preview.redd.it/hut-full-album-theory-v0-wxtp9tt4ayie1.jpeg?auto=webp&s=476e8ed57a870940a855525e09bb1f87a5779a81")),
+        .init(id: "hewhle1hwlhcx", rank: 7, votes: 32, record: RankoRecord(objectID: "hewhle1hwlhcx", ItemName: "The Life Of Pablo", ItemDescription: "Kanye West", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/4/4d/The_life_of_pablo_alternate.jpg")),
+        .init(id: "hewhleh1wlhcx", rank: 8, votes: 29, record: RankoRecord(objectID: "hewhleh1wlhcx", ItemName: "beerbongs & bentleys", ItemDescription: "Post Malone", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/634175-Product-0-I_1024x1024.jpg")),
+        .init(id: "hewhlehw1lhcx", rank: 9, votes: 28, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Manic", ItemDescription: "Halsey", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/c/ce/Halsey_-_Manic.png")),
+        .init(id: "hewhlehwl1hcx", rank: 10, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg")),
+        .init(id: "hewhlehwl1hcx", rank: 11, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg"))
+    ]
+    // Mock list that matches your model usage inside the view
+    static let mockList1 = RankoList(
+        id: "list_123",
+        listName: "Top 10 Albums This Decade",
+        listDescription: "My current fave bangers — argue with your mum 😌",
+        type: "default",
+        category: "Songs",
+        isPrivate: "Public",
+        userCreator: "user_abc123",
+        dateTime: "20250815123045", // yyyyMMddHHmmss
+        items: mockItems1
+    )
+    
+    static let mockItems2: [RankoItem] = [
+        .init(id: "1hewhlehwlhcx", rank: 1, votes: 103, record: RankoRecord(objectID: "1hewhlehwlhcx", ItemName: "Cookies & Cream", ItemDescription: "", ItemCategory: "", ItemImage: "https://image.shutterstock.com/image-photo/isolated-scoop-cream-ice-white-250nw-2498180691.jpg")),
+        .init(id: "h1ewhlehwlhcx", rank: 2, votes: 97, record: RankoRecord(objectID: "h1ewhlehwlhcx", ItemName: "Chocolate", ItemDescription: "", ItemCategory: "", ItemImage: "https://t3.ftcdn.net/jpg/15/54/40/82/360_F_1554408215_prUzouZME3FBK1G4tzGDMkAyiqbc3PZk.jpg")),
+        .init(id: "he1whlehwlhcx", rank: 3, votes: 72, record: RankoRecord(objectID: "he1whlehwlhcx", ItemName: "Strawberry", ItemDescription: "", ItemCategory: "", ItemImage: "https://media.istockphoto.com/id/138087063/photo/strawberry-ice-cream.jpg?s=612x612&w=0&k=20&c=KRwUn679tUQnW7n76ZvDWfI9glRfITaeuqqj5xTasT0=")),
+        .init(id: "hew1hlehwlhcx", rank: 4, votes: 56, record: RankoRecord(objectID: "hew1hlehwlhcx", ItemName: "Mint Choc Chip", ItemDescription: "", ItemCategory: "", ItemImage: "https://thumbs.dreamstime.com/b/flavorful-mint-chocolate-chip-classic-dessert-rich-flavor-perfect-refreshing-your-taste-buds-isolated-white-367177761.jpg")),
+        .init(id: "hewh1lehwlhcx", rank: 5, votes: 53, record: RankoRecord(objectID: "hewh1lehwlhcx", ItemName: "Chocolate Chip", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.shutterstock.com/image-photo/scoop-vanilla-ice-cream-chocolate-600nw-2569287049.jpg")),
+        .init(id: "hewhl1ehwlhcx", rank: 6, votes: 49, record: RankoRecord(objectID: "hewhl1ehwlhcx", ItemName: "Rocky Road", ItemDescription: "", ItemCategory: "", ItemImage: "https://images.getbento.com/accounts/7be06ab46c91545d057b03e4bc16a220/media/images/66456Rocky-Road_4286.png?w=1800&fit=max&auto=compress,format&cs=origin&h=1800")),
+        .init(id: "hewhle1hwlhcx", rank: 7, votes: 32, record: RankoRecord(objectID: "hewhle1hwlhcx", ItemName: "Vanilla", ItemDescription: "", ItemCategory: "", ItemImage: "https://static.vecteezy.com/system/resources/previews/054/709/028/non_2x/close-up-ice-cream-scoop-delicious-vanilla-flavor-ice-cream-isolated-on-white-background-photo.jpg")),
+        .init(id: "hewhleh1wlhcx", rank: 8, votes: 29, record: RankoRecord(objectID: "hewhleh1wlhcx", ItemName: "Coffee", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.shutterstock.com/image-photo/coffee-ice-cream-scoop-isolated-600nw-2636609039.jpg")),
+        .init(id: "hewhlehw1lhcx", rank: 9, votes: 28, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Peanut Butter Cup", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.benjerry.ie/files/live/sites/systemsite/files/EU%20Specific%20Assets/Flavors/Product%20Assets/Peanut%20Butter%20Cup%20Ice%20Cream/web_EU_Tower_PeanutButterCup_RGB_HR2_60M.png")),
+        .init(id: "hewhlehwl1hcx", rank: 10, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Brownie Batter", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.benjerry.com/files/live/sites/systemsite/files/US%20and%20Global%20Assets/Flavors/Product%20Assets/US/Chocolate%20Fudge%20Brownie%20Ice%20Cream/web_Tower_ChocolateFudgeBrownie_RGB_HR2_60M.png")),
+    ]
+    // Mock list that matches your model usage inside the view
+    static let mockList2 = RankoList(
+        id: "list_123",
+        listName: "My Favourite Ice Cream Flavours",
+        listDescription: "My current fave flavours — argue with your mum 😌",
+        type: "default",
+        category: "Ice Cream",
+        isPrivate: "Public",
+        userCreator: "user_abc123",
+        dateTime: "20250822165913", // yyyyMMddHHmmss
+        items: mockItems2
+    )
+    
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 16) {
+            if presentFakeRankos {
+                DefaultListHomeView(
+                    listData: HomeListsDisplay.mockList1,
+                    onCommentTap: { msg in
+                        print("Comment tapped with message: \(msg)")
+                    }
+                )
+                DefaultListHomeView(
+                    listData: HomeListsDisplay.mockList2,
+                    onCommentTap: { msg in
+                        print("Comment tapped with message: \(msg)")
+                    }
+                )
+            }
             if isLoading {
                 ForEach(0..<4, id: \.self) { _ in
                     HomeListSkeletonViewRow()
@@ -967,7 +1494,7 @@ struct HomeListsDisplay: View {
                 GroupListSpectate(listID: list.id, creatorID: list.userCreator)
             }
         }
-        .padding(.horizontal)
+        .padding(.leading)
         .onAppear {
             loadAllData()
         }
@@ -1089,110 +1616,123 @@ struct GroupListHomeView: View {
     
 struct HomeListSkeletonViewRow: View {
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: 16) {
-            // MARK: Profile row skeleton
-            HStack(alignment: .center, spacing: 12) {
+        VStack {
+            SkeletonView(Rectangle())
+                .frame(maxWidth: .infinity)
+                .frame(height: 2)
+                .padding(.bottom, 10)
+                .padding(.horizontal, 10)
+            HStack(alignment: .top) {
                 // avatar
-                SkeletonView(Circle())
-                    .frame(width: 45, height: 45)
+                SkeletonView(RoundedRectangle(cornerRadius: 10))
+                    .frame(width: 42, height: 42)
                 
                 // name / time / badge
-                VStack(alignment: .leading, spacing: 4) {
-                    
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 4) {
                         SkeletonView(RoundedRectangle(cornerRadius: 4))
-                            .frame(width: 120, height: 14)
+                            .frame(width: CGFloat.random(in: 50...100), height: 11)
                         SkeletonView(Circle())
                             .frame(width: 4, height: 4)
                         SkeletonView(RoundedRectangle(cornerRadius: 4))
-                            .frame(width: 40, height: 14)
+                            .frame(width: 40, height: 11)
                     }
-                    SkeletonView(RoundedRectangle(cornerRadius: 6))
-                        .frame(width: 60, height: 20)
+                    // MARK: Title skeleton
+                    SkeletonView(RoundedRectangle(cornerRadius: 4))
+                        .frame(height: 14)
+                        .padding(.trailing, CGFloat.random(in: 50...100))
                 }
+                .padding(.leading, 8)
+                Spacer()
+            }
+            
+            ZStack {
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 42)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 24) {
+                            // Left column (first 5)
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach(0..<5) { _ in
+                                    HStack(spacing: 8) {
+                                        SkeletonView(RoundedRectangle(cornerRadius: 8))
+                                            .frame(width: 47, height: 47)
+                                        SkeletonView(RoundedRectangle(cornerRadius: 4))
+                                            .frame(width: CGFloat.random(in: 60...110), height: 14)
+                                    }
+                                }
+                            }
+                            // Right column (next 4 + “+N more”)
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach(0..<5) { _ in
+                                    HStack(spacing: 8) {
+                                        SkeletonView(RoundedRectangle(cornerRadius: 8))
+                                            .frame(width: 47, height: 47)
+                                        SkeletonView(RoundedRectangle(cornerRadius: 4))
+                                            .frame(width: CGFloat.random(in: 60...110), height: 14)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(height: 300)
+                }
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 42)
+                        .overlay(
+                            SkeletonView(Rectangle())
+                                .frame(width: 2)
+                        )
+                    Spacer()
+                }
+            }
+            
+            HStack {
+                ZStack {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 42)
+                    SkeletonView(Circle())
+                        .frame(width: 32, height: 32)
+                }
+                HStack(spacing: 4) {
+                    SkeletonView(Circle())
+                        .frame(width: 24, height: 24)
+                    SkeletonView(RoundedRectangle(cornerRadius: 4))
+                        .frame(width: 20, height: 14)
+                }
+                .padding(.horizontal, 8)
+                
+                HStack(spacing: 4) {
+                    SkeletonView(Circle())
+                        .frame(width: 24, height: 24)
+                    SkeletonView(RoundedRectangle(cornerRadius: 4))
+                        .frame(width: 20, height: 14)
+                }
+                .padding(.trailing, 8)
+                
+                SkeletonView(Circle())
+                    .frame(width: 24, height: 24)
                 
                 Spacer()
             }
-            
-            // MARK: Title skeleton
-            SkeletonView(RoundedRectangle(cornerRadius: 4))
-                .frame(height: 24)
-                .padding(.trailing, 150)
-            
-            Divider()
-            
-            // MARK: Items grid skeleton
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 24) {
-                    // Left column (first 5)
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(0..<5) { _ in
-                            HStack(spacing: 8) {
-                                SkeletonView(RoundedRectangle(cornerRadius: 8))
-                                    .frame(width: 50, height: 50)
-                                SkeletonView(RoundedRectangle(cornerRadius: 4))
-                                    .frame(width: 100, height: 14)
-                            }
-                        }
-                    }
-                    // Right column (next 4 + “+N more”)
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(0..<5) { _ in
-                            HStack(spacing: 8) {
-                                SkeletonView(RoundedRectangle(cornerRadius: 8))
-                                    .frame(width: 50, height: 50)
-                                SkeletonView(RoundedRectangle(cornerRadius: 4))
-                                    .frame(width: 100, height: 14)
-                            }
-                        }
-                    }
-                }
-                .padding(.vertical, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(height: 300)
-            
-            Divider()
-            
-            // MARK: Likes & comments skeleton
-            HStack(spacing: 24) {
-                HStack(spacing: 4) {
-                    SkeletonView(Circle())
-                        .frame(width: 24, height: 24)
-                    SkeletonView(RoundedRectangle(cornerRadius: 4))
-                        .frame(width: 20, height: 14)
-                }
-                HStack(spacing: 4) {
-                    SkeletonView(Circle())
-                        .frame(width: 24, height: 24)
-                    SkeletonView(RoundedRectangle(cornerRadius: 4))
-                        .frame(width: 20, height: 14)
-                }
-                Spacer()
-            }
-            
-            // MARK: Description skeleton
-            SkeletonView(RoundedRectangle(cornerRadius: 4))
-                .frame(height: 14)
-                .padding(.trailing, 100)
         }
-        .padding()
-        .background(
-            LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFEF4E7), Color(hex: 0xFFFBF1)]),
-                           startPoint: .top,
-                           endPoint: .bottom
-                          )
-        )
-        .cornerRadius(25)
-        .shadow(color: Color(hex: 0xD0BD91).opacity(0.6), radius: 6, x: 0, y: -3)
     }
 }
 
 #Preview {
     HomeView()
+        .environmentObject(ProfileImageService())
 }
 
 #Preview {
     HomeListSkeletonViewRow()
+        .environmentObject(ProfileImageService())
 }
 

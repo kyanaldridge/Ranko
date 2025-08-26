@@ -89,6 +89,7 @@ struct LayoutGridCell: View {
 #Preview {
     @Previewable @State var selectedLayout: LayoutTemplate? = nil
     return LayoutPickerView(selectedLayout: $selectedLayout, isPresented: .constant(true))
+        .environmentObject(ProfileImageService())
 }
 
 // MARK: - Layout Picker View

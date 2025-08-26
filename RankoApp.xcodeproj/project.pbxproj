@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A3A5E54C2E3396B50063B3ED /* SwiftUIGradientBlur in Frameworks */ = {isa = PBXBuildFile; productRef = A3A5E54B2E3396B50063B3ED /* SwiftUIGradientBlur */; };
+		A3C8370D2E547D1000F777C7 /* ScalingHeaderScrollView in Frameworks */ = {isa = PBXBuildFile; productRef = A3C8370C2E547D1000F777C7 /* ScalingHeaderScrollView */; };
 		A3EE3D232E3B331F00094E29 /* InstantSearch in Frameworks */ = {isa = PBXBuildFile; productRef = A3EE3D222E3B331F00094E29 /* InstantSearch */; };
 		A3EE3D252E3B331F00094E29 /* InstantSearchCore in Frameworks */ = {isa = PBXBuildFile; productRef = A3EE3D242E3B331F00094E29 /* InstantSearchCore */; };
 		A3EE3D272E3B331F00094E29 /* InstantSearchInsights in Frameworks */ = {isa = PBXBuildFile; productRef = A3EE3D262E3B331F00094E29 /* InstantSearchInsights */; };
@@ -97,6 +98,7 @@
 				A3FB44722E16BFEF000E87F5 /* FirebaseAnalyticsWithoutAdIdSupport in Frameworks */,
 				A3FB446E2E16BFEF000E87F5 /* FirebaseAnalyticsIdentitySupport in Frameworks */,
 				A3FB448E2E16BFEF000E87F5 /* FirebaseInstallations in Frameworks */,
+				A3C8370D2E547D1000F777C7 /* ScalingHeaderScrollView in Frameworks */,
 				A3A5E54C2E3396B50063B3ED /* SwiftUIGradientBlur in Frameworks */,
 				A3FB44922E16BFEF000E87F5 /* FirebaseMessaging in Frameworks */,
 				A3FB447E2E16BFEF000E87F5 /* FirebaseCrashlytics in Frameworks */,
@@ -186,6 +188,7 @@
 				A3EE3D262E3B331F00094E29 /* InstantSearchInsights */,
 				A3EE3D282E3B331F00094E29 /* InstantSearchSwiftUI */,
 				A3EE3D2B2E3B335E00094E29 /* AlgoliaSearchClient */,
+				A3C8370C2E547D1000F777C7 /* ScalingHeaderScrollView */,
 			);
 			productName = RankoApp;
 			productReference = A3FB44032E16B370000E87F5 /* Ranko.app */;
@@ -221,6 +224,7 @@
 				A3A5E54A2E3396B50063B3ED /* XCRemoteSwiftPackageReference "SwiftUIGradientBlur" */,
 				A3EE3D212E3B331F00094E29 /* XCRemoteSwiftPackageReference "instantsearch-ios" */,
 				A3EE3D2A2E3B335E00094E29 /* XCRemoteSwiftPackageReference "algoliasearch-client-swift" */,
+				A3C8370B2E547D1000F777C7 /* XCRemoteSwiftPackageReference "ScalingHeaderScrollView" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A3FB44042E16B370000E87F5 /* Products */;
@@ -492,6 +496,14 @@
 				kind = branch;
 			};
 		};
+		A3C8370B2E547D1000F777C7 /* XCRemoteSwiftPackageReference "ScalingHeaderScrollView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/exyte/ScalingHeaderScrollView.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.1;
+			};
+		};
 		A3EE3D212E3B331F00094E29 /* XCRemoteSwiftPackageReference "instantsearch-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/algolia/instantsearch-ios.git";
@@ -531,6 +543,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A3A5E54A2E3396B50063B3ED /* XCRemoteSwiftPackageReference "SwiftUIGradientBlur" */;
 			productName = SwiftUIGradientBlur;
+		};
+		A3C8370C2E547D1000F777C7 /* ScalingHeaderScrollView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A3C8370B2E547D1000F777C7 /* XCRemoteSwiftPackageReference "ScalingHeaderScrollView" */;
+			productName = ScalingHeaderScrollView;
 		};
 		A3EE3D222E3B331F00094E29 /* InstantSearch */ = {
 			isa = XCSwiftPackageProductDependency;

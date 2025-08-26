@@ -12,48 +12,51 @@ import FirebaseAnalytics
 // MARK: - Main Tab-based Navigation Layout
 struct MainTabView: View {
     
-    @State private var activeTab: TabModel = .explore
+    @State private var activeTab: TabModel = .home
     @State private var navigationBar: Int = 1
     
     var body: some View {
-        if navigationBar == 0 {
-            ZStack(alignment: .bottom) {
-                Group {
-                    switch activeTab {
-                    case .home:
-                        HomeView()
-                    case .explore:
-                        ExploreView()
-                    case .profile:
-                        ProfileView()
-                    case .settings:
-                        SettingsView()
+        GeometryReader{
+            let safeArea = $0.safeAreaInsets
+            let size = $0.size
+            if navigationBar == 0 {
+                ZStack(alignment: .bottom) {
+                    Group {
+                        switch activeTab {
+                        case .home:
+                            HomeView()
+                        case .explore:
+                            ExploreView()
+                        case .profile:
+                            ProfileView()
+                        case .settings:
+                            SettingsView()
+                        }
                     }
+                    CustomTabBar(activeTab: $activeTab)
                 }
-                CustomTabBar(activeTab: $activeTab)
-            }
-            .ignoresSafeArea()
-        } else if navigationBar == 1 {
-            ZStack(alignment: .bottom) {
-                Group {
-                    switch activeTab {
-                    case .home:
-                        HomeView()
-                    case .explore:
-                        ExploreView()
-                    case .profile:
-                        ProfileView()
-                    case .settings:
-                        SettingsView()
+                .ignoresSafeArea()
+            } else if navigationBar == 1 {
+                ZStack(alignment: .bottom) {
+                    Group {
+                        switch activeTab {
+                        case .home:
+                            HomeView()
+                        case .explore:
+                            ExploreView()
+                        case .profile:
+                            ProfileView()
+                        case .settings:
+                            SettingsView()
+                        }
                     }
+                    .ignoresSafeArea(.all)
+                    CurvedTabBarView(activeTab: $activeTab)
                 }
-                .ignoresSafeArea(.all)
-                CurvedTabBarView(activeTab: $activeTab)
+            } else if navigationBar == 2 {
+                
             }
-        } else if navigationBar == 2 {
-            
         }
-        
     }
 }
 
@@ -111,7 +114,7 @@ struct CurvedTabBarView: View {
                         .clipShape(
                             RoundedRectangle(cornerRadius: 34, style: .continuous)
                         )
-                        .shadow(color: Color(hex: 0xE7DBCB), radius: 10)
+                        .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 6)
                         .background {
                             Rectangle()
                                 .fill(.ultraThinMaterial)
@@ -347,6 +350,7 @@ enum TabModel: String, CaseIterable {
 
 #Preview {
     MainTabView()
+        .environmentObject(ProfileImageService())
 }
 
 // MARK: - Supporting Views & Models

@@ -534,7 +534,7 @@ struct GroupListSpectate: View {
             .child("UserProfilePicturePath")
         ref.getData { _, snap in
             if let path = snap?.value as? String {
-                Storage.storage().reference().child(path)
+                Storage.storage().reference().child("profilePictures").child(path)
                     .getData(maxSize: 2*1024*1024) { data, _ in
                         if let data = data, let ui = UIImage(data: data) {
                             creatorImage = ui

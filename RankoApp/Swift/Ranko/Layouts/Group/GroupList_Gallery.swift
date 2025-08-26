@@ -285,5 +285,6 @@ struct GroupListIndividualGallery: View {
 
 #Preview {
     GroupSelectedItemRow(item: RankoItem(id: "AU73T2-73GW6A-9873HG-JW4Q32", rank: 1, votes: 43, record: RankoRecord(objectID: "1234567890", ItemName: "Test Item", ItemDescription: "This is a test item", ItemCategory: "", ItemImage: "https://i.ytimg.com/vi/JrEVa5_k-_8/maxresdefault.jpg")))
+        .environmentObject(ProfileImageService())
 }
 

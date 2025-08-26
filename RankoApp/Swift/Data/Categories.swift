@@ -135,6 +135,7 @@ let categoryChipIconColors: [String: Color] = [
     "Statues": Color(red: 0.54, green: 0.17, blue: 0.89),
     "Planets": Color(red: 0.50, green: 0.0, blue: 0.50),
     "Relationships": Color(red: 0.86, green: 0.44, blue: 0.84),
+    "Science": .blue,
     "Emotions": Color(red: 1.0, green: 0.75, blue: 0.80),
     "Red Flags": Color(red: 1.0, green: 0.08, blue: 0.58)
 ]
@@ -244,6 +245,7 @@ let categoryChipsByCategory: [String: [CategoryChip]] = [
         CategoryChip(name: "Statues", icon: "figure.stand", category: "Other", synonym: "sculptures monuments effigies carvings"),
         CategoryChip(name: "Planets", icon: "circles.hexagonpath.fill", category: "Other", synonym: "worlds celestial bodies orbs spheres"),
         CategoryChip(name: "Relationships", icon: "heart.fill", category: "Other", synonym: "bonds connections associations links"),
+        CategoryChip(name: "Science", icon: "atom", category: "Other", synonym: "planets, chemistry, biology, physics, astronomy"),
         CategoryChip(name: "Emotions", icon: "face.smiling", category: "Other", synonym: "feelings sentiments moods passions"),
         CategoryChip(name: "Red Flags", icon: "flag.fill", category: "Other", synonym: "warningSigns alerts cautionSignals indicators")
     ]
@@ -442,8 +444,26 @@ struct HomeCategoryBadge: View {
         .padding(6)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(categoryChipIconColors[text]!)
+                .fill(categoryChipIconColors[text] ?? .blue)
                 .opacity(0.2)
         )
+    }
+}
+
+struct HomeCategoryBadge1: View {
+    let text: String
+    var body: some View {
+        Circle()
+            .foregroundColor(categoryChipIconColors[text]?.opacity(0.6))
+            .frame(width: 32, height: 32)
+            .overlay(
+                Image(systemName: FilterChip.icon(named: text, in: defaultFilterChips) ?? "circle.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 16, maxHeight: 16)
+                    .fontWeight(.black)
+                    .foregroundColor(Color(hex: 0xFFFFFF))
+            )
+            
     }
 }

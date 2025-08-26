@@ -363,14 +363,20 @@ struct ProSubscriptionView: View {
     @State var activeIndex: Int = 0
     
     let subscriptionFeatures: [SubscriptionFeatures] = [
-        .init(id: 1, title: "Unlimited Items & Rankos", icon: "infinity", description: "Create as many Rankos and items in Rankos as you want!"),
-        .init(id: 2, title: "Create New Blank Items", icon: "rectangle.dashed", description: "Add blank items to your Rankos!"),
-        .init(id: 3, title: "Add Custom Images to Items", icon: "photo.fill", description: "Add custom photos from your camera roll to your items!"),
-        .init(id: 4, title: "Download & Export Rankos", icon: "arrow.down.circle.fill", description: "Download your Rankos for Offline Use and also export via csv and soon other formats!"),
-        .init(id: 5, title: "New Folders & Tags", icon: "square.grid.3x1.folder.fill.badge.plus", description: "Organise all your Rankos into folders and tags, seperate a series of Rankos by categories or anything practically!"),
-        .init(id: 6, title: "Unlock Pro App Icons", icon: "apps.iphone", description: "Unlock all pro app icons in the Customise App section!"),
-        .init(id: 7, title: "Pin 20 Rankos", icon: "pin.fill", description: "Pin 20 Rankos to your Feature View for quick access and to show friends and the community!"),
-        .init(id: 8, title: "Clone Rankos", icon: "square.fill.on.square.fill", description: "Copy other users Rankos and create your very own version of their creation!")
+        .init(id: 14, title: "Unlimited Items & Rankos", icon: "infinity", description: "Create as many Rankos and items in Rankos as you want!"),
+        .init(id: 13, title: "Create New Blank Items", icon: "rectangle.dashed", description: "Add blank items to your Rankos!"),
+        .init(id: 12, title: "Add Custom Images to Items", icon: "photo.fill", description: "Add custom photos from your camera roll to your items!"),
+        .init(id: 11, title: "Download & Export Rankos", icon: "arrow.down.circle.fill", description: "Download your Rankos for Offline Use and also export via csv and soon other formats!"),
+        .init(id: 10, title: "New Folders & Tags", icon: "square.grid.3x1.folder.fill.badge.plus", description: "Organise all your Rankos into folders and tags, seperate a series of Rankos by categories or anything practically!"),
+        .init(id: 9, title: "Unlock Pro App Icons", icon: "apps.iphone", description: "Unlock all pro app icons in the Customise App section!"),
+        .init(id: 8, title: "Pin 20 Rankos", icon: "pin.fill", description: "Pin 20 Rankos to your Feature View for quick access and to show friends and the community!"),
+        .init(id: 7, title: "Clone Rankos", icon: "square.fill.on.square.fill", description: "Copy other users Rankos and create your very own version of their creation!"),
+        .init(id: 6, title: "Collaborate on Rankos", icon: "person.3.fill", description: "Collaborate with friends and family on Rankos!"),
+        .init(id: 5, title: "Integrate with Spotify", icon: "music.note", description: "Add your favourite artists, albums, songs, playlists and more to your Rankos. More integrations to come soon!"),
+        .init(id: 4, title: "Search Community Rankos", icon: "rectangle.and.text.magnifyingglass", description: "Search All Public Community Rankos"),
+        .init(id: 3, title: "Personal Homepage", icon: "star.bubble.fill", description: "Get community Rankos on your homepage that fit your interests and Rankos you've created"),
+        .init(id: 2, title: "Save Rankos", icon: "star.fill", description: "Save communities and friends Rankos to your library to look at again later!"),
+        .init(id: 1, title: "Archive Rankos", icon: "archivebox.fill", description: "Archive your Rankos that you don't want showing up in your library anymore without deleting them!")
     ]
     
     var body: some View {
@@ -505,7 +511,13 @@ struct ProSubscriptionView: View {
                     // article view
                     ZStack {
                         RoundedRectangle(cornerRadius: 18)
-                            .fill(.ultraThinMaterial)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: 0x041913), Color(hex: 0x0D3632), Color(hex: 0x175158), Color(hex: 0x1E565F)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                         VStack {
                             HStack {
                                 Image(systemName: item.icon)
@@ -538,23 +550,6 @@ struct ProSubscriptionView: View {
         .padding(.top, -60)
     }
     
-    @ViewBuilder
-    func ScreenshotsView(_ content: [IAPImage], offset: CGFloat) -> some View {
-        ScrollView(.vertical) {
-            VStack(spacing: 10) {
-                ForEach(content.indices, id: \.self) { index in
-                    Image(content[index].rawValue)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                }
-            }
-            .offset(y: offset)
-        }
-        .scrollDisabled(true)
-        .scrollIndicators(.hidden)
-        .rotationEffect(.init(degrees: -30), anchor: .bottom)
-        .scrollClipDisabled()
-    }
     private func getDragGesture() -> some Gesture {
         
         DragGesture()
@@ -631,6 +626,7 @@ func updateGlobalSubscriptionStatus(groupID: String, productIDs: [String]) async
 
 #Preview {
     SettingsView()
+        .environmentObject(ProfileImageService())
 }
 
 struct SubscriptionView_Previews: PreviewProvider {
@@ -1640,12 +1636,21 @@ struct PrivacySecurityView: View {
                 }
             }
             .onChange(of: user_data.privacyPrivateAccount) {
-                user_data.privacyAllowFriendRequests = true
-                user_data.privacyDisplayFeaturedLists = true
-                user_data.privacyDisplayUsername = true
-                user_data.privacyDisplayBio = true
-                user_data.privacyDisplayProfilePicture = true
-                user_data.privacyAllowClones = true
+                if user_data.privacyPrivateAccount {
+                    user_data.privacyAllowFriendRequests = true
+                    user_data.privacyDisplayFeaturedLists = true
+                    user_data.privacyDisplayUsername = true
+                    user_data.privacyDisplayBio = true
+                    user_data.privacyDisplayProfilePicture = true
+                    user_data.privacyAllowClones = true
+                } else {
+                    user_data.privacyAllowFriendRequests = false
+                    user_data.privacyDisplayFeaturedLists = false
+                    user_data.privacyDisplayUsername = false
+                    user_data.privacyDisplayBio = false
+                    user_data.privacyDisplayProfilePicture = false
+                    user_data.privacyAllowClones = false
+                }
             }
         }
     }
@@ -1654,6 +1659,65 @@ struct PrivacySecurityView: View {
 struct SuggestionsIdeasView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
+    
+    @State private var snappedItem = 0.0
+    @State private var draggingItem = 0.0
+    @State var activeIndex: Int = 4
+    @State private var suggestionCategoryName = "Features & User Interface"
+    
+    private var orderedIDs: [Int] { suggestionCategories.map(\.id).sorted(by: >) } // [4,3,2,1,0]
+    private var activePage: Int { orderedIDs.firstIndex(of: activeIndex) ?? 0 }
+
+    private func jumpTo(_ page: Int) {
+        let targetID = orderedIDs[page]
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            snappedItem  = Double(targetID)
+            draggingItem = snappedItem
+            activeIndex  = targetID
+        }
+    }
+    
+    let suggestionCategories: [SuggestionCategory] = [
+        .init(id: 4, title: "Features & User Interface", icon: "star.fill",
+              feature1: "New Feature Request",
+              feature2: "Navigation & Layout",
+              feature3: "Customization & Themes",
+              feature4: "Accessibility Improvements",
+              feature5: "Animations & Polish",
+              feature6: "Usability/Clarity Issues"),
+
+        .init(id: 3, title: "Crashes & Bugs", icon: "ant.fill",
+              feature1: "App Crashed Suddenly",
+              feature2: "View Won't Load or Open",
+              feature3: "Screen Freezes",
+              feature4: "Ranko Deleted For No Reason",
+              feature5: "Search Functionality Not Working",
+              feature6: "Images or Contents Not Loading"),
+
+        .init(id: 2, title: "Data & Performance", icon: "speedometer",
+              feature1: "Slow Loading Times",
+              feature2: "Laggy Scrolling",
+              feature3: "High Battery Usage",
+              feature4: "Offline/Sync Problems",
+              feature5: "Data Not Saving",
+              feature6: "Unexpected Data Changes"),
+
+        .init(id: 1, title: "Integrations & External Data", icon: "cylinder.split.1x2.fill",
+              feature1: "Apple/Google Sign-In",
+              feature2: "Algolia Search Results",
+              feature3: "Firebase Read/Write",
+              feature4: "Spotify Data/Images",
+              feature5: "AFL/Champion Data",
+              feature6: "Webhooks/Rate Limits"),
+
+        .init(id: 0, title: "Any Feedback & Suggestions", icon: "hand.thumbsup.fill",
+              feature1: "Overall Experience",
+              feature2: "What Felt Confusing",
+              feature3: "Missing Feature",
+              feature4: "Notifications",
+              feature5: "Pricing & Pro",
+              feature6: "Other Suggestions")
+    ]
 
     var body: some View {
         ZStack {
@@ -1683,10 +1747,215 @@ struct SuggestionsIdeasView: View {
                 .padding(.top, 40)
                 
                 Divider()
+                
+                
+                VStack(spacing: 10) {
+                    VStack(spacing: 10) {
+                        HStack {
+                            Text("Suggestion Category")
+                                .foregroundColor(Color(hex: 0x857467))
+                                .font(.title2)
+                                .bold()
+                            Spacer()
+                        }
+                        
+                        Divider()
+                    }
+                    .padding(.horizontal)
+                    
+                    
+                    ZStack {
+                        ForEach(suggestionCategories) { item in
+                            // article view
+                            ZStack {
+                                VStack {
+                                    HStack {
+                                        Image(systemName: item.icon)
+                                            .font(.system(size: 15, weight: .heavy, design: .default))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                        Text(item.title)
+                                            .font(.system(size: 15, weight: .heavy, design: .rounded))
+                                            .foregroundColor(Color(hex: 0x857467))
+                                    }
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        if item.feature1 != "" {
+                                            Text("•  \(item.feature1)")
+                                                .font(.system(size: 12, weight: .semibold, design: .default))
+                                                .foregroundColor(Color(hex: 0x857467))
+                                                .lineLimit(1)
+                                                .padding(.top, 8)
+                                        }
+                                        if item.feature2 != "" {
+                                            Text("•  \(item.feature2)")
+                                                .font(.system(size: 12, weight: .semibold, design: .default))
+                                                .foregroundColor(Color(hex: 0x857467))
+                                                .lineLimit(1)
+                                        }
+                                        if item.feature3 != "" {
+                                            Text("•  \(item.feature3)")
+                                                .font(.system(size: 12, weight: .semibold, design: .default))
+                                                .foregroundColor(Color(hex: 0x857467))
+                                                .lineLimit(1)
+                                        }
+                                        if item.feature4 != "" {
+                                            Text("•  \(item.feature4)")
+                                                .font(.system(size: 12, weight: .semibold, design: .default))
+                                                .foregroundColor(Color(hex: 0x857467))
+                                                .lineLimit(1)
+                                        }
+                                        if item.feature5 != "" {
+                                            Text("•  \(item.feature5)")
+                                                .font(.system(size: 12, weight: .semibold, design: .default))
+                                                .foregroundColor(Color(hex: 0x857467))
+                                                .lineLimit(1)
+                                        }
+                                        if item.feature6 != "" {
+                                            Text("•  \(item.feature6)")
+                                                .font(.system(size: 12, weight: .semibold, design: .default))
+                                                .foregroundColor(Color(hex: 0x857467))
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    
+                                }
+                                .padding(.vertical, 15)
+                                .frame(width: 300)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .fill(Color(hex: 0xFEFAED))
+                                        .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                                }
+                            }
+                            .scaleEffect(1.0 - abs(distance(item.id)) * 0.2 )
+                            .opacity(1.0 - abs(distance(item.id)) * 0.3 )
+                            .offset(x: myXOffset(item.id), y: 0)
+                            .zIndex(1.0 - abs(distance(item.id)) * 0.1)
+                            .onAppear {
+                                activeIndex = 4
+                                activeIndex = item.id
+                            }
+                            .onTapGesture {
+                                withAnimation {
+                                    draggingItem = Double(item.id)
+                                    snappedItem  = Double(item.id)
+                                    activeIndex  = item.id
+                                    updateCategoryName(for: item.id)   // ← NEW
+                                }
+                            }
+                        }
+                        HStack(alignment: .center) {
+                            Button { step(+1) } label: {
+                                Image(systemName: "chevron.backward")
+                                    .font(.system(size: 16, weight: .black))
+                                    .frame(width: 25, height: 30)
+                            }
+                            .foregroundColor(Color(hex: 0x857467))
+                            .tint(Color(hex: 0xFFFCF7))
+                            .buttonStyle(.glassProminent)
+                            
+                            Spacer()
+                            
+                            Button { step(-1) } label: {
+                                Image(systemName: "chevron.forward")
+                                    .font(.system(size: 16, weight: .black))
+                                    .frame(width: 25, height: 30)
+                            }
+                            .foregroundColor(Color(hex: 0x857467))
+                            .tint(Color(hex: 0xFFFCF7))
+                            .buttonStyle(.glassProminent)
+                        }
+                        .padding(.horizontal, 8)
+                        .zIndex(100)
+                    }
+                    .gesture(getDragGesture())
+                    .padding(.top, 20)
+                    
+                }
+                
+                HStack(spacing: 8) {
+                    ForEach(0..<orderedIDs.count, id: \.self) { i in
+                        Circle()
+                            .frame(width: 8, height: 8)
+                            .foregroundColor(i == activePage ? .white : Color(hex: 0xCFC2B3)) // white = active, grey = others
+                            .overlay(
+                                Circle().stroke(Color(hex: 0x857467).opacity(0.25), lineWidth: 0.5)
+                            )
+                            .scaleEffect(i == activePage ? 1.15 : 1.0)
+                            .animation(.spring(response: 0.25, dampingFraction: 0.9), value: activePage)
+                            .onTapGesture { jumpTo(i) } // optional: tap to jump
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+                
+                Text("\(suggestionCategoryName)")
                 Spacer()
             }
         }
+        .onAppear {
+            snappedItem  = Double(activeIndex)
+            draggingItem = snappedItem
+            updateCategoryName(for: activeIndex)
+        }
     }
+    private func updateCategoryName(for id: Int) {
+        if let cat = suggestionCategories.first(where: { $0.id == id }) {
+            suggestionCategoryName = cat.title
+        }
+    }
+    
+    private func step(_ delta: Int) {
+        let count = suggestionCategories.count
+        guard count > 0 else { return }
+
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+            let current = Int(round(snappedItem))
+            let next = ((current + delta) % count + count) % count
+            snappedItem  = Double(next)
+            draggingItem = snappedItem
+            activeIndex  = next
+            updateCategoryName(for: next)       // ← NEW
+        }
+    }
+    private func getDragGesture() -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                draggingItem = snappedItem + value.translation.width / 400
+            }
+            .onEnded { value in
+                withAnimation {
+                    draggingItem = snappedItem + value.predictedEndTranslation.width / 400
+                    draggingItem = round(draggingItem).remainder(dividingBy: Double(suggestionCategories.count))
+
+                    let count = suggestionCategories.count
+                    let idx = ((Int(draggingItem) % count) + count) % count
+                    snappedItem  = Double(idx)
+                    activeIndex  = idx
+                    updateCategoryName(for: idx)
+                }
+            }
+    }
+    
+    func distance(_ item: Int) -> Double {
+        return (draggingItem - Double(item)).remainder(dividingBy: Double(suggestionCategories.count))
+    }
+    
+    func myXOffset(_ item: Int) -> Double {
+        let angle = Double.pi * 2 / Double(suggestionCategories.count) * distance(item)
+        return sin(angle) * 200
+    }
+}
+
+struct SuggestionCategory: Identifiable {
+    let id: Int
+    let title: String
+    let icon: String
+    let feature1: String
+    let feature2: String
+    let feature3: String
+    let feature4: String
+    let feature5: String
+    let feature6: String
 }
 
 struct DataStorageView: View {

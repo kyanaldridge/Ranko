@@ -142,13 +142,13 @@ struct DefaultListVote: View {
                                 Group {
                                     if let img = creatorImage {
                                         ZStack {
-                                            Circle()
+                                            RoundedRectangle(cornerRadius: 3)
                                                 .fill(Color.white)
                                                 .frame(width: 18, height: 18)
                                             Image(uiImage: img)
                                                 .resizable()
                                         }
-                                        .clipShape(Circle())
+                                        .clipShape(RoundedRectangle(cornerRadius: 3))
                                         
                                     } else {
                                         ZStack {
@@ -374,7 +374,7 @@ struct DefaultListVote: View {
         .onAppear {
             fetchCreatorName()
             loadListFromFirebase()
-            //checkUserVoted()
+            checkUserVoted()
             
             print("Page Loaded: DefaultListVote")
             print("ListID: \(listID)")
@@ -447,7 +447,7 @@ struct DefaultListVote: View {
             .child("UserProfilePicturePath")
         ref.getData { _, snap in
             if let path = snap?.value as? String {
-                Storage.storage().reference().child(path)
+                Storage.storage().reference().child("profilePictures").child(path)
                     .getData(maxSize: 2*1024*1024) { data, _ in
                         if let data = data, let ui = UIImage(data: data) {
                             creatorImage = ui

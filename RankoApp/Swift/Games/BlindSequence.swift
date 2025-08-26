@@ -50,17 +50,21 @@ struct BlindSequence: View {
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     // freeSetup
-    @State private var freeBoxCount: Double = 5
+    @State private var freeBoxCount: Double = 6
     @State private var animateLeftSymbol: Bool = false
     @State private var animateRightSymbol: Bool = false
     
     @State private var showSettings = false
     @State private var showLeaderboard = false
+    @State private var opacityViewNo: Double = 0
     
     // app storage shi
     @AppStorage("totalBlindSequenceGamesPlayed") private var totalGamesPlayed = 0
     @AppStorage("BlindSequenceHighScore") private var highScore = 0
     @AppStorage("BlindSequenceHighScoreTime") private var highScoreTime: Double = .infinity
+    @AppStorage("BS_MaxUnlockedLevel") private var maxUnlockedLevel: Int = 1   // progress
+    @AppStorage("BS_SelectedLevel") private var selectedLevel: Int = 1         // last picked
+    @State private var currentLevel: Int? = nil                                 // active level while playing (free)
     @State private var isNewHighScore = false
 
     var body: some View {
@@ -90,6 +94,256 @@ struct BlindSequence: View {
     }
     
     var mainMenuView: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(hex: 0xF76000), Color(hex: 0xD84A00), Color(hex: 0xBB3300), Color(hex: 0x9E1C00), Color(hex: 0x800100)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
+            VStack {
+                HStack {
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 24, weight: .black, design: .default))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.horizontal, 1)
+                            .padding(.vertical, 6)
+                    }
+                    .tint(Color(hex: 0xC03700))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                }
+                .padding(.horizontal, 30)
+                Spacer()
+                HStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("B")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("L")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("I")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("N")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("D")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                }
+                HStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("S")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("E")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("Q")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("U")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("E")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("N")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("C")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(hex: 0x8E0F00))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text("E")
+                                .font(.custom("Nunito-Black", size: 26))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        )
+                }
+                Spacer()
+                HStack(spacing: 6) {
+                    Button { showLeaderboard = true } label: {
+                        Image(systemName: "trophy.fill")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 6)
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                    .sheet(isPresented: $showLeaderboard) {
+                        BlindSequenceLeaderboard()
+                            .presentationDragIndicator(.visible)
+                            .presentationDetents([.medium, .large])
+                    }
+                    
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 6)
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                    .sheet(isPresented: $showSettings) {
+                        BlindSequenceSettings(
+                            totalGamesPlayed: $totalGamesPlayed,
+                            highScore: $highScore,
+                            highScoreTime: $highScoreTime
+                        )
+                        .presentationDragIndicator(.visible)
+                        .presentationDetents([.medium])
+                    }
+                    
+                    Button {
+                        gameType = .challenge
+                        startChallenge()
+                    } label: {
+                        Spacer()
+                        Text("Challenge")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 2)
+                            .frame(maxWidth: .infinity)
+                        Spacer()
+                        VStack(spacing: -5) {
+                            Text("SCORE")
+                                .font(.custom("Nunito-Black", size: 10))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("\(highScore)")
+                                .font(.custom("Nunito-Black", size: 24))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        }
+                        .padding(.trailing, 10)
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                }
+                .padding(.horizontal)
+                
+                HStack(spacing: 6) {
+                    Button {} label: {
+                        HStack {
+                            Image(systemName: "paintbrush.pointed.fill")
+                                .font(.custom("Nunito-Black", size: 24))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("Themes")
+                                .font(.custom("Nunito-Black", size: 24))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .padding(.vertical, 5)
+                                .padding(.horizontal, 8)
+                        }
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                    
+                    Button {
+                        gameType = .free
+                        mode = .freeSetup
+                        freePlayScore = 0
+                    } label: {
+                        Spacer()
+                        Text("Classic")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 2)
+                            .frame(maxWidth: .infinity)
+                        Spacer()
+                        VStack(spacing: -5) {
+                            Text("LEVEL")
+                                .font(.custom("Nunito-Black", size: 10))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("\(maxUnlockedLevel)")
+                                .font(.custom("Nunito-Black", size: 24))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        }
+                        .padding(.trailing, 10)
+                    }
+                    .tint(Color(hex: 0x8E0F00))
+                    .buttonStyle(.glassProminent)
+                    .environment(\.colorScheme, .dark)
+                }
+                .padding(.horizontal)
+                Spacer()
+                Spacer()
+                Spacer()
+            }
+        }
+        
+        
+    }
+    
+    var mainMenuView2: some View {
         ZStack {
             // Background Layer
             GeometryReader { proxy in
@@ -335,57 +589,347 @@ struct BlindSequence: View {
     
     // MARK: - Free Play Setup
     var freeSetupView: some View {
-        VStack(spacing: 20) {
-            Text("Select number of boxes (Max 20)")
-                .font(.headline)
-            VStack {
-                Rectangle()
-                    .fill(Color.blue.opacity(0.7))
-                    .frame(width: 90, height: 30)
-                    .overlay(
-                        Text("\(Int(freeBoxCount)) Boxes")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                    )
-                    .cornerRadius(5)
-                HStack {
-                    Image(systemName: "rectangle.grid.1x2.fill")
-                        .font(.system(size: 30))
-                        .foregroundColor(.blue.opacity(0.7))
-                        .bold()
-                        .symbolEffect(.wiggle, options: animateLeftSymbol ? .repeating : .nonRepeating, value: freeBoxCount)
-                    Slider(value: $freeBoxCount, in: 2...20)
-                        .padding(.horizontal, 15)
-                        .accentColor(.blue.opacity(0.7))
-                    Image(systemName: "rectangle.grid.3x3.fill")
-                        .font(.system(size: 30))
-                        .foregroundColor(.blue.opacity(0.7))
-                        .bold()
-                        .symbolEffect(.wiggle, options: animateRightSymbol ? .repeating : .nonRepeating, value: freeBoxCount)
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: 0xF76000), Color(hex: 0xD84A00), Color(hex: 0xBB3300), Color(hex: 0x9E1C00), Color(hex: 0x800100)],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
+            VStack(spacing: 20) {
+                Text("Select A Level")
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .foregroundColor(.white.opacity(0.9))
+                
+                // 4-column grid of 1...24
+                let cols = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
+                LazyVGrid(columns: cols, spacing: 12) {
+                    ForEach(1...24, id: \.self) { level in
+                        let isUnlocked = level <= maxUnlockedLevel
+                        Button {
+                            if isUnlocked { selectedLevel = level }
+                        } label: {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(isUnlocked
+                                          ? (selectedLevel == level ? Color.white.opacity(0.22) : Color.white.opacity(0.12))
+                                          : Color.black.opacity(0.25))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(selectedLevel == level && isUnlocked ? Color.white.opacity(0.8) : Color.white.opacity(0.25), lineWidth: 2)
+                                    )
+                                    .frame(height: 56)
+                                
+                                HStack(spacing: 8) {
+                                    if isUnlocked {
+                                        Text("\(level)")
+                                            .font(.system(size: 20, weight: .black, design: .rounded))
+                                            .foregroundColor(.white)
+                                    } else {
+                                        Image(systemName: "lock.fill")
+                                            .font(.system(size: 18, weight: .black))
+                                            .foregroundColor(.white.opacity(0.8))
+                                        Text("\(level)")
+                                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                                            .foregroundColor(.white.opacity(0.7))
+                                    }
+                                }
+                            }
+                        }
+                        .disabled(!isUnlocked)
+                    }
                 }
+                .padding(.horizontal)
+                
+                Button(action: {
+                    // start selected level in FREE mode
+                    let count = boxCount(for: selectedLevel)
+                    currentLevel = selectedLevel
+                    freePlayScore = 0
+                    gameType = .free
+                    startGame(boxCount: count)
+                }) {
+                    Text("Start Level \(selectedLevel)")
+                        .font(.system(size: 24, weight: .bold, design: .default))
+                        .foregroundColor(Color(hex: 0xFFFFFF))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.glass)
+                .environment(\.colorScheme, .dark)
+                
+                Spacer()
+                
+                HStack {
+                    Button {
+                        mode = .mainMenu
+                    } label: {
+                        Image(systemName: "house.fill")
+                            .font(.system(size: 24, weight: .black))
+                            .foregroundColor(.white)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.glass)
+                }
+                .padding(.horizontal, 24)
             }
-            Button(action: {
-                startGame(boxCount: Int(freeBoxCount))
-                freePlayScore = 0
-            }) {
-                Text("Start")
-                    .foregroundColor(.white)
-                    .fontWeight(.bold)
-                    .frame(maxWidth: .infinity)
-                    .padding(10)
-                    .background(Color.blue.opacity(0.7))
-                    .cornerRadius(40)
-                    .padding(.horizontal)
-            }
+            .padding(.top, 40)
         }
-        .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+    
+    private func unlockNextLevelIfNeeded() {
+        guard gameType == .free, didWin, let lvl = currentLevel else { return }
+        if lvl == maxUnlockedLevel && lvl < 24 {
+            maxUnlockedLevel = lvl + 1
+        }
+    }
+    
+    var layoutForCount: [Int: [Int]] = [
+        1: [1],
+        2: [2],
+        3: [3],
+        4: [4],
+        5: [2, 3],
+        6: [3, 3],
+        7: [3, 4],
+        8: [4, 4],
+        9: [4, 5],
+        10: [5, 5],
+        11: [3, 4, 4],
+        12: [4, 4, 4],
+        13: [4, 5, 4],
+        14: [4, 5, 5],
+        15: [5, 5, 5],
+        16: [4, 4, 4, 4],
+        17: [4, 4, 4, 5],
+        18: [4, 4, 5, 5],
+        19: [4, 5, 5, 5],
+        20: [5, 5, 5, 5],
+        21: [4, 4, 4, 4, 5],
+        22: [4, 4, 4, 5, 5],
+        23: [4, 4, 5, 5, 5],
+        24: [4, 5, 5, 5, 5],
+        25: [5, 5, 5, 5, 5]
+    ]
     
     // MARK: - Game Board
     @available(iOS 26.0, *)
     @ViewBuilder
     var gameView: some View {
+        NavigationStack {
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(hex: 0xF76000),
+                        Color(hex: 0xD84A00), Color(hex: 0xBB3300), Color(hex: 0x9E1C00),
+                        Color(hex: 0x800100)
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .ignoresSafeArea()
+
+                VStack {
+                    Text("\(score)")
+                        .font(.system(size: 28, weight: .black, design: .default))
+                        .foregroundColor((gameType == .free) ? .clear : Color(hex: 0xFFFFFF))
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill((gameType == .free) ? .clear : Color(hex: 0x650E02))
+                            )
+
+                    Spacer()
+                    
+                    VStack(spacing: 20) {
+                        
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color(hex: 0x8E0F00))
+                            .frame(width: 160, height: 160)
+                            .overlay(
+                                Text(showingRandomizing ? "?" : String(currentLetter ?? " "))
+                                    .font(.custom("Nunito-Black", size: 90))
+                                    .foregroundColor(Color(hex: 0xFFFFFF))
+                                    .rotationEffect(.degrees(animateRotation ? 360 : 0))
+                                    .animation(
+                                        showingRandomizing
+                                        ? .linear(duration: 0.7).repeatCount(1, autoreverses: false)
+                                        : .default,
+                                        value: animateRotation
+                                    )
+                            )
+                        
+                        ZStack {
+                            if gameType == .free {
+                                HStack(spacing: 15) {
+                                    Text("\(freePlayScore)/\(currentBoxCount)")
+                                        .font(.custom("Nunito-Black", size: 15))
+                                        .foregroundColor(Color(hex: 0xFFFFFF))
+
+                                    ProgressView(value: Float(freePlayScore), total: Float(currentBoxCount))
+                                        .animation(.easeInOut(duration: 0.5), value: freePlayScore)
+                                        .tint(Color(hex: 0xBF3600))
+                                        .background(Color(hex: 0x696969))
+                                }
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(Color(hex: 0x650E02))
+                                    )
+                            }
+                            if gameType == .challenge {
+                                HStack {
+                                    Spacer()
+                                    Text("\(Int(elapsedTime))s")
+                                        .font(.custom("Nunito-Black", size: 15))
+                                        .foregroundColor(Color(hex: 0xFFFFFF))
+                                        .padding()
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 20)
+                                                .fill(Color(hex: 0x650E02))
+                                        )
+                                    Spacer()
+                                    Spacer()
+                                    Spacer()
+                                    Spacer()
+                                    Spacer()
+                                    Spacer()
+                                }
+                            }
+                            if gameType == .challenge {
+                                HStack {
+                                    Spacer()
+                                    Spacer()
+                                    Spacer()
+                                    Spacer()
+                                    Spacer()
+                                    Spacer()
+                                    HStack(spacing: 6) {
+                                        ForEach(0..<maxLives, id: \.self) { index in
+                                            HeartView(index: index,
+                                                      lives: lives,
+                                                      lostLifeIndex: lostLifeIndex,
+                                                      newLifeAnimation: newLifeAnimation)
+                                        }
+                                    }
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .fill(Color(hex: 0x650E02))
+                                    )
+                                    Spacer()
+                                }
+                            }
+                        }
+                        
+                        // 🔽🔽🔽 replaced grid logic starts here
+                        let count = max(0, Int(currentBoxCount))
+                        let pattern = layoutForCount[count] ?? defaultPattern(for: count)
+                        
+                        VStack(spacing: 10) {
+                            ForEach(0..<pattern.count, id: \.self) { row in
+                                let rowCount = pattern[row]
+                                let gridItems = Array(
+                                    repeating: GridItem(.flexible(), spacing: 10),
+                                    count: rowCount
+                                )
+                                
+                                LazyVGrid(columns: gridItems, alignment: .center, spacing: 10) {
+                                    let start = pattern.prefix(row).reduce(0, +)
+                                    let end = min(start + rowCount, count)
+                                    ForEach(start..<end, id: \.self) { idx in
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .fill(Color(hex: 0x8E0F00))
+                                            .frame(minWidth: 65, minHeight: 65)
+                                            .overlay(
+                                                Text(boxes.indices.contains(idx) ? boxes[idx] : "")
+                                                    .font(.custom("Nunito-Black", size: 38))
+                                                    .foregroundColor(Color(hex: 0xFFFFFF))
+                                            )
+                                            .accessibilityLabel("box \(idx + 1)")
+                                            .onTapGesture { placeLetter(at: idx) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer()
+                    Spacer()
+                    Spacer()
+
+                    HStack {
+                        Spacer()
+                        Button {
+                                if gameType == .challenge {
+                                    startChallenge()
+                                } else if gameType == .free {
+                                    restartRound()
+                                    freePlayScore = 0
+                                    score = 0
+                                }
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 20, weight: .black, design: .default))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .padding(.vertical, 3)
+                        }
+                        .buttonStyle(.glass)
+
+                        Spacer()
+                        Button {
+                            score = 0
+                            freePlayScore = 0
+                            mode = .mainMenu
+                        } label: {
+                            Image(systemName: "house.fill")
+                                .font(.system(size: 24, weight: .black, design: .default))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.glass)
+
+                        Spacer()
+                        Button {} label: {
+                            Image(systemName: "trophy.fill")
+                                .font(.system(size: 18, weight: .regular, design: .default))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.glass)
+                        Spacer()
+                    }
+                    .padding(.vertical, -10)
+                    .padding(.horizontal, 10)
+                }
+                .padding()
+            }
+        }
+    }
+    
+    // fallback layout if not customized above
+    // tweak this to your taste (e.g., prefer rows of 4, then remainder)
+    private func defaultPattern(for n: Int) -> [Int] {
+        guard n > 0 else { return [] }
+        if n <= 4 { return [n] }
+        if n == 5 { return [2, 3] }
+        if n == 6 { return [3, 3] }
+
+        // generic: fill rows of 5 until done (change 5 to whatever you like)
+        let perRow = 5
+        var res: [Int] = []
+        var remaining = n
+        while remaining > 0 {
+            let take = min(perRow, remaining)
+            res.append(take)
+            remaining -= take
+        }
+        return res
+    }
+    
+    // MARK: - Game Board
+    @available(iOS 26.0, *)
+    @ViewBuilder
+    var gameView2: some View {
         NavigationStack {
             ZStack {
                 // Background Layer
@@ -532,22 +1076,69 @@ struct BlindSequence: View {
     var overlayView: some View {
         ZStack {
             // now covers the full screen
-            Color.black.opacity(0.6)
+            Color.black.opacity(opacityViewNo)
                 .ignoresSafeArea()
-                .edgesIgnoringSafeArea(.all)
 
             VStack(spacing: 20) {
                 Text(isNewHighScore ? "New High Score!" : (didWin ? "Well Done!" : "Game Over"))
-                    .font(.largeTitle).bold()
-                    .foregroundColor(isNewHighScore ? .purple : (didWin ? .green : .red))
+                    .font(.custom("Nunito-Black", size: 28))
+                    .foregroundColor(Color(hex: 0xFFFFFF))
 
                 if gameType == .challenge {
-                    Text("Score: \(score)")
-                    Text("Time: \(Int(elapsedTime))s")
+                    HStack {
+                        VStack {
+                            Text("Score")
+                                .font(.custom("Nunito-Black", size: 22))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("\(score)")
+                                .font(.custom("Nunito-Black", size: 27))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color(hex: 0x650E02))
+                            )
+                        VStack {
+                            Text("Time")
+                                .font(.custom("Nunito-Black", size: 22))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                            Text("\(Int(elapsedTime))")
+                                .font(.custom("Nunito-Black", size: 27))
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color(hex: 0x650E02))
+                            )
+                    }
                 }
+                
+                
 
-                VStack(spacing: 15) {
-                    Button(didWin ? "Next Round" : "Restart") {
+                HStack(spacing: 8) {
+                    Button(action: {
+                        if didWin {
+                            score = 0
+                            mode = .mainMenu
+                            freePlayScore = 0
+                        } else {
+                            score = 0
+                            mode = .mainMenu
+                            freePlayScore = 0
+                        }
+                    }) {
+                        Image(systemName: "house.fill")
+                            .font(.system(size: 24, weight: .bold, design: .default))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.glass)
+                    .environment(\.colorScheme, .dark)
+                    
+                    Button(action: {
                         if didWin {
                             nextRound()
                         } else {
@@ -558,33 +1149,43 @@ struct BlindSequence: View {
                                 score = 0
                                 freePlayScore = 0
                             }
-                            
                         }
+                    }) {
+                        Text(didWin ? "Next Round" : "Restart")
+                            .font(.custom("Nunito-Black", size: 26))
+                            .foregroundColor(Color(hex: 0xFFFFFF))
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(PrimaryButton())
-                    
-                    Button(didWin ? "Main Menu" : "Main Menu") {
-                        if didWin {
-                            score = 0
-                            mode = .mainMenu
-                            freePlayScore = 0
-                        } else {
-                            score = 0
-                            mode = .mainMenu
-                            freePlayScore = 0
-                        }
-                    }
-                    .buttonStyle(PrimaryButton())
+                    .buttonStyle(.glass)
+                    .environment(\.colorScheme, .dark)
                 }
             }
             .padding(30)
-            .background(Color.white.opacity(0.9))
+            .background(LinearGradient(
+                colors: [
+                    Color(hex: 0xD84A00), Color(hex: 0xBB3300), Color(hex: 0x9E1C00)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea().opacity(0.9))
             .cornerRadius(12)
             .padding(40)
         }
         // pause/resume timer correctly
-        .onAppear { isPaused = true }
+        .onAppear {
+            isPaused = true
+            opacityViewNo = 0
+            withAnimation(.easeInOut(duration: 0.3)) {
+                opacityViewNo = 0.6
+            }
+        }
         .onDisappear { isPaused = false }
+    }
+    
+    private func boxCount(for level: Int) -> Int {
+        // level 1 = 2 boxes, level 24 = 25 boxes (cap if you want lower)
+        return min(level + 1, 25)
     }
     
     // MARK: - Helpers
@@ -610,9 +1211,24 @@ struct BlindSequence: View {
     private func nextRound() {
         mode = .playing
         didWin = false
+        freePlayScore = 0
         
-        currentBoxCount += 1
-        boxes = Array(repeating: "", count: currentBoxCount)
+        if gameType == .free {
+            // advance to next level if unlocked
+            if let lvl = currentLevel {
+                let next = min(lvl + 1, 24)
+                currentLevel = next
+                selectedLevel = next
+                let count = boxCount(for: next)
+                currentBoxCount = count
+                boxes = Array(repeating: "", count: count)
+            }
+        } else {
+            // existing challenge behavior
+            currentBoxCount += 1
+            boxes = Array(repeating: "", count: currentBoxCount)
+        }
+        
         pool = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
         currentLetter = nil
         showingRandomizing = false
@@ -660,6 +1276,12 @@ struct BlindSequence: View {
         showingRandomizing = false
         animateRotation = false
         
+        if gameType == .free {
+            // infer currentLevel from the chosen box count
+            let lvl = max(1, min(24, boxCount - 1))
+            currentLevel = lvl
+        }
+        
         if gameType == .challenge {
             lives = 3
             score = 0
@@ -691,6 +1313,7 @@ struct BlindSequence: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 didWin = (gameType == .free || (gameType == .challenge && currentBoxCount < 20))
                 mode = .gameOver
+                unlockNextLevelIfNeeded()
             }
             return
         }
@@ -914,6 +1537,7 @@ struct PrimaryButton: ButtonStyle {
 
 #Preview {
     BlindSequence()
+        .environmentObject(ProfileImageService())
 }
 
 struct DailyChallengeCard: View {

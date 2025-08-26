@@ -469,10 +469,12 @@ enum ListDestination: Identifiable {
 
 #Preview {
     MainTabView()
+        .environmentObject(ProfileImageService())
 }
 
 #Preview {
     ContentView2()
+        .environmentObject(ProfileImageService())
 }
 
 struct ContentView2: View {

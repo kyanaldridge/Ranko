@@ -291,6 +291,7 @@ struct Login: View {
 
 #Preview {
     Login()
+        .environmentObject(ProfileImageService())
 }
 
 

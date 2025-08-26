@@ -751,7 +751,7 @@ struct ProfileView: View {
             .child("profilePictures")
             .child(filePath)
 
-        storageRef.getData(maxSize: 2 * 1024 * 1024) { data, error in
+        storageRef.getData(maxSize: Int64(2 * 1024 * 1024)) { data, error in
             DispatchQueue.main.async {
                 defer { loadingProfileImage = false }
                 guard let d = data, let ui = UIImage(data: d) else {
@@ -2506,6 +2506,8 @@ struct ProfileSpectateView: View {
     @State private var lists: [RankoList] = []
     
     @State private var topCategories: [String] = []
+    @State private var pendingClone: ClonedRankoList? = nil
+    @State private var showClonedEditor = false
     
     static let interestIconMapping: [String: String] = [
         "Sport": "figure.gymnastics",
@@ -2895,13 +2897,38 @@ struct ProfileSpectateView: View {
                 .sheet(isPresented: $showSearchRankos) {
                     SearchRankosView()
                 }
+                .onChange(of: selectedFeaturedList?.id, initial: false) { _, newID in
+                    if newID == nil, pendingClone != nil {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            showClonedEditor = true
+                        }
+                    }
+                }
                 .fullScreenCover(item: $selectedFeaturedList) { list in
                     if list.type == "default" {
-                        DefaultListSpectate(listID: list.id, creatorID: list.userCreator)
+                        DefaultListSpectate(
+                            listID: list.id,
+                            creatorID: list.userCreator,
+                            onClone: { cloned in
+                                // 1) store the clone payload
+                                pendingClone = cloned
+                                // 2) child will dismiss itself; we wait for dismissal to complete below
+                            }
+                        )
                     } else if list.type == "group" {
                         GroupListSpectate(listID: list.id, creatorID: list.userCreator)
                     }
-                    
+                }
+                .fullScreenCover(isPresented: $showClonedEditor, onDismiss: { pendingClone = nil }) {
+                    if let clone = pendingClone {
+                        DefaultListView(
+                            rankoName: clone.listName,
+                            description: clone.listDescription,
+                            isPrivate: clone.isPrivate == "Private",
+                            category: categoryChip(named: clone.category),
+                            selectedRankoItems: clone.items
+                        ) { _ in /* no-op */ }
+                    }
                 }
                 .sheet(isPresented: $showUserFollowers) {
                     SearchFollowersView(userID: userID)
@@ -2939,6 +2966,12 @@ struct ProfileSpectateView: View {
             }
             
         }
+    }
+    
+    private func categoryChip(named name: String) -> CategoryChip? {
+        // Uses your existing global/category source if available
+        let all = categoryChipsByCategory.values.flatMap { $0 }
+        return all.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
     }
     
     private func checkFollowStatus() {
@@ -3103,7 +3136,7 @@ struct ProfileSpectateView: View {
             .child("profilePictures")
             .child(path)
 
-        storageRef.getData(maxSize: 2 * 1024 * 1024) { data, error in
+        storageRef.getData(maxSize: Int64(2 * 1024 * 1024)) { data, error in
             DispatchQueue.main.async {
                 if let error = error {
                     print("❌ loadProfileImage failed:", error.localizedDescription)

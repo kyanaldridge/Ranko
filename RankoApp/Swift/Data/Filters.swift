@@ -383,7 +383,7 @@ var defaultFilterChips: [FilterChip] = [
                         order: 0
                     ),
                     FilterChip(
-                        name: "Football",
+                        name: "Footballers",
                         icon: "figure.indoor.soccer",
                         synonyms: "football, soccer, footy, association football, fútbol",
                         nameIndex: "Sports-Athletes",
@@ -393,7 +393,7 @@ var defaultFilterChips: [FilterChip] = [
                         order: 1
                     ),
                     FilterChip(
-                        name: "Basketball",
+                        name: "Basketballers",
                         icon: "figure.basketball",
                         synonyms: "basketball, hoops, NBA, court ball, b-ball",
                         nameIndex: "Sports-Athletes",
@@ -403,7 +403,7 @@ var defaultFilterChips: [FilterChip] = [
                         order: 2
                     ),
                     FilterChip(
-                        name: "Tennis",
+                        name: "Tennis Players",
                         icon: "figure.tennis",
                         synonyms: "tennis, racquet sport, Wimbledon, Grand Slam, deuce",
                         nameIndex: "Sports-Athletes",
@@ -413,7 +413,7 @@ var defaultFilterChips: [FilterChip] = [
                         order: 3
                     ),
                     FilterChip(
-                        name: "American Football",
+                        name: "American Footballers",
                         icon: "figure.american.football",
                         synonyms: "American football, gridiron, NFL, pigskin, football",
                         nameIndex: "Sports-Athletes",
@@ -423,7 +423,7 @@ var defaultFilterChips: [FilterChip] = [
                         order: 4
                     ),
                     FilterChip(
-                        name: "Australian Football",
+                        name: "Australian Footballers",
                         icon: "figure.australian.football",
                         synonyms: "Australian rules football, AFL, footy, Aussie rules, league",
                         nameIndex: "Sports-Athletes",
@@ -433,7 +433,7 @@ var defaultFilterChips: [FilterChip] = [
                         order: 5
                     ),
                     FilterChip(
-                        name: "Motorsport",
+                        name: "Motorsport Drivers",
                         icon: "steeringwheel",
                         synonyms: "motorsport, racing, F1, auto racing, motorsports",
                         nameIndex: "Sports-Athletes",

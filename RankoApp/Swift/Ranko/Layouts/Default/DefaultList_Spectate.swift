@@ -36,8 +36,6 @@ struct DefaultListSpectate: View {
     @State private var showTabBar = true
     @State private var tabBarPresent = false
     @State var showSaveRankoSheet = false
-    @State var showCloneSheet = false
-    @State var showEditItemSheet = false
     @State var showExitSheet = false
     
     @State private var toastMessage: String = ""
@@ -51,6 +49,8 @@ struct DefaultListSpectate: View {
     @State private var selectedItem: RankoItem? = nil
     @State private var itemToEdit: RankoItem? = nil
     @State private var onSave: ((RankoItem) -> Void)? = nil
+    
+    let onClone: (ClonedRankoList) -> Void
 
     // MARK: - Init now only requires listID
     init(
@@ -62,10 +62,12 @@ struct DefaultListSpectate: View {
         description: String = "",
         isPrivate: Bool = false,
         category: CategoryChip? = CategoryChip(name: "Unknown", icon: "questionmark.circle.fill", category: "Unknown", synonym: ""),
-        selectedRankoItems: [RankoItem] = []
+        selectedRankoItems: [RankoItem] = [],
+        onClone: @escaping (ClonedRankoList) -> Void = { _ in }
     ) {
         self.listID = listID
         self.creatorID = creatorID
+        self.onClone = onClone
         _creatorName = State(initialValue: creatorName)
         _creatorImage = State(initialValue: creatorImage)
         _rankoName = State(initialValue: rankoName)
@@ -142,13 +144,13 @@ struct DefaultListSpectate: View {
                                 Group {
                                     if let img = creatorImage {
                                         ZStack {
-                                            Circle()
+                                            RoundedRectangle(cornerRadius: 3)
                                                 .fill(Color.white)
                                                 .frame(width: 18, height: 18)
                                             Image(uiImage: img)
                                                 .resizable()
                                         }
-                                        .clipShape(Circle())
+                                        .clipShape(RoundedRectangle(cornerRadius: 3))
                                         
                                     } else {
                                         ZStack {
@@ -193,31 +195,6 @@ struct DefaultListSpectate: View {
                                 .onTapGesture {
                                     selectedItem = item
                                 }
-                                .sheet(isPresented: $showEditItemSheet) {
-                                    // Determine which item is centered
-                                    EditItemView(
-                                        item: item,
-                                        listID: listID
-                                    ) { newName, newDesc in
-                                        // build updated record & item
-                                        let rec = item.record
-                                        let updatedRecord = RankoRecord(
-                                            objectID: rec.objectID,
-                                            ItemName: newName,
-                                            ItemDescription: newDesc,
-                                            ItemCategory: "",
-                                            ItemImage: rec.ItemImage
-                                        )
-                                        let updatedItem = RankoItem(
-                                            id: item.id,
-                                            rank: item.rank,
-                                            votes: item.votes,
-                                            record: updatedRecord
-                                        )
-                                        // callback to parent
-                                        onSave!(updatedItem)
-                                    }
-                                }
                         }
                         .padding(.top, 5)
                         .padding(.bottom, 70)
@@ -253,25 +230,6 @@ struct DefaultListSpectate: View {
             .ignoresSafeArea()
             
         }
-        .fullScreenCover(isPresented: $showCloneSheet) { 
-            DefaultListView(
-                rankoName: rankoName,
-                description: description,
-                isPrivate: isPrivate,
-                category: category,
-                selectedRankoItems: selectedRankoItems
-            ) { updatedItem in
-                // no-op in preview
-            }
-        }
-        .onChange(of: showCloneSheet) { _, isPresented in
-            // when it flips from true → false…
-            if !isPresented {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    dismiss()
-                }
-            }
-        }
         .animation(.easeInOut(duration: 0.25), value: toastID)
         .sheet(isPresented: $showTabBar) {
             VStack {
@@ -305,9 +263,18 @@ struct DefaultListSpectate: View {
                                     showComingSoonToast(for: "Save Rankos")
                                 }
                             case .clone:
-                                showCloneSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
+                                let payload = ClonedRankoList(
+                                    listName: rankoName,
+                                    listDescription: description,
+                                    type: "default",
+                                    category: category?.name ?? "Unknown",
+                                    isPrivate: isPrivate ? "Private" : "Public",
+                                    items: selectedRankoItems
+                                )
+                                tabBarPresent = false
+                                withAnimation(.easeInOut(duration: 0.4)) {
+                                    onClone(payload)
+                                    dismiss()
                                 }
                             case .exit:
                                 let haptic = UIImpactFeedbackGenerator(style: .medium)
@@ -389,7 +356,7 @@ struct DefaultListSpectate: View {
             .child("UserProfilePicturePath")
         ref.getData { _, snap in
             if let path = snap?.value as? String {
-                Storage.storage().reference().child(path)
+                Storage.storage().reference().child("profilePictures").child(path)
                     .getData(maxSize: 2*1024*1024) { data, _ in
                         if let data = data, let ui = UIImage(data: data) {
                             creatorImage = ui
@@ -679,7 +646,7 @@ struct DefaultListSpectate2: View {
             .child("UserProfilePicturePath")
         ref.getData { _, snap in
             if let path = snap?.value as? String {
-                Storage.storage().reference().child(path)
+                Storage.storage().reference().child("profilePictures").child(path)
                     .getData(maxSize: 2*1024*1024) { data, _ in
                         if let data = data, let ui = UIImage(data: data) {
                             profileImage = ui

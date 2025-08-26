@@ -170,6 +170,7 @@ struct DefaultListIndividualGallery: View {
         )
         Spacer()
     }
+    .environmentObject(ProfileImageService())
     .background(
         RoundedRectangle(cornerRadius: 25)
             .fill(
