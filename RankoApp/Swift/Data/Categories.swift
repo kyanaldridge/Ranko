@@ -413,15 +413,15 @@ struct FeaturedCategoryBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: FilterChip.icon(named: text, in: defaultFilterChips) ?? "circle.fill")
-                .font(.system(size: 8, weight: .heavy))
+                .font(.system(size: 10, weight: .heavy))
                 .foregroundColor(categoryChipIconColors[text])
             Text(text)
-                .font(.system(size: 8, weight: .heavy))
+                .font(.custom("Nunito-ExtraBold", size: 11))
                 .foregroundColor(categoryChipIconColors[text])
         }
         .font(.caption)
-        .padding(.vertical, 6)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 3)
+        .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(categoryChipIconColors[text]!)

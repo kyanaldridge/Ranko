@@ -156,14 +156,14 @@ struct GroupListIndividualGallery: View {
             overlappingImages
             VStack(alignment: .leading, spacing: 4) {
                 Text(listData.listName)
-                    .font(.system(size: 15, weight: .heavy))
-                    .foregroundColor(Color(hex: 0x7E5F46))
+                    .font(.custom("Nunito-Black", size: 16))
+                    .foregroundColor(Color(hex: 0x514343))
                     .multilineTextAlignment(.leading)
                 HStack(spacing: 6) {
                     FeaturedCategoryBadge(text: listData.category)
                     Text("• \(timeAgo(from: String(listData.dateTime)))")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(Color(hex: 0x7E5F46))
+                        .font(.custom("Nunito-Black", size: 9))
+                        .foregroundColor(Color(hex: 0x514343))
                 }
             }
             Spacer()
@@ -172,8 +172,8 @@ struct GroupListIndividualGallery: View {
                     onUnpin?()
                 } label: {
                     Image(systemName: "pin.fill")
-                        .font(.system(size: 12, weight: .heavy))
-                        .foregroundColor(Color(hex: 0x7E5F46))
+                        .font(.custom("Nunito-Black", size: 12))
+                        .foregroundColor(Color(hex: 0x514343))
                         .padding(.trailing, 6)
                 }
             }
@@ -199,8 +199,8 @@ struct GroupListIndividualGallery: View {
                 }
                 .frame(width: 40, height: 40)
                 .clipShape(Circle())
-                .overlay(Circle().stroke(LinearGradient(colors: [Color(hex: 0xFFFAEF), Color(hex: 0xFEF6EA)], startPoint: .top, endPoint: .bottom), lineWidth: 2))
-                .background(Circle().fill(LinearGradient(colors: [Color(hex: 0xFFFAEF), Color(hex: 0xFEF6EA)], startPoint: .top, endPoint: .bottom)))
+                .overlay(Circle().stroke(Color(hex: 0xFFFFFF), lineWidth: 2))
+                .background(Circle().fill(Color(hex: 0xFFFFFF)))
             }
         }
     }

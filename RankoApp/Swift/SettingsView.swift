@@ -22,6 +22,275 @@ struct SettingItem: Identifiable {
 
 struct SettingsView: View {
     @Environment(\.requestReview) private var requestReview
+    @Namespace private var transition
+    
+    @StateObject private var auth = MusicAuthManager()
+    @StateObject private var player = PlayerManager()
+    @StateObject private var user_data = UserInformation.shared
+    
+    // Store the tint as a String value (note the dot prefix to match our mapping below)
+    @State private var rankoProView: Bool
+    @State private var accountView: Bool = false
+    @State private var notificationsView: Bool = false
+    @State private var preferencesView: Bool = false
+    @State private var privacySecurityView: Bool = false
+    @State private var suggestionsIdeasView: Bool = false
+    @State private var dataStorageView: Bool = false
+    @State private var aboutView: Bool = false
+    @State private var legalView: Bool = false
+    
+    @State private var searchText: String = ""
+    @State private var activeSheet: SettingItem? = nil
+    
+    init(rankoProView: Bool = false) {
+        self._rankoProView = State(initialValue: rankoProView)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(hex: 0xFFFFFF)
+                    .ignoresSafeArea()
+                ScrollView(.vertical) {
+                    VStack(spacing: 10) {
+                        HStack {
+                            Text("Settings")
+                                .font(.custom("Nunito-Black", size: 36))
+                                .foregroundStyle(Color(hex: 0x514343))
+                            Spacer()
+                            ProfileIconView(diameter: CGFloat(50))
+                        }
+                        .padding(.horizontal, 30)
+                        .padding(.top, 10)
+                        
+                        VStack(spacing: 0) {
+                            if matchingSettings.isEmpty {
+                                VStack(spacing: 18) {
+                                    Image(systemName: "questionmark.circle.fill")
+                                        .font(.system(size: 120, weight: .heavy))
+                                        .foregroundColor(Color(hex: 0x7E5F46).opacity(0.3))
+                                        .padding(.top, 40)
+                                    Text("No Settings Found")
+                                        .font(.system(size: 20, weight: .heavy))
+                                        .foregroundColor(Color(hex: 0x7E5F46))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.bottom, 30)
+                                .transition(.opacity)
+                            } else {
+                                ForEach(matchingSettings) { setting in
+                                    Button {
+                                        switch setting.title {
+                                        case "Account":
+                                            accountView = true
+                                        case "Ranko Pro":
+                                            rankoProView = true
+                                        case "Notifications":
+                                            notificationsView = true
+                                        case "Preferences":
+                                            preferencesView = true
+                                        case "Privacy & Security":
+                                            privacySecurityView = true
+                                        case "Please Leave Us A Review":
+                                            requestReview()
+                                        case "Suggestions & Ideas":
+                                            suggestionsIdeasView = true
+                                        case "Data & Storage":
+                                            dataStorageView = true
+                                        case "About":
+                                            aboutView = true
+                                        case "Privacy Policy & Terms Of Use":
+                                            legalView = true
+                                        default:
+                                            break
+                                        }
+                                    } label: {
+                                        HStack(spacing: 14) {
+                                            Image(systemName: setting.icon)
+                                                .font(.system(size: 20, weight: .black))
+                                                .foregroundColor(Color(hex: 0x514343))
+                                                .frame(width: 32)
+                                            Text(setting.title)
+                                                .font(.system(size: 14, weight: .black))
+                                                .foregroundColor(Color(hex: 0x514343))
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 16, weight: .black))
+                                                .foregroundColor(Color(hex: 0x514343))
+                                        }
+                                        .padding(.vertical, 16)
+                                        .padding(.horizontal, 16)
+                                        .matchedTransitionSource(id: setting.title, in: transition)
+                                    }
+                                    .tint(Color(hex: 0xFFFFFF))
+                                    .buttonStyle(.glassProminent)
+                                    .id(setting.id)
+                                    .background(Color.clear)
+                                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 8, x: 0, y: 0)
+                                }
+                                .padding(.horizontal, 15)
+                                .padding(.top, 6)
+                            }
+                        }
+                        .padding(.top, 5)
+                        .padding(.bottom, 70)
+                        .animation(.easeInOut(duration: 0.35), value: searchText)
+                        .cornerRadius(16)
+                        .sheet(item: $activeSheet) { setting in
+                            VStack {
+                                Text(setting.title)
+                                    .font(.title)
+                                    .padding()
+                                Spacer()
+                                Text("This is a placeholder for \(setting.title) settings.")
+                                    .foregroundColor(.gray)
+                                Spacer()
+                            }
+                        }
+                        Spacer()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            Analytics.logEvent(AnalyticsEventScreenView, parameters: [
+                AnalyticsParameterScreenName: "Settings",
+                AnalyticsParameterScreenClass: "SettingsView"
+            ])
+        }
+        .sheet(isPresented: $accountView) {
+            AccountView()
+                .navigationTransition(
+                    .zoom(sourceID: "Account", in: transition)
+                )
+        }
+        .fullScreenCover(isPresented: $rankoProView) {
+            ProSubscriptionView()
+                .navigationTransition(
+                    .zoom(sourceID: "Ranko Pro", in: transition)
+                )
+        }
+        .sheet(isPresented: $notificationsView) {
+            NotificationsView()
+                .navigationTransition(
+                    .zoom(sourceID: "Notifications", in: transition)
+                )
+        }
+        .sheet(isPresented: $preferencesView) {
+            PreferencesView()
+                .navigationTransition(
+                    .zoom(sourceID: "Preferences", in: transition)
+                )
+        }
+        .sheet(isPresented: $privacySecurityView) {
+            PrivacySecurityView()
+                .navigationTransition(
+                    .zoom(sourceID: "Privacy & Security", in: transition)
+                )
+        }
+        .fullScreenCover(isPresented: $suggestionsIdeasView) {
+            AppleMusicView()
+                .environmentObject(auth)
+                .environmentObject(player)
+                .navigationTransition(
+                    .zoom(sourceID: "Suggestions & Ideas", in: transition)
+                )
+        }
+        .sheet(isPresented: $dataStorageView) {
+            DataStorageView()
+                .navigationTransition(
+                    .zoom(sourceID: "Data & Storage", in: transition)
+                )
+        }
+        .sheet(isPresented: $aboutView) {
+            AboutView()
+                .navigationTransition(
+                    .zoom(sourceID: "About", in: transition)
+                )
+        }
+        .sheet(isPresented: $legalView) {
+            LegalView()
+                .navigationTransition(
+                    .zoom(sourceID: "Privacy Policy & Terms Of Use", in: transition)
+                )
+        }
+        
+    }
+    
+    // Example settings with keywords
+    private var settings: [SettingItem] {
+        [
+            SettingItem(variable: "account", title: "Account", icon: "person.crop.circle", keywords: ["account", "profile", "sign in", "sign out", "user", "login", "logout"]),
+            SettingItem(variable: "rankoPro", title: "Ranko Pro", icon: "medal.star", keywords: ["ranko", "pro", "premium"]),
+            SettingItem(variable: "notifications", title: "Notifications", icon: "bell.badge", keywords: ["notification", "alerts", "reminders", "push", "messages"]),
+            SettingItem(variable: "preferences", title: "Preferences", icon: "wrench.and.screwdriver", keywords: ["preferences", "alerts", "reminders", "push", "messages"]),
+            SettingItem(variable: "privacy", title: "Privacy & Security", icon: "lock.shield", keywords: ["privacy", "security", "password", "passcode", "auth", "protection"]),
+            SettingItem(variable: "review", title: "Please Leave Us A Review", icon: "star.fill", keywords: ["Review"]),
+            SettingItem(variable: "suggestions", title: "Suggestions & Ideas", icon: "brain.head.profile.fill", keywords: ["suggestions", "ideas", "help", "contact", "feedback"]),
+            SettingItem(variable: "dataStorage", title: "Data & Storage", icon: "externaldrive", keywords: ["data", "storage", "cache", "clear", "reset"]),
+            SettingItem(variable: "about", title: "About", icon: "info.circle", keywords: ["about", "info", "version", "app", "credits"]),
+            SettingItem(variable: "legal", title: "Privacy Policy & Terms Of Use", icon: "scroll", keywords: ["privacy policy", "terms of use", "legal"])
+        ]
+    }
+    
+    // Filtering logic to get matching settings
+    private var matchingSettings: [SettingItem] {
+        if searchText.isEmpty { return settings }
+        let lowercased = searchText.lowercased()
+        return settings.filter { setting in
+            setting.title.lowercased().contains(lowercased) ||
+            setting.keywords.contains(where: { $0.contains(lowercased) })
+        }
+    }
+    
+    // Filtering logic to get non-matching settings
+    private var nonMatchingSettings: [SettingItem] {
+        let lowercased = searchText.lowercased()
+        if lowercased.isEmpty { return [] }
+        return settings.filter { setting in
+            !(setting.title.lowercased().contains(lowercased) ||
+            setting.keywords.contains(where: { $0.contains(lowercased) })) }
+    }
+    
+    private func clearAllCache() {
+        // 1. Remove URLCache entries
+        let urlCache = URLCache.shared
+        urlCache.removeAllCachedResponses()
+        
+        // 2. Reset its capacities
+        URLCache.shared = URLCache(memoryCapacity: 0, diskCapacity: 0, diskPath: nil)
+        
+        // 3. Clear out everything in Caches directory
+        if let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            do {
+                let contents = try FileManager.default.contentsOfDirectory(at: cachesURL,
+                                                                           includingPropertiesForKeys: nil)
+                for file in contents {
+                    try FileManager.default.removeItem(at: file)
+                }
+            } catch {
+                print("⚠️ Failed to clear Caches directory:", error)
+            }
+        }
+        
+        // 4. Clear out the tmp directory
+        let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        do {
+            let tmpContents = try FileManager.default.contentsOfDirectory(at: tmpURL,
+                                                                          includingPropertiesForKeys: nil)
+            for file in tmpContents {
+                try FileManager.default.removeItem(at: file)
+            }
+        } catch {
+            print("⚠️ Failed to clear tmp directory:", error)
+        }
+        
+        print("✅ All caches cleared")
+    }
+}
+
+struct SettingsView1: View {
+    @Environment(\.requestReview) private var requestReview
     
     @StateObject private var user_data = UserInformation.shared
     // Store the tint as a String value (note the dot prefix to match our mapping below)
@@ -644,38 +913,41 @@ struct AccountView: View {
     
     var body: some View {
         ZStack {
-            Color(hex: 0xFFF5E2)
+            Color(hex: 0xFFFFFF)
                 .ignoresSafeArea()
             
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Title
                 HStack {
                     Text("Account")
-                        .font(.system(size: 32, weight: .black))
-                        .foregroundColor(Color(hex: 0x857467))
+                        .font(.custom("Nunito-Black", size: 32))
+                        .foregroundColor(Color(hex: 0x514343))
                     Spacer()
                     Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .black))
-                            .frame(width: 30, height: 30)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22, weight: .black))
+                            .padding(.vertical, 5)
                     }
-                    .foregroundColor(Color(hex: 0x857467))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
                 
-                Divider()
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(hex: 0x000000))
+                    .frame(height: 3)
+                    .opacity(0.08)
+                    .padding(.horizontal, 25)
+                    .padding(.top, 20)
                 
                 // ✅ Credentials Section
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Credentials")
-                            .foregroundColor(Color(hex: 0x857467))
+                            .foregroundColor(Color(hex: 0x514343))
                             .font(.title2)
                             .bold()
                         
@@ -689,12 +961,12 @@ struct AccountView: View {
                                         .renderingMode(.template)
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                         .frame(width: 24, height: 24)
                                         .clipShape(Circle())
                                     Text("Signed in with Apple")
-                                        .font(.system(size: 17, weight: .heavy, design: .default))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 20))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                 }
                                 .padding(.vertical, 10)
@@ -705,12 +977,12 @@ struct AccountView: View {
                                         .renderingMode(.template)
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                         .frame(width: 24, height: 24)
                                         .clipShape(Circle())
                                     Text("Signed in with Google")
-                                        .font(.headline)
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 20))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                 }
                                 .padding(.vertical, 10)
@@ -719,41 +991,38 @@ struct AccountView: View {
                                     Spacer()
                                     Image(systemName: "exclamationmark.triangle.fill")
                                         .font(.system(size: 24))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Text("Can't Find Login Service")
-                                        .font(.headline)
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 20))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                 }
                                 .padding(.vertical, 10)
                             }
                         }
-                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                             startPoint: .top,
-                                             endPoint: .bottom
-                                            ))
+                        .foregroundColor(Color(hex: 0x514343))
+                        .tint(Color(hex: 0xFFFFFF))
                         .buttonStyle(.glassProminent)
+                        .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                     }
                     .padding(.horizontal, 25)
                     
                     // ✅ Log Out & Delete Account Buttons
                     HStack(spacing: 10) {
+                        Spacer(minLength: 0)
                         Button(role: .destructive) { showLogoutAlert = true } label: {
                             HStack {
-                                Spacer()
                                 Text("Sign Out")
-                                    .font(.system(size: 14, weight: .heavy, design: .default))
-                                    .foregroundColor(Color(hex: 0x857467))
-                                Spacer()
+                                    .font(.custom("Nunito-Black", size: 17))
+                                    .foregroundColor(Color(hex: 0x514343))
+                                    .padding(.horizontal, 10)
                             }
                             .padding(.vertical, 10)
                         }
-                        .foregroundColor(Color(hex: 0xFF9864))
-                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                             startPoint: .top,
-                                             endPoint: .bottom
-                                            ))
+                        .foregroundColor(Color(hex: 0x514343))
+                        .tint(Color(hex: 0xFFFFFF))
                         .buttonStyle(.glassProminent)
+                        .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                         .alert(isPresented: $showLogoutAlert) {
                             CustomDialog(
                                 title: "Sign Out?",
@@ -794,20 +1063,17 @@ struct AccountView: View {
                         
                         Button(role: .destructive) { showDeleteAlert = true } label: {
                             HStack {
-                                Spacer()
                                 Text("Delete Account")
-                                    .font(.system(size: 14, weight: .heavy, design: .default))
-                                    .foregroundColor(Color(hex: 0x857467))
-                                Spacer()
+                                    .font(.custom("Nunito-Black", size: 17))
+                                    .foregroundColor(Color(hex: 0x514343))
+                                    .padding(.horizontal, 10)
                             }
                             .padding(.vertical, 10)
                         }
-                        .foregroundColor(Color(hex: 0xFF9864))
-                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                             startPoint: .top,
-                                             endPoint: .bottom
-                                            ))
+                        .foregroundColor(Color(hex: 0x514343))
+                        .tint(Color(hex: 0xFFFFFF))
                         .buttonStyle(.glassProminent)
+                        .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                         .alert(isPresented: $showDeleteAlert) {
                             CustomDialog(
                                 title: "Delete Account?",
@@ -845,9 +1111,11 @@ struct AccountView: View {
                             Rectangle()
                                 .fill(.primary.opacity(0.35))
                         }
+                        Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 25)
                 }
+                .padding(.top, 20)
                 
                 Spacer()
                 
@@ -952,43 +1220,43 @@ struct NotificationsView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0xFFF5E2)
+            Color(hex: 0xFFFFFF)
                 .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Title Bar
                 HStack {
                     Text("Notifications")
-                        .font(.system(size: 32, weight: .black))
-                        .foregroundColor(Color(hex: 0x857467))
+                        .font(.custom("Nunito-Black", size: 32))
+                        .foregroundColor(Color(hex: 0x514343))
                     Spacer()
                     Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .black))
-                            .frame(width: 30, height: 30)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22, weight: .black))
+                            .padding(.vertical, 5)
                     }
-                    .foregroundColor(Color(hex: 0x857467))
-                    .tint(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
-
-                Divider()
+                
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(hex: 0x000000))
+                    .frame(height: 3)
+                    .opacity(0.08)
+                    .padding(.horizontal, 25)
+                    .padding(.top, 20)
                 
                 ScrollView {
                     VStack(spacing: 25) {
                         VStack {
                             HStack {
                                 Text("Personal")
-                                    .font(.system(size: 14, weight: .heavy))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .foregroundColor(Color(hex: 0x514343))
                                     .padding(.leading, 40)
                                     .padding(.bottom, 5)
                                 Spacer()
@@ -998,18 +1266,24 @@ struct NotificationsView: View {
                                     HStack {
                                         Image(systemName: "hand.thumbsup.fill")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("Ranko Likes")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationRankoLikes)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationRankoLikes ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationRankoLikes ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
+                                            .foregroundColor(.white)
                                             .labelsHidden()
                                     }
                                     Text("Receive a notification whenever someone likes one of your rankos.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
@@ -1020,19 +1294,24 @@ struct NotificationsView: View {
                                 VStack(alignment: .leading) {
                                     HStack {
                                         Image(systemName: "square.fill.on.square.fill")
-                                            .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 13))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("Ranko Clones")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationRankoClones)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationRankoClones ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationRankoClones ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
                                             .labelsHidden()
                                     }
                                     Text("Get alerted when another user clones one of your rankos.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
@@ -1044,18 +1323,23 @@ struct NotificationsView: View {
                                     HStack {
                                         Image(systemName: "person.crop.circle.badge")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("Personalized Recommendations")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationPersonalizedRecommendations)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationPersonalizedRecommendations ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationPersonalizedRecommendations ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
                                             .labelsHidden()
                                     }
                                     Text("See suggested rankos tailored to your interests.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
@@ -1067,18 +1351,23 @@ struct NotificationsView: View {
                                     HStack {
                                         Image(systemName: "calendar.badge.exclamationmark")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("Weekly Progress Summary")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationWeeklyProgress)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationWeeklyProgress ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationWeeklyProgress ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
                                             .labelsHidden()
                                     }
                                     Text("View a weekly summary of your activity progress.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
@@ -1090,35 +1379,40 @@ struct NotificationsView: View {
                                     HStack {
                                         Image(systemName: "app.badge")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("App Update Available")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationAppUpdateAvailable)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationAppUpdateAvailable ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationAppUpdateAvailable ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
                                             .labelsHidden()
                                     }
                                     Text("Be notified when a new app version is available.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
                             }
                             .background(
                                 RoundedRectangle(cornerRadius: 24)
-                                    .fill(Color(hex: 0xFFFCF2))
-                                    .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                                    .fill(Color(hex: 0xF8F8F8))
                             )
                             .padding(.horizontal, 25)
                         }
+                        .padding(.top, 20)
                         
                         VStack {
                             HStack {
                                 Text("Friends")
-                                    .font(.system(size: 14, weight: .heavy))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .foregroundColor(Color(hex: 0x514343))
                                     .padding(.leading, 40)
                                     .padding(.bottom, 5)
                                 Spacer()
@@ -1128,18 +1422,23 @@ struct NotificationsView: View {
                                     HStack {
                                         Image(systemName: "figure.2.arms.open")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("Friend Requests")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationFriendRequests)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationFriendRequests ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationFriendRequests ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
                                             .labelsHidden()
                                     }
                                     Text("Get notified when someone sends you a friend request.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
@@ -1151,18 +1450,23 @@ struct NotificationsView: View {
                                     HStack {
                                         Image(systemName: "hands.clap.fill")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("Shared Rankos")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationSharedRankos)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationSharedRankos ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationSharedRankos ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
                                             .labelsHidden()
                                     }
                                     Text("See when a friend shares a ranko with you.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
@@ -1174,26 +1478,30 @@ struct NotificationsView: View {
                                     HStack {
                                         Image(systemName: "plus.diamond.fill")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("Friends' New Rankos")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationFriendsNewRankos)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationFriendsNewRankos ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationFriendsNewRankos ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
                                             .labelsHidden()
                                     }
                                     Text("Be alerted when friends create new rankos.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
                             }
                             .background(
                                 RoundedRectangle(cornerRadius: 24)
-                                    .fill(Color(hex: 0xFFFCF2))
-                                    .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                                    .fill(Color(hex: 0xF8F8F8))
                             )
                             .padding(.horizontal, 25)
                         }
@@ -1201,8 +1509,8 @@ struct NotificationsView: View {
                         VStack {
                             HStack {
                                 Text("Community")
-                                    .font(.system(size: 14, weight: .heavy))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .foregroundColor(Color(hex: 0x514343))
                                     .padding(.leading, 40)
                                     .padding(.bottom, 5)
                                 Spacer()
@@ -1212,18 +1520,24 @@ struct NotificationsView: View {
                                     HStack {
                                         Image(systemName: "flame.fill")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("Trending Rankos")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationTrendingRankos)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationTrendingRankos ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationTrendingRankos ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
+                                            .transition(.opacity)
                                             .labelsHidden()
                                     }
                                     Text("Stay updated on rankos that are trending community-wide.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
@@ -1235,26 +1549,30 @@ struct NotificationsView: View {
                                     HStack {
                                         Image(systemName: "party.popper.fill")
                                             .font(.system(size: 13, weight: .bold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text("Mini Game Events")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Spacer()
                                         Toggle("", isOn: $user_data.notificationMiniGameEvents)
-                                            .tint(Color(hex: 0x857467))
+                                            .tint(Color(hex:0x78C2B3))
+                                            .padding(.trailing, 2)
+                                            .background(RoundedRectangle(cornerRadius: 20)
+                                                .fill(user_data.notificationMiniGameEvents ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                                .stroke(user_data.notificationMiniGameEvents ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                            )
                                             .labelsHidden()
                                     }
                                     Text("Receive alerts for upcoming in-app mini game events.")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
                                         .padding(.top, 6)
                                 }
                                 .padding(20)
                             }
                             .background(
                                 RoundedRectangle(cornerRadius: 24)
-                                    .fill(Color(hex: 0xFFFCF2))
-                                    .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                                    .fill(Color(hex: 0xF8F8F8))
                             )
                             .padding(.horizontal, 25)
                         }
@@ -1272,38 +1590,41 @@ struct PreferencesView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0xFFF5E2)
+            Color(hex: 0xFFFFFF)
                 .ignoresSafeArea()
             
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Title
                 HStack {
                     Text("Preferences")
-                        .font(.system(size: 32, weight: .black))
-                        .foregroundColor(Color(hex: 0x857467))
+                        .font(.custom("Nunito-Black", size: 32))
+                        .foregroundColor(Color(hex: 0x514343))
                     Spacer()
                     Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .black))
-                            .frame(width: 30, height: 30)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22, weight: .black))
+                            .padding(.vertical, 5)
                     }
-                    .foregroundColor(Color(hex: 0x857467))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
                 
-                Divider()
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(hex: 0x000000))
+                    .frame(height: 3)
+                    .opacity(0.08)
+                    .padding(.horizontal, 25)
+                    .padding(.top, 20)
                 
                 VStack {
                     HStack {
                         Text("Text Preferences")
-                            .font(.system(size: 14, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x857467))
+                            .font(.custom("Nunito-Black", size: 14))
+                            .foregroundColor(Color(hex: 0x514343))
                             .padding(.leading, 40)
                             .padding(.bottom, 5)
                         Spacer()
@@ -1313,18 +1634,23 @@ struct PreferencesView: View {
                             HStack {
                                 Image(systemName: "text.magnifyingglass")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .foregroundColor(Color(hex: 0x514343))
                                 Text("Auto-Correction Disabled")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .foregroundColor(Color(hex: 0x514343))
                                 Spacer()
                                 Toggle("", isOn: $user_data.preferencesAutocorrectDisabled)
-                                    .tint(Color(hex: 0x857467))
+                                    .tint(Color(hex:0x78C2B3))
+                                    .padding(.trailing, 2)
+                                    .background(RoundedRectangle(cornerRadius: 20)
+                                        .fill(user_data.preferencesAutocorrectDisabled ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                        .stroke(user_data.preferencesAutocorrectDisabled ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                    )
                                     .labelsHidden()
                             }
                             Text("Disable Autocorrect for all text fields in Ranko.")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(Color(hex: 0xA2A2A1))
                                 .padding(.top, 6)
                         }
                         .padding(20)
@@ -1336,18 +1662,23 @@ struct PreferencesView: View {
                             HStack {
                                 Image(systemName: "capslock.fill")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .foregroundColor(Color(hex: 0x514343))
                                 Text("Autocapitalise Ranko Titles")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .foregroundColor(Color(hex: 0x514343))
                                 Spacer()
                                 Toggle("", isOn: $user_data.notificationMiniGameEvents)
-                                    .tint(Color(hex: 0x857467))
+                                    .tint(Color(hex:0x78C2B3))
+                                    .padding(.trailing, 2)
+                                    .background(RoundedRectangle(cornerRadius: 20)
+                                        .fill(user_data.notificationMiniGameEvents ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                        .stroke(user_data.notificationMiniGameEvents ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                    )
                                     .labelsHidden()
                             }
                             Text("Enable Ranko Titles to have automatic proper casing.")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(Color(hex: 0xA2A2A1))
                                 .padding(.top, 6)
                         }
                         .padding(20)
@@ -1359,18 +1690,23 @@ struct PreferencesView: View {
                             HStack {
                                 Image(systemName: "waveform.path")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .foregroundColor(Color(hex: 0x514343))
                                 Text("Haptics")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .foregroundColor(Color(hex: 0x514343))
                                 Spacer()
                                 Toggle("", isOn: $user_data.preferencesHaptics)
-                                    .tint(Color(hex: 0x857467))
+                                    .tint(Color(hex:0x78C2B3))
+                                    .padding(.trailing, 2)
+                                    .background(RoundedRectangle(cornerRadius: 20)
+                                        .fill(user_data.preferencesHaptics ? Color(hex:0x78C2B3) : Color(hex: 0xD67063))
+                                        .stroke(user_data.preferencesHaptics ? Color(hex:0x78C2B3) : Color(hex: 0xD67063), lineWidth: 2)
+                                    )
                                     .labelsHidden()
                             }
                             Text("Receive haptic feedback.")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(Color(hex: 0xA2A2A1))
                                 .padding(.top, 6)
                         }
                         .padding(20)
@@ -1382,14 +1718,14 @@ struct PreferencesView: View {
                             HStack {
                                 Image(systemName: "waveform")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .foregroundColor(Color(hex: 0x514343))
                                 Text("Haptic Intensity")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .foregroundColor(Color(hex: 0x514343))
                                 Spacer()
                                 Text(user_data.preferencesHapticIntensity == 1 ? "Low" : (user_data.preferencesHapticIntensity == 2 ? "Normal" : (user_data.preferencesHapticIntensity == 3 ? "High" : "Very High")))
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(Color(hex: 0x857467))
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .foregroundColor(Color(hex: 0x514343))
                             }
                             Slider(
                                 value: Binding(
@@ -1402,23 +1738,24 @@ struct PreferencesView: View {
                                 in: 1...4,
                                 step: 1
                             )
-                            .sensoryFeedback(.impact(intensity: Double(user_data.preferencesHapticIntensity / 2)), trigger: user_data.preferencesHapticIntensity)
+                            .sensoryFeedback(.impact(intensity: Double(user_data.preferencesHapticIntensity / 4)), trigger: user_data.preferencesHapticIntensity)
+                            .accentColor(Color(hex:0x78C2B3))
                             .padding(.top, 6)
                             
                             Text("Customise the intensity of haptic feedback.")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(Color(hex: 0xA2A2A1))
                                 .padding(.top, 6)
                         }
                         .padding(20)
                     }
                     .background(
                         RoundedRectangle(cornerRadius: 24)
-                            .fill(Color(hex: 0xFFFCF2))
-                            .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                            .fill(Color(hex: 0xF8F8F8))
                     )
                     .padding(.horizontal, 25)
                 }
+                .padding(.top, 20)
                 Spacer()
             }
         }
@@ -1431,52 +1768,55 @@ struct PrivacySecurityView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0xFFF5E2)
+            Color(hex: 0xFFFFFF)
                 .ignoresSafeArea()
             
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Title
-                    HStack {
-                        Text("Privacy & Security")
-                            .font(.system(size: 32, weight: .black))
-                            .foregroundColor(Color(hex: 0x857467))
-                        Spacer()
-                        Button { dismiss() } label: {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 16, weight: .black))
-                                .frame(width: 30, height: 30)
-                        }
-                        .foregroundColor(Color(hex: 0x857467))
-                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                             startPoint: .top,
-                                             endPoint: .bottom
-                                            ))
-                        .buttonStyle(.glassProminent)
+            VStack(alignment: .leading, spacing: 0) {
+                // Title
+                HStack {
+                    Text("Privacy & Security")
+                        .font(.custom("Nunito-Black", size: 32))
+                        .foregroundColor(Color(hex: 0x514343))
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22, weight: .black))
+                            .padding(.vertical, 5)
                     }
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
+                    .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
+                }
+                .padding(.horizontal, 25)
+                .padding(.top, 40)
+                
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(hex: 0x000000))
+                    .frame(height: 3)
+                    .opacity(0.08)
                     .padding(.horizontal, 25)
-                    .padding(.top, 40)
-                    
-                    Divider()
-                    
+                    .padding(.top, 20)
+                
+                ScrollView {
                     VStack {
                         VStack(spacing: 0) {
                             VStack(alignment: .leading) {
                                 HStack {
                                     Image(systemName: "key.fill")
                                         .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Text("Private Account")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 14))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                     Toggle("", isOn: $user_data.privacyPrivateAccount)
                                         .tint(Color(hex: 0x857467))
                                         .labelsHidden()
                                 }
                                 Text("Make your account fully private.")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .font(.custom("Nunito-Black", size: 12))
+                                    .foregroundColor(Color(hex: 0xA2A2A1))
                                     .padding(.top, 6)
                             }
                             .padding(20)
@@ -1488,10 +1828,10 @@ struct PrivacySecurityView: View {
                                 HStack {
                                     Image(systemName: "figure.2.arms.open")
                                         .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Text("Allow Friend Requests")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 14))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                     Toggle("", isOn: $user_data.privacyAllowFriendRequests)
                                         .tint(Color(hex: 0x857467))
@@ -1499,8 +1839,8 @@ struct PrivacySecurityView: View {
                                         .disabled(user_data.privacyPrivateAccount)
                                 }
                                 Text("Allow friend requests from other users.")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .font(.custom("Nunito-Black", size: 12))
+                                    .foregroundColor(Color(hex: 0xA2A2A1))
                                     .padding(.top, 6)
                             }
                             .padding(20)
@@ -1512,10 +1852,10 @@ struct PrivacySecurityView: View {
                                 HStack {
                                     Image(systemName: "star.fill")
                                         .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Text("Show Featured Lists Publicly")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 14))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                     Toggle("", isOn: $user_data.privacyDisplayFeaturedLists)
                                         .tint(Color(hex: 0x857467))
@@ -1523,8 +1863,8 @@ struct PrivacySecurityView: View {
                                         .disabled(user_data.privacyPrivateAccount)
                                 }
                                 Text("Show all your featured lists to people who visit your profile.")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .font(.custom("Nunito-Black", size: 12))
+                                    .foregroundColor(Color(hex: 0xA2A2A1))
                                     .padding(.top, 6)
                             }
                             .padding(20)
@@ -1536,10 +1876,10 @@ struct PrivacySecurityView: View {
                                 HStack {
                                     Image(systemName: "person.fill")
                                         .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Text("Display Username Publicly")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 14))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                     Toggle("", isOn: $user_data.privacyDisplayUsername)
                                         .tint(Color(hex: 0x857467))
@@ -1547,8 +1887,8 @@ struct PrivacySecurityView: View {
                                         .disabled(user_data.privacyPrivateAccount)
                                 }
                                 Text("Display your username on leaderboards and to people who visit your profile.")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .font(.custom("Nunito-Black", size: 12))
+                                    .foregroundColor(Color(hex: 0xA2A2A1))
                                     .padding(.top, 6)
                             }
                             .padding(20)
@@ -1560,10 +1900,10 @@ struct PrivacySecurityView: View {
                                 HStack {
                                     Image(systemName: "text.word.spacing")
                                         .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Text("Display Description Publicly")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 14))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                     Toggle("", isOn: $user_data.privacyDisplayBio)
                                         .tint(Color(hex: 0x857467))
@@ -1571,8 +1911,8 @@ struct PrivacySecurityView: View {
                                         .disabled(user_data.privacyPrivateAccount)
                                 }
                                 Text("Display your bio to people who visit your profile.")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .font(.custom("Nunito-Black", size: 12))
+                                    .foregroundColor(Color(hex: 0xA2A2A1))
                                     .padding(.top, 6)
                             }
                             .padding(20)
@@ -1584,10 +1924,10 @@ struct PrivacySecurityView: View {
                                 HStack {
                                     Image(systemName: "person.crop.square")
                                         .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Text("Display Profile Picture Publicly")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 14))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                     Toggle("", isOn: $user_data.privacyDisplayProfilePicture)
                                         .tint(Color(hex: 0x857467))
@@ -1595,8 +1935,8 @@ struct PrivacySecurityView: View {
                                         .disabled(user_data.privacyPrivateAccount)
                                 }
                                 Text("Display your profile picture on leaderboards and to people who visit your profile.")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .font(.custom("Nunito-Black", size: 12))
+                                    .foregroundColor(Color(hex: 0xA2A2A1))
                                     .padding(.top, 6)
                             }
                             .padding(20)
@@ -1608,10 +1948,10 @@ struct PrivacySecurityView: View {
                                 HStack {
                                     Image(systemName: "square.fill.on.square.fill")
                                         .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Text("Allow Users to Clone Your Rankos")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Color(hex: 0x857467))
+                                        .font(.custom("Nunito-Black", size: 14))
+                                        .foregroundColor(Color(hex: 0x514343))
                                     Spacer()
                                     Toggle("", isOn: $user_data.privacyAllowClones)
                                         .tint(Color(hex: 0x857467))
@@ -1619,19 +1959,19 @@ struct PrivacySecurityView: View {
                                         .disabled(user_data.privacyPrivateAccount)
                                 }
                                 Text("Allow users when they visit your profile to clone your rankos to create their own versions.")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color(hex: 0x857467).opacity(0.7))
+                                    .font(.custom("Nunito-Black", size: 12))
+                                    .foregroundColor(Color(hex: 0xA2A2A1))
                                     .padding(.top, 6)
                             }
                             .padding(20)
                         }
                         .background(
                             RoundedRectangle(cornerRadius: 24)
-                                .fill(Color(hex: 0xFFFCF2))
-                                .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
+                                .fill(Color(hex: 0xF8F8F8))
                         )
                         .padding(.horizontal, 25)
                     }
+                    .padding(.top, 20)
                     Spacer()
                 }
             }
@@ -1721,39 +2061,42 @@ struct SuggestionsIdeasView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0xFFF5E2)
+            Color(hex: 0xFFFFFF)
                 .ignoresSafeArea()
             
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Title
                 HStack {
                     Text("Suggestions")
-                        .font(.system(size: 32, weight: .black))
-                        .foregroundColor(Color(hex: 0x857467))
+                        .font(.custom("Nunito-Black", size: 32))
+                        .foregroundColor(Color(hex: 0x514343))
                     Spacer()
                     Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .black))
-                            .frame(width: 30, height: 30)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22, weight: .black))
+                            .padding(.vertical, 5)
                     }
-                    .foregroundColor(Color(hex: 0x857467))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
                 
-                Divider()
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(hex: 0x000000))
+                    .frame(height: 3)
+                    .opacity(0.08)
+                    .padding(.horizontal, 25)
+                    .padding(.top, 20)
                 
                 
                 VStack(spacing: 10) {
                     VStack(spacing: 10) {
                         HStack {
                             Text("Suggestion Category")
-                                .foregroundColor(Color(hex: 0x857467))
+                                .foregroundColor(Color(hex: 0x514343))
                                 .font(.title2)
                                 .bold()
                             Spacer()
@@ -1772,47 +2115,47 @@ struct SuggestionsIdeasView: View {
                                     HStack {
                                         Image(systemName: item.icon)
                                             .font(.system(size: 15, weight: .heavy, design: .default))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .foregroundColor(Color(hex: 0x514343))
                                         Text(item.title)
-                                            .font(.system(size: 15, weight: .heavy, design: .rounded))
-                                            .foregroundColor(Color(hex: 0x857467))
+                                            .font(.custom("Nunito-Black", size: 15))
+                                            .foregroundColor(Color(hex: 0x514343))
                                     }
                                     VStack(alignment: .leading, spacing: 10) {
                                         if item.feature1 != "" {
                                             Text("•  \(item.feature1)")
-                                                .font(.system(size: 12, weight: .semibold, design: .default))
-                                                .foregroundColor(Color(hex: 0x857467))
+                                                .font(.custom("Nunito-Black", size: 12))
+                                                .foregroundColor(Color(hex: 0x514343))
                                                 .lineLimit(1)
                                                 .padding(.top, 8)
                                         }
                                         if item.feature2 != "" {
                                             Text("•  \(item.feature2)")
-                                                .font(.system(size: 12, weight: .semibold, design: .default))
-                                                .foregroundColor(Color(hex: 0x857467))
+                                                .font(.custom("Nunito-Black", size: 12))
+                                                .foregroundColor(Color(hex: 0x514343))
                                                 .lineLimit(1)
                                         }
                                         if item.feature3 != "" {
                                             Text("•  \(item.feature3)")
-                                                .font(.system(size: 12, weight: .semibold, design: .default))
-                                                .foregroundColor(Color(hex: 0x857467))
+                                                .font(.custom("Nunito-Black", size: 12))
+                                                .foregroundColor(Color(hex: 0x514343))
                                                 .lineLimit(1)
                                         }
                                         if item.feature4 != "" {
                                             Text("•  \(item.feature4)")
-                                                .font(.system(size: 12, weight: .semibold, design: .default))
-                                                .foregroundColor(Color(hex: 0x857467))
+                                                .font(.custom("Nunito-Black", size: 12))
+                                                .foregroundColor(Color(hex: 0x514343))
                                                 .lineLimit(1)
                                         }
                                         if item.feature5 != "" {
                                             Text("•  \(item.feature5)")
-                                                .font(.system(size: 12, weight: .semibold, design: .default))
-                                                .foregroundColor(Color(hex: 0x857467))
+                                                .font(.custom("Nunito-Black", size: 12))
+                                                .foregroundColor(Color(hex: 0x514343))
                                                 .lineLimit(1)
                                         }
                                         if item.feature6 != "" {
                                             Text("•  \(item.feature6)")
-                                                .font(.system(size: 12, weight: .semibold, design: .default))
-                                                .foregroundColor(Color(hex: 0x857467))
+                                                .font(.custom("Nunito-Black", size: 12))
+                                                .foregroundColor(Color(hex: 0x514343))
                                                 .lineLimit(1)
                                         }
                                     }
@@ -1849,7 +2192,7 @@ struct SuggestionsIdeasView: View {
                                     .font(.system(size: 16, weight: .black))
                                     .frame(width: 25, height: 30)
                             }
-                            .foregroundColor(Color(hex: 0x857467))
+                            .foregroundColor(Color(hex: 0x514343))
                             .tint(Color(hex: 0xFFFCF7))
                             .buttonStyle(.glassProminent)
                             
@@ -1860,7 +2203,7 @@ struct SuggestionsIdeasView: View {
                                     .font(.system(size: 16, weight: .black))
                                     .frame(width: 25, height: 30)
                             }
-                            .foregroundColor(Color(hex: 0x857467))
+                            .foregroundColor(Color(hex: 0x514343))
                             .tint(Color(hex: 0xFFFCF7))
                             .buttonStyle(.glassProminent)
                         }
@@ -1964,32 +2307,35 @@ struct DataStorageView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0xFFF5E2)
+            Color(hex: 0xFFFFFF)
                 .ignoresSafeArea()
             
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Title
                 HStack {
                     Text("Data & Storage")
-                        .font(.system(size: 32, weight: .black))
-                        .foregroundColor(Color(hex: 0x857467))
+                        .font(.custom("Nunito-Black", size: 32))
+                        .foregroundColor(Color(hex: 0x514343))
                     Spacer()
                     Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .black))
-                            .frame(width: 30, height: 30)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22, weight: .black))
+                            .padding(.vertical, 5)
                     }
-                    .foregroundColor(Color(hex: 0x857467))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
                 
-                Divider()
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(hex: 0x000000))
+                    .frame(height: 3)
+                    .opacity(0.08)
+                    .padding(.horizontal, 25)
+                    .padding(.top, 20)
                 
                 Button {
                     clearAllCache()
@@ -1998,20 +2344,19 @@ struct DataStorageView: View {
                         Spacer()
                         Image(systemName: "")
                             .font(.system(size: 19, weight: .heavy, design: .default))
-                            .foregroundColor(Color(hex: 0x857467))
+                            .foregroundColor(Color(hex: 0x514343))
                         Text("Clear Cache")
-                            .font(.system(size: 17, weight: .heavy, design: .default))
-                            .foregroundColor(Color(hex: 0x857467))
+                            .font(.custom("Nunito-Black", size: 17))
+                            .foregroundColor(Color(hex: 0x514343))
                         Spacer()
                     }
                     .padding(.vertical, 10)
                 }
-                .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                     startPoint: .top,
-                                     endPoint: .bottom
-                                    ))
+                .tint(Color(hex: 0xFFFFFF))
                 .buttonStyle(.glassProminent)
+                .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                 .padding(.horizontal, 25)
+                .padding(.top, 20)
                 
                 Spacer()
             }
@@ -2060,32 +2405,35 @@ struct AboutView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0xFFF5E2)
+            Color(hex: 0xFFFFFF)
                 .ignoresSafeArea()
             
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Title
                 HStack {
                     Text("About")
-                        .font(.system(size: 32, weight: .black))
-                        .foregroundColor(Color(hex: 0x857467))
+                        .font(.custom("Nunito-Black", size: 32))
+                        .foregroundColor(Color(hex: 0x514343))
                     Spacer()
                     Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .black))
-                            .frame(width: 30, height: 30)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22, weight: .black))
+                            .padding(.vertical, 5)
                     }
-                    .foregroundColor(Color(hex: 0x857467))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
                 
-                Divider()
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(hex: 0x000000))
+                    .frame(height: 3)
+                    .opacity(0.08)
+                    .padding(.horizontal, 25)
+                    .padding(.top, 20)
                 Spacer()
             }
         }
@@ -2098,32 +2446,35 @@ struct LegalView: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0xFFF5E2)
+            Color(hex: 0xFFFFFF)
                 .ignoresSafeArea()
             
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Title
                 HStack {
                     Text("Legal")
-                        .font(.system(size: 32, weight: .black))
-                        .foregroundColor(Color(hex: 0x857467))
+                        .font(.custom("Nunito-Black", size: 32))
+                        .foregroundColor(Color(hex: 0x514343))
                     Spacer()
                     Button { dismiss() } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .black))
-                            .frame(width: 30, height: 30)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22, weight: .black))
+                            .padding(.vertical, 5)
                     }
-                    .foregroundColor(Color(hex: 0x857467))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
                 
-                Divider()
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(hex: 0x000000))
+                    .frame(height: 3)
+                    .opacity(0.08)
+                    .padding(.horizontal, 25)
+                    .padding(.top, 20)
                 
                 // MARK: - 📜 LINKS TO TERMS AND CONDITIONS - PRIVACY POLICY
                 VStack(spacing: 10) {
@@ -2131,37 +2482,34 @@ struct LegalView: View {
                         HStack {
                             Spacer()
                             Text("Terms & Conditions")
-                                .font(.system(size: 18, weight: .heavy, design: .default))
-                                .foregroundColor(Color(hex: 0x857467))
+                                .font(.custom("Nunito-Black", size: 18))
+                                .foregroundColor(Color(hex: 0x514343))
                             Spacer()
                         }
                         .padding(.vertical, 10)
                     }
-                    .foregroundColor(Color(hex: 0xFF9864))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                     
                     Button { print("Viewing Privacy Policy") } label: {
                         HStack {
                             Spacer()
                             Text("Privacy Policy")
-                                .font(.system(size: 18, weight: .heavy, design: .default))
-                                .foregroundColor(Color(hex: 0x857467))
+                                .font(.custom("Nunito-Black", size: 18))
+                                .foregroundColor(Color(hex: 0x514343))
                             Spacer()
                         }
                         .padding(.vertical, 10)
                     }
-                    .foregroundColor(Color(hex: 0xFF9864))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
+                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
                 }
                 .padding(.horizontal, 25)
+                .padding(.top, 20)
                 Spacer()
             }
         }

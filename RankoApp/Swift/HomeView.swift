@@ -41,462 +41,19 @@ let isSimulator: Bool = {
     return isSim
 }()
 
-struct MyView: View {
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(hex: 0xF76000), Color(hex: 0xD84A00), Color(hex: 0xBB3300), Color(hex: 0x9E1C00), Color(hex: 0x800100)
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            
-            VStack {
-                HStack {
-                    Spacer()
-                    Button {} label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 24, weight: .black, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                            .padding(.horizontal, 1)
-                            .padding(.vertical, 6)
-                    }
-                    .tint(Color(hex: 0xC03700))
-                    .buttonStyle(.glassProminent)
-                    .environment(\.colorScheme, .dark)
-                }
-                .padding(.horizontal, 30)
-                Spacer()
-                HStack(spacing: 3) {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("B")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("L")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("I")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("N")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("D")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                }
-                HStack(spacing: 3) {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("S")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("E")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("Q")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("U")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("E")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("N")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("C")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text("E")
-                                .font(.custom("Nunito-Black", size: 26))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                }
-                Spacer()
-                HStack(spacing: 3) {
-                    Button {} label: {
-                        Image(systemName: "trophy.fill")
-                            .font(.custom("Nunito-Black", size: 24))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                            .padding(.vertical, 6)
-                    }
-                    .tint(Color(hex: 0x8E0F00))
-                    .buttonStyle(.glassProminent)
-                    .environment(\.colorScheme, .dark)
-                    
-                    Button {} label: {
-                        Image(systemName: "gearshape.fill")
-                            .font(.custom("Nunito-Black", size: 24))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                            .padding(.vertical, 6)
-                    }
-                    .tint(Color(hex: 0x8E0F00))
-                    .buttonStyle(.glassProminent)
-                    .environment(\.colorScheme, .dark)
-                    
-                    Button {} label: {
-                        Spacer()
-                        Text("Challenge")
-                            .font(.custom("Nunito-Black", size: 24))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                            .padding(.vertical, 2)
-                            .frame(maxWidth: .infinity)
-                        Spacer()
-                        VStack(spacing: -5) {
-                            Text("SCORE")
-                                .font(.custom("Nunito-Black", size: 10))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                            Text("51")
-                                .font(.custom("Nunito-Black", size: 24))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        }
-                        .padding(.trailing, 10)
-                    }
-                    .tint(Color(hex: 0x8E0F00))
-                    .buttonStyle(.glassProminent)
-                    .environment(\.colorScheme, .dark)
-                }
-                .padding(.horizontal)
-                
-                HStack(spacing: 3) {
-                    Button {} label: {
-                        HStack {
-                            Image(systemName: "paintbrush.pointed.fill")
-                                .font(.custom("Nunito-Black", size: 24))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                            Text("Themes")
-                                .font(.custom("Nunito-Black", size: 24))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                                .padding(.vertical, 5)
-                                .padding(.horizontal, 5)
-                        }
-                    }
-                    .tint(Color(hex: 0x8E0F00))
-                    .buttonStyle(.glassProminent)
-                    .environment(\.colorScheme, .dark)
-                    
-                    Button {} label: {
-                        Spacer()
-                        Text("Classic")
-                            .font(.custom("Nunito-Black", size: 24))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                            .padding(.vertical, 2)
-                            .frame(maxWidth: .infinity)
-                        Spacer()
-                        VStack(spacing: -5) {
-                            Text("LEVEL")
-                                .font(.custom("Nunito-Black", size: 10))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                            Text("13")
-                                .font(.custom("Nunito-Black", size: 24))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        }
-                        .padding(.trailing, 10)
-                    }
-                    .tint(Color(hex: 0x8E0F00))
-                    .buttonStyle(.glassProminent)
-                    .environment(\.colorScheme, .dark)
-                }
-                .padding(.horizontal)
-                Spacer()
-                Spacer()
-                Spacer()
-            }
-        }
-    }
-}
-
-struct MyView2: View {
-    @State private var score: Int = 140
-    @State private var time: Int = 337291
-    @State private var boxes: CGFloat = 13
-
-    // customize: count → array of "boxes per row" (i.e., columns in that row)
-    var layoutForCount: [Int: [Int]] = [
-        1: [1],
-        2: [2],
-        3: [3],
-        4: [4],
-        5: [2, 3],
-        6: [3, 3],
-        7: [3, 4],
-        8: [4, 4],
-        9: [4, 5],
-        10: [5, 5],
-        11: [3, 4, 4],
-        12: [4, 4, 4],
-        13: [4, 5, 4],
-        14: [4, 5, 5],
-        15: [5, 5, 5],
-        16: [4, 4, 4, 4],
-        17: [4, 4, 4, 5],
-        18: [4, 4, 5, 5],
-        19: [4, 5, 5, 5],
-        20: [5, 5, 5, 5],
-        21: [4, 4, 4, 4, 5],
-        22: [4, 4, 4, 5, 5],
-        23: [4, 4, 5, 5, 5],
-        24: [4, 5, 5, 5, 5],
-        25: [5, 5, 5, 5, 5]
-    ]
-
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(hex: 0xF76000),
-                    Color(hex: 0xD84A00), Color(hex: 0xBB3300), Color(hex: 0x9E1C00),
-                    Color(hex: 0x800100)
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            .ignoresSafeArea()
-
-            VStack {
-                Text("\(score)")
-                    .font(.system(size: 28, weight: .black, design: .default))
-                    .foregroundColor(Color(hex: 0xFFFFFF))
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(Color(hex: 0x650E02))
-                        )
-
-                Spacer()
-                
-                VStack(spacing: 20) {
-                    
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(Color(hex: 0x8E0F00))
-                        .frame(width: 160, height: 160)
-                        .overlay(
-                            Text("L")
-                                .font(.custom("Nunito-Black", size: 90))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                        )
-                    
-                    ZStack {
-                        HStack {
-                            Spacer()
-                            Text("\(time)s")
-                                .font(.custom("Nunito-Black", size: 15))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(Color(hex: 0x650E02))
-                                    )
-                            Spacer()
-                            Spacer()
-                            Spacer()
-                            Spacer()
-                            Spacer()
-                            Spacer()
-                        }
-                        HStack {
-                            Spacer()
-                            Spacer()
-                            Spacer()
-                            Spacer()
-                            Spacer()
-                            Spacer()
-                            HStack(spacing: 5) {
-                                Image(systemName: "heart.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(Color(hex: 0xAD0303))
-                                Image(systemName: "heart.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(Color(hex: 0xAD0303))
-                                Image(systemName: "heart.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(Color(hex: 0xAD0303))
-                                Image(systemName: "heart.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(Color(hex: 0x696969))
-                                Image(systemName: "heart.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(Color(hex: 0x696969))
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(Color(hex: 0x650E02))
-                                )
-                            Spacer()
-                        }
-                    }
-                    
-                    // 🔽🔽🔽 replaced grid logic starts here
-                    let count = max(0, Int(boxes))
-                    let pattern = layoutForCount[count] ?? defaultPattern(for: count)
-                    
-                    VStack(spacing: 10) {
-                        ForEach(0..<pattern.count, id: \.self) { row in
-                            let rowCount = pattern[row]
-                            let gridItems = Array(
-                                repeating: GridItem(.flexible(), spacing: 10),
-                                count: rowCount
-                            )
-                            
-                            LazyVGrid(columns: gridItems, alignment: .center, spacing: 10) {
-                                let start = pattern.prefix(row).reduce(0, +)
-                                let end = min(start + rowCount, count)
-                                ForEach(start..<end, id: \.self) { idx in
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(Color(hex: 0x8E0F00))
-                                        .frame(minWidth: 65, minHeight: 65)
-                                        .overlay(
-                                            Text("D")
-                                                .font(.custom("Nunito-Black", size: 38))
-                                                .foregroundColor(Color(hex: 0xFFFFFF))
-                                        )
-                                        .accessibilityLabel("box \(idx + 1)")
-                                }
-                            }
-                        }
-                    }
-                    // 🔼🔼🔼 replaced grid logic ends here
-                }
-
-                Spacer()
-                Spacer()
-                Spacer()
-
-                HStack {
-                    Spacer()
-                    Button {} label: {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 20, weight: .black, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                            .padding(.vertical, 3)
-                    }
-                    .buttonStyle(.glass)
-
-                    Spacer()
-                    Button {} label: {
-                        Image(systemName: "house.fill")
-                            .font(.system(size: 24, weight: .black, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.glass)
-
-                    Spacer()
-                    Button {} label: {
-                        Image(systemName: "trophy.fill")
-                            .font(.system(size: 18, weight: .regular, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                            .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.glass)
-                    Spacer()
-                }
-                .padding(.vertical, -10)
-                .padding(.horizontal, 10)
-            }
-            .padding()
-        }
-    }
-
-    // fallback layout if not customized above
-    // tweak this to your taste (e.g., prefer rows of 4, then remainder)
-    private func defaultPattern(for n: Int) -> [Int] {
-        guard n > 0 else { return [] }
-        if n <= 4 { return [n] }
-        if n == 5 { return [2, 3] }
-        if n == 6 { return [3, 3] }
-
-        // generic: fill rows of 5 until done (change 5 to whatever you like)
-        let perRow = 5
-        var res: [Int] = []
-        var remaining = n
-        while remaining > 0 {
-            let take = min(perRow, remaining)
-            res.append(take)
-            remaining -= take
-        }
-        return res
-    }
-}
-
-#Preview {
-    MyView()
-}
-
 // MARK: - HomeView
 
 struct HomeView: View {
     // MARK: - Variables
+    @EnvironmentObject private var imageService: ProfileImageService
     @StateObject private var user_data = UserInformation.shared
+    @Namespace private var transition
     @State private var showPicker: Bool = false
     @State private var profileImage: UIImage?
     @State private var listViewID = UUID()
     @State private var isLoadingLists = true
     @State private var trayViewOpen = false
+    @State private var showCategorySheet = false
     
     @State private var showToast = false
     @State private var toastMessage = ""
@@ -521,7 +78,7 @@ struct HomeView: View {
                 Color(hex: 0xFFFFFF)
                     .ignoresSafeArea()
                 ScrollView(.vertical) {
-                    VStack {
+                    LazyVStack {
                         HStack {
                             Text("Home")
                                 .font(.custom("Nunito-Black", size: 36))
@@ -529,29 +86,38 @@ struct HomeView: View {
                             Spacer()
                             ProfileIconView(diameter: CGFloat(50))
                         }
-                        .padding(.horizontal, 35)
+                        .padding(.horizontal, 30)
+                        .padding(.top, 10)
                         
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
+                            HStack(spacing: 6) {
                                 ForEach(Self.popularCategories, id: \.self) { category in
-                                    Circle()
-                                        .foregroundColor(categoryChipIconColors[category]?.opacity(0.6))
-                                        .frame(width: 60, height: 60)
-                                        .overlay(
+                                    Button {
+                                        showCategorySheet = true
+                                    } label: {
+                                        HStack {
                                             Image(systemName: FilterChip.icon(named: category, in: defaultFilterChips) ?? "circle.fill")
-                                                .resizable()
-                                                .scaledToFit()
-                                                .frame(maxWidth: 30, maxHeight: 30)
-                                                .fontWeight(.black)
+                                                .font(.system(size: 14, weight: .black, design: .default))
                                                 .foregroundColor(Color(hex: 0xFFFFFF))
-                                        )
+                                            Text(category)
+                                                .font(.custom("Nunito-Black", size: 15))
+                                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                        }
+                                    }
+                                    .tint(categoryChipIconColors[category]?.opacity(0.6))
+                                    .buttonStyle(.glassProminent)
+                                    .matchedTransitionSource(
+                                        id: "categoryButton", in: transition
+                                    )
+                                    .mask(RoundedRectangle(cornerRadius: 15))
                                 }
                             }
                             .padding(.horizontal, 20)
                         }
+                        
                         if isLoadingLists {
                             // Show 4 skeleton cards
-                            VStack(spacing: 16) {
+                            LazyVStack(spacing: 16) {
                                 ForEach(0..<4, id: \.self) { _ in
                                     HomeListSkeletonViewRow()
                                 }
@@ -634,6 +200,12 @@ struct HomeView: View {
         .sheet(isPresented: $trayViewOpen) {
             TrayView()
         }
+        .fullScreenCover(isPresented: $showCategorySheet) {
+            BlindSequence()
+                .navigationTransition(
+                    .zoom(sourceID: "categoryButton", in: transition)
+                )
+        }
     }
     
     private func showComingSoonToast(_ msg: String) {
@@ -692,7 +264,7 @@ struct HomeView: View {
             
         }
         
-        userProfilePicture.observeSingleEvent(of: .value) { snapshot in
+        userProfilePicture.observe(.value) { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
                 print("❌ Failed To Fetch User Data From Firebase.")
                 return
@@ -709,10 +281,10 @@ struct HomeView: View {
             if modifiedTimestamp != user_data.userProfilePictureModified {
                 print("🔁 Profile Picture Modified Date Changed, Reloading Image...")
                 user_data.userProfilePictureModified = modifiedTimestamp
-                downloadAndCacheProfileImage(from: user_data.userProfilePicturePath)
+                imageService.refreshFromRemote(path: user_data.userProfilePicturePath)
             } else {
                 print("✅ Using Cached Profile Image From Disk.")
-                profileImage = loadImageFromDisk()
+                imageService.reloadFromDisk()
             }
         }
         
@@ -833,7 +405,7 @@ struct DefaultListHomeView: View {
     }
     
     var body: some View {
-        VStack {
+        LazyVStack {
             Rectangle()
                 .fill(Color(hex: 0x707070))
                 .opacity(0.15)
@@ -843,18 +415,22 @@ struct DefaultListHomeView: View {
                 .padding(.horizontal, 10)
             HStack(alignment: .top) {
                 Group {
-                    if let img = profileImage {
-                        Image(uiImage: img)
-                            .resizable()
-                    } else {
-                        SkeletonView(RoundedRectangle(cornerRadius: 10))
-                            .frame(width: 42, height: 42)
+                    AsyncImage(url: URL(string: "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media&token=\(Secrets.firebaseToken)")) { phase in
+                        if let img = phase.image {
+                            img.resizable()
+                                .scaledToFill()
+                                .frame(width: 50, height: 50)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        } else {
+                            SkeletonView(RoundedRectangle(cornerRadius: 10))
+                                .frame(width: 42, height: 42)
+                        }
                     }
+                    .frame(width: 42, height: 42)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .frame(width: 42, height: 42)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
                 
-                VStack(alignment: .leading) {
+                LazyVStack(alignment: .leading) {
                     HStack(spacing: 4) {
                         Text(creatorName)
                             .font(.custom("Nunito-Black", size: 13))
@@ -959,34 +535,45 @@ struct DefaultListHomeView: View {
         }
     }
     
+    private func positionForItem(_ item: RankoItem) -> Int? {
+        // prefer matching by id; if your RankoItem doesn't have `id`,
+        // swap to another unique key (e.g. itemName + image url).
+        if let idx = sortedItems.firstIndex(where: { $0.id == item.id }) {
+            return idx + 1
+        }
+        return nil
+    }
     
     @ViewBuilder
-    private func badgeView(for rank: Int) -> some View {
-        Group {
-            if rank == 1 {
-                Image(systemName: "1.circle.fill")
-                    .foregroundColor(Color(red: 1, green: 0.65, blue: 0))
-                    .font(.system(size: 15, weight: .black, design: .default))
-                    .padding(2)
-            } else if rank == 2 {
-                Image(systemName: "2.circle.fill")
-                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698))
-                    .font(.system(size: 15, weight: .black, design: .default))
-                    .padding(2)
-            } else if rank == 3 {
-                Image(systemName: "3.circle.fill")
-                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0))
-                    .font(.system(size: 15, weight: .black, design: .default))
-                    .padding(2)
-            } else {
-                Image(systemName: "\(rank).circle.fill")
-                    .foregroundColor(Color(hex: 0x000000))
-                    .font(.system(size: 15, weight: .black, design: .default))
-                    .padding(2)
+    private func badgeView(forPosition position: Int) -> some View {
+        // colors for 1/2/3 stay special; others default to black
+        let color: Color = {
+            switch position {
+            case 1: return Color(red: 1, green: 0.65, blue: 0)            // gold-ish
+            case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)      // silver-ish
+            case 3: return Color(red: 0.56, green: 0.33, blue: 0)          // bronze-ish
+            default: return Color(hex: 0x000000)
             }
+        }()
+
+        // SF Symbols provide numbered circles up to 50; fallback to text if bigger
+        if (1...50).contains(position) {
+            Image(systemName: "\(position).circle.fill")
+                .foregroundColor(color)
+                .font(.system(size: 15, weight: .black, design: .default))
+                .padding(2)
+                .background(Circle().fill(Color.white))
+                .offset(x: 7, y: 7)
+        } else {
+            ZStack {
+                Circle().fill(Color.white)
+                Text("\(position)")
+                    .font(.system(size: 11, weight: .black, design: .default))
+                    .foregroundColor(color)
+            }
+            .frame(width: 19, height: 19)
+            .offset(x: 7, y: 7)
         }
-        .background(Circle().fill(Color.white))
-        .offset(x: 7, y: 7)
     }
     
     private var itemsSection: some View {
@@ -1007,7 +594,7 @@ struct DefaultListHomeView: View {
     }
     
     private func leftColumn(minWidth: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        LazyVStack(alignment: .leading, spacing: 12) {
             ForEach(firstBlock) { item in
                 itemRow(item)
             }
@@ -1017,7 +604,7 @@ struct DefaultListHomeView: View {
     }
     
     private func rightColumn() -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        LazyVStack(alignment: .leading, spacing: 12) {
             ForEach(secondBlock) { item in
                 itemRow(item)
             }
@@ -1040,7 +627,9 @@ struct DefaultListHomeView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
                             }
-                            badgeView(for: item10.rank)
+                            if let pos = positionForItem(item10) {
+                                badgeView(forPosition: pos)
+                            }
                         }
                         Text(item10.itemName)
                             .font(.custom("Nunito-Black", size: 14))
@@ -1078,7 +667,9 @@ struct DefaultListHomeView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                 }
-                badgeView(for: item.rank)
+                if let pos = positionForItem(item) {
+                    badgeView(forPosition: pos)
+                }
             }
             Text(item.itemName.count > 25 ? "\(item.itemName.prefix(23))..." : item.itemName)
                 .font(.custom("Nunito-Black", size: 14))
@@ -1159,7 +750,6 @@ struct DefaultListHomeView: View {
     // MARK: — Data fetches
     private func fetchCreatorName() {
         let userDetails = Database.database().reference().child("UserData").child(listData.userCreator).child("UserDetails")
-        let userProfilePicture = Database.database().reference().child("UserData").child(listData.userCreator).child("UserProfilePicture")
 
         userDetails.observeSingleEvent(of: .value) { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
@@ -1168,17 +758,6 @@ struct DefaultListHomeView: View {
             }
 
             self.creatorName = value["UserName"] as? String ?? ""
-        }
-        
-        userProfilePicture.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Could Not Load Profile Photo Data for HomeView Rankos with UserID: \(listData.userCreator)")
-                return
-            }
-
-            let profilePath = value["UserProfilePicturePath"] as? String ?? ""
-
-            loadProfileImage(from: profilePath)
         }
     }
     
@@ -1204,7 +783,7 @@ struct DefaultListHomeView: View {
         let index = client.index(withName: "RankoLists")
         
         let updates: [(ObjectID, PartialUpdate)] = [
-            (ObjectID(rawValue: listData.id), .update(attribute: "RankoLikes", value: JSON(likes.count)))
+            (ObjectID(rawValue: listData.id), .update(attribute: "RankoLikes", value: AlgoliaSearchClient.JSON(likes.count)))
         ]
         
         index.partialUpdateObjects(updates: updates) { result in
@@ -1237,7 +816,7 @@ struct DefaultListHomeView: View {
         let index = client.index(withName: "RankoLists")
         
         let updates: [(ObjectID, PartialUpdate)] = [
-            (ObjectID(rawValue: listData.id), .update(attribute: "RankoComments", value: JSON(commentsCount)))
+            (ObjectID(rawValue: listData.id), .update(attribute: "RankoComments", value: AlgoliaSearchClient.JSON(commentsCount)))
         ]
         
         index.partialUpdateObjects(updates: updates) { result in
@@ -1248,16 +827,6 @@ struct DefaultListHomeView: View {
                 print("❌ Algolia update failed:", error)
             }
         }
-    }
-    
-    // MARK: — Helpers
-    private func loadProfileImage(from path: String) {
-        Storage.storage().reference().child("profilePictures").child(path)
-            .getData(maxSize: Int64(2 * 1024 * 1024)) { data, _ in
-                if let data = data, let ui = UIImage(data: data) {
-                    profileImage = ui
-                }
-            }
     }
     
     private func timeAgo(from dt: String) -> String {
@@ -1354,7 +923,7 @@ struct DefaultListHomeView_Previews: PreviewProvider {
         type: "default",
         category: "Songs",
         isPrivate: "Public",
-        userCreator: "user_abc123",
+        userCreator: "2FOqyZfO5TNOdoJ0B3KrX99za1SLJ3",
         dateTime: "20250815123045", // yyyyMMddHHmmss
         items: mockItems
     )
@@ -1362,7 +931,7 @@ struct DefaultListHomeView_Previews: PreviewProvider {
     static var previews: some View {
         // Wrap in a layout you like (card-ish)
         ScrollView {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 DefaultListHomeView(
                     listData: mockList,
                     onCommentTap: { msg in
@@ -1378,6 +947,7 @@ struct DefaultListHomeView_Previews: PreviewProvider {
 }
 
 struct HomeListsDisplay: View {
+    @Namespace private var transition
     @State private var lists: [RankoList] = []
     @State private var allItems: [RankoItem] = []
     @State private var isLoading = true
@@ -1465,21 +1035,30 @@ struct HomeListsDisplay: View {
                     .foregroundColor(.red)
                     .padding()
             } else {
-                ForEach(lists, id: \.id) { list in
-                    if list.type == "group" {
-                        GroupListHomeView(listData: list, showToastHelper: { msg in
-                            showToastHelper(msg)
-                        })
-                            .onTapGesture {
-                                selectedList = list
+                ForEach($lists, id: \.id) { $list in
+                    NavigationLink {
+                        Group {
+                            if list.type == "default" {
+                                DefaultListVote(listID: list.id, creatorID: list.userCreator)
+                                    .navigationTransition(.zoom(sourceID: "zoom", in: transition))
+                            } else {
+                                GroupListSpectate(listID: list.id, creatorID: list.userCreator)
+                                    .navigationTransition(.zoom(sourceID: "zoom", in: transition))
                             }
-                    } else {
-                        DefaultListHomeView(listData: list, onCommentTap: { msg in
-                            showToastHelper(msg)
                         }
-                    )
-                        .onTapGesture {
-                            selectedList = list
+                    } label: {
+                        Group {
+                            if list.type == "default" {
+                                DefaultListHomeView(listData: list, onCommentTap: { msg in
+                                    showToastHelper(msg)
+                                })
+                                .matchedTransitionSource(id: "zoom", in: transition)
+                            } else {
+                                GroupListHomeView(listData: list, showToastHelper: { msg in
+                                    showToastHelper(msg)
+                                })
+                                .matchedTransitionSource(id: "zoom", in: transition)
+                            }
                         }
                     }
                 }
@@ -1616,7 +1195,7 @@ struct GroupListHomeView: View {
     
 struct HomeListSkeletonViewRow: View {
     var body: some View {
-        VStack {
+        LazyVStack {
             SkeletonView(Rectangle())
                 .frame(maxWidth: .infinity)
                 .frame(height: 2)
@@ -1628,7 +1207,7 @@ struct HomeListSkeletonViewRow: View {
                     .frame(width: 42, height: 42)
                 
                 // name / time / badge
-                VStack(alignment: .leading, spacing: 6) {
+                LazyVStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 4) {
                         SkeletonView(RoundedRectangle(cornerRadius: 4))
                             .frame(width: CGFloat.random(in: 50...100), height: 11)
@@ -1654,7 +1233,7 @@ struct HomeListSkeletonViewRow: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: 24) {
                             // Left column (first 5)
-                            VStack(alignment: .leading, spacing: 12) {
+                            LazyVStack(alignment: .leading, spacing: 12) {
                                 ForEach(0..<5) { _ in
                                     HStack(spacing: 8) {
                                         SkeletonView(RoundedRectangle(cornerRadius: 8))
@@ -1665,7 +1244,7 @@ struct HomeListSkeletonViewRow: View {
                                 }
                             }
                             // Right column (next 4 + “+N more”)
-                            VStack(alignment: .leading, spacing: 12) {
+                            LazyVStack(alignment: .leading, spacing: 12) {
                                 ForEach(0..<5) { _ in
                                     HStack(spacing: 8) {
                                         SkeletonView(RoundedRectangle(cornerRadius: 8))

@@ -17,6 +17,1118 @@ import PhotosUI
 import SwiftData
 
 struct ProfileView: View {
+    @EnvironmentObject private var imageService: ProfileImageService
+    @StateObject private var user_data = UserInformation.shared
+    @Namespace private var transition
+
+    @State private var showEditProfile = false
+    @State private var loadingProfileImage = false
+    @State private var profileImage: UIImage?
+    
+    private var profileImageService = ProfileImageService()
+    
+    @State private var showSearchRankos = false
+    @State private var showUserFollowers = false
+    @State private var showUserFollowing = false
+    @State private var listViewID = UUID()
+    @State private var isLoadingLists = true
+    @State private var animatedTags: Set<String> = []
+    
+    @State private var featuredLists: [Int: RankoList] = [:]
+    @State private var featuredLoading: Bool = true
+    @State private var featuredLoadFailed: Bool = false
+    @State private var retryCount: Int = 0
+    @State private var slotToSelect: Int?
+    @State private var slotToUnpin: Int?
+    @State private var showUnpinAlert = false
+    @State private var selectedFeaturedList: RankoList?
+    
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var showUserFinder = false
+    @State private var appIconCustomiserView: Bool = false
+    @State private var lists: [RankoList] = []
+    
+    @State private var topCategories: [String] = []
+    
+    static let interestIconMapping: [String: String] = [
+        "Sport": "figure.gymnastics",
+        "Animals": "pawprint.fill",
+        "Music": "music.note",
+        "Food": "fork.knife",
+        "Nature": "leaf.fill",
+        "Geography": "globe.europe.africa.fill",
+        "History": "building.columns.fill",
+        "Science": "atom",
+        "Gaming": "gamecontroller.fill",
+        "Celebrities": "star.fill",
+        "Art": "paintbrush.pointed.fill",
+        "Cars": "car.side.roof.cargo.carrier.fill",
+        "Football": "soccerball",
+        "Fruit": "apple.logo",
+        "Soda": "takeoutbag.and.cup.and.straw.fill",
+        "Mammals": "hare.fill",
+        "Flowers": "microbe.fill",
+        "Movies": "movieclapper",
+        "Instruments": "guitars.fill",
+        "Politics": "person.bust.fill",
+        "Basketball": "basketball.fill",
+        "Vegetables": "carrot.fill",
+        "Alcohol": "flame.fill",
+        "Birds": "bird.fill",
+        "Trees": "tree.fill",
+        "Shows": "tv",
+        "Festivals": "hifispeaker.2.fill",
+        "Planets": "circles.hexagonpath.fill",
+        "Tennis": "tennisball.fill",
+        "Pizza": "triangle.lefthalf.filled",
+        "Coffee": "cup.and.heat.waves.fill",
+        "Dogs": "dog.fill",
+        "Social Media": "message.fill",
+        "Albums": "record.circle",
+        "Actors": "theatermasks.fill",
+        "Travel": "airplane",
+        "Motorsport": "steeringwheel",
+        "Eggs": "oval.portrait.fill",
+        "Cats": "cat.fill",
+        "Books": "books.vertical.fill",
+        "Musicians": "music.microphone",
+        "Australian Football": "australian.football.fill",
+        "Fast Food": "takeoutbag.and.cup.and.straw.fill",
+        "Fish": "fish.fill",
+        "Board Games": "dice.fill",
+        "Numbers": "1.square.fill",
+        "Relationships": "heart.fill",
+        "American Football": "american.football.fill",
+        "Pasta": "water.waves",
+        "Reptiles": "lizard.fill",
+        "Card Games": "suit.club.fill",
+        "Letters": "a.square.fill",
+        "Baseball": "baseball.fill",
+        "Ice Cream": "snowflake",
+        "Bugs": "ladybug.fill",
+        "Memes": "camera.fill",
+        "Shapes": "triangle.fill",
+        "Emotions": "face.smiling",
+        "Ice Hockey": "figure.ice.hockey",
+        "Statues": "figure.stand",
+        "Gym": "figure.indoor.cycle",
+        "Running": "figure.run"
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(hex: 0xFFFFFF)
+                    .ignoresSafeArea()
+                ScrollView {
+                    VStack {
+                        HStack {
+                            ZStack(alignment: .bottomTrailing) {
+                                ProfileIconView(diameter: CGFloat(90))
+                                    .matchedTransitionSource(
+                                        id: "editProfileButton", in: transition
+                                    )
+                                Button {
+                                    showEditProfile = true
+                                    print("Editing Profile...")
+                                } label: {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 11, weight: .black, design: .default))
+                                        .padding(.vertical, -2)
+                                        .padding(.horizontal, -7)
+                                }
+                                .tint(
+                                    LinearGradient(
+                                        colors: [Color(hex: 0xFFC155), Color(hex: 0xFF924E)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .buttonStyle(.glassProminent)
+                                .background(Circle().stroke(Color.white, lineWidth: 8))
+                                .offset(x: 2, y: 2)
+                                
+                            }
+                            .padding(.trailing, 25)
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(user_data.username)
+                                    .font(.custom("Nunito-Black", size: 20))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [Color(hex: 0xFFC155), Color(hex: 0xFF924E)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                HStack(spacing: 20) {
+                                    VStack {
+                                        Text("\(user_data.userStatsRankos)")
+                                            .font(.custom("Nunito-ExtraBold", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
+                                        Text("Rankos")
+                                            .font(.custom("Nunito-ExtraBold", size: 13))
+                                            .foregroundColor(Color(hex: 0x514343))
+                                    }
+                                    .onTapGesture {
+                                        showSearchRankos = true
+                                    }
+                                    VStack {
+                                        Text("\(user_data.userStatsFollowers)")
+                                            .font(.custom("Nunito-ExtraBold", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
+                                        Text("Followers")
+                                            .font(.custom("Nunito-ExtraBold", size: 13))
+                                            .foregroundColor(Color(hex: 0x514343))
+                                    }
+                                    .onTapGesture {
+                                        showUserFollowers = true
+                                    }
+                                    VStack {
+                                        Text("\(user_data.userStatsFollowing)")
+                                            .font(.custom("Nunito-ExtraBold", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
+                                        Text("Following")
+                                            .font(.custom("Nunito-ExtraBold", size: 13))
+                                            .foregroundColor(Color(hex: 0x514343))
+                                    }
+                                    .onTapGesture {
+                                        showUserFollowing = true
+                                    }
+                                }
+                            }
+                            
+                        }
+                        .padding(.vertical)
+                        
+                        HStack {
+                            if !user_data.userDescription.isEmpty {
+                                Text(user_data.userDescription)
+                                    .font(.custom("Nunito-Black", size: 11))
+                                    .foregroundColor(Color(hex: 0x514343))
+                                    .multilineTextAlignment(.leading)
+                            } else {
+                                Text("✏️ Add a bio to display more personality to your profile...")
+                                    .font(.custom("Nunito-ExtraBold", size: 13))
+                                    .foregroundColor(Color(hex: 0x514343))
+                                    .multilineTextAlignment(.leading)
+                            }
+                        }
+                        .padding(.horizontal, 15)
+                        .padding(.bottom, -20)
+                        
+                        // 2) your view snippet
+                        if !user_data.userInterests.isEmpty {
+                            let tags = user_data.userInterests
+                                .split(separator: ",")
+                                .map { $0.trimmingCharacters(in: .whitespaces) }
+                            
+                            // track the measured width of the HStack
+                            @State var rowWidth: CGFloat = 0
+                            
+                            GeometryReader { geo in
+                                // account for your outer horizontal padding (change if you tweak padding below)
+                                let outerHorizontalPadding: CGFloat = 16
+                                let available = geo.size.width - (outerHorizontalPadding * 2)
+                                
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(tags, id: \.self) { tag in
+                                            let icon = ProfileView.interestIconMapping[tag] ?? "tag.fill"
+                                            
+                                            Button(action: { print("\(tag) Category Clicked") }) {
+                                                HStack(spacing: 4) {
+                                                    ZStack {
+                                                        Image(systemName: icon)
+                                                            .font(.system(size: 12, weight: .heavy))
+                                                            .foregroundColor(.clear)
+                                                        if animatedTags.contains(tag) {
+                                                            Image(systemName: icon)
+                                                                .font(.system(size: 12, weight: .heavy))
+                                                                .transition(.symbolEffect(.drawOn.individually))
+                                                                .padding(1)
+                                                        }
+                                                    }
+                                                    Text(tag)
+                                                        .font(.system(size: 10, weight: .heavy))
+                                                }
+                                            }
+                                            .foregroundColor(Color(hex: 0xFFFFFF))
+                                            .tint(Color(hex: 0xFFB654))
+                                            .buttonStyle(.glassProminent)
+                                            .mask(RoundedRectangle(cornerRadius: 30))
+                                        }
+                                    }
+                                    // measure the natural width of the HStack (with paddings)
+                                    .background(
+                                        GeometryReader { proxy in
+                                            Color.clear.preference(key: RowWidthKey.self, value: proxy.size.width)
+                                        }
+                                    )
+                                    // if content < available, expand to available and center; else use content width and lead align
+                                    .frame(
+                                        width: max(available, rowWidth),
+                                        alignment: rowWidth < available ? .center : .leading
+                                    )
+                                    .padding(.vertical, 30)
+                                    .padding(.horizontal, outerHorizontalPadding)
+                                }
+                                .onPreferenceChange(RowWidthKey.self) { rowWidth = $0 }
+                            }
+                            .frame(height: 72) // or whatever fits your buttons’ height
+                            .padding(.horizontal) // keeps parity with your original outer padding
+                        }
+                        
+                        ZStack {
+                            
+                            HStack {
+                                Button {
+                                    showSearchRankos = true
+                                    print("Searching Rankos...")
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "magnifyingglass")
+                                            .font(.system(size: 17, weight: .heavy))
+                                        Text("Search Rankos")
+                                            .font(.system(size: 14, weight: .heavy))
+                                    }
+                                    .padding(.vertical, 3)
+                                    .padding(.horizontal, 8)
+                                }
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .tint(
+                                    LinearGradient(
+                                        colors: [Color(hex: 0xFFC155), Color(hex: 0xFFFFFF)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .buttonStyle(.glassProminent)
+                                .matchedTransitionSource(
+                                    id: "searchRankos", in: transition
+                                )
+                                .mask(RoundedRectangle(cornerRadius: 30))
+                                Button {
+                                    appIconCustomiserView = true
+                                    print("Customising App...")
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "paintbrush.fill")
+                                            .font(.system(size: 17, weight: .heavy))
+                                        Text("Customise App")
+                                            .font(.system(size: 14, weight: .heavy))
+                                    }
+                                    .padding(.vertical, 3)
+                                    .padding(.horizontal, 8)
+                                }
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .tint(
+                                    LinearGradient(
+                                        colors: [Color(hex: 0xFFC155), Color(hex: 0xFF924E)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .buttonStyle(.glassProminent)
+                                .matchedTransitionSource(
+                                    id: "customiseApp", in: transition
+                                )
+                                .mask(RoundedRectangle(cornerRadius: 30))
+                            }
+                            
+                            
+                            
+                            HStack {
+                                Button {
+                                    showSearchRankos = true
+                                    print("Searching Rankos...")
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "magnifyingglass")
+                                            .font(.system(size: 17, weight: .heavy))
+                                        Text("Search Rankos")
+                                            .font(.system(size: 14, weight: .heavy))
+                                    }
+                                    .padding(.vertical, 3)
+                                    .padding(.horizontal, 8)
+                                }
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .tint(
+                                    LinearGradient(
+                                        colors: [Color(hex: 0xFFC155), Color(hex: 0xFFFFFF)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .buttonStyle(.glassProminent)
+                                Button {
+                                    appIconCustomiserView = true
+                                    print("Customising App...")
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "paintbrush.fill")
+                                            .font(.system(size: 17, weight: .heavy))
+                                        Text("Customise App")
+                                            .font(.system(size: 14, weight: .heavy))
+                                    }
+                                    .padding(.vertical, 3)
+                                    .padding(.horizontal, 8)
+                                }
+                                .foregroundColor(Color(hex: 0xFFFFFF))
+                                .tint(
+                                    LinearGradient(
+                                        colors: [Color(hex: 0xFFC155), Color(hex: 0xFF924E)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .buttonStyle(.glassProminent)
+                            }
+                        }
+                        .padding(.bottom, 12)
+                        
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color(hex: 0x707070))
+                            .frame(height: 2)
+                            .padding(.horizontal, 25)
+                            .opacity(0.20)
+                        
+                        HStack {
+                            Text("⭐️ Featured Rankos")
+                                .font(.custom("Nunito-Black", size: 22))
+                                .foregroundStyle(Color(hex: 0x514343))
+                            Spacer()
+                        }
+                        .padding(.top, 10)
+                        .padding(.leading, 25)
+                        .padding(.bottom, 10)
+                        
+                        VStack(spacing: 13) {
+                            let filledSlots = featuredLists.keys.sorted()
+                            let emptySlots = (1...10).filter { !featuredLists.keys.contains($0) }
+                            
+                            // ✅ If loading or failed, show placeholders
+                            if featuredLoading {
+                                HStack {
+                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
+                                }
+                                .background(RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(hex: 0xFFFFFF))
+                                )
+                                .padding(.top, 40)
+                                .padding(.bottom, 120)
+                                
+                            } else if featuredLoadFailed {
+                                // ❌ If failed after 3 attempts, show retry buttons
+                                ForEach(1...10, id: \.self) { slot in
+                                    HStack {
+                                        Button {
+                                            retryFeaturedLoading()
+                                        } label: {
+                                            HStack {
+                                                Spacer()
+                                                Image(systemName: "arrow.clockwise")
+                                                    .font(.system(size: 24, weight: .black))
+                                                    .foregroundStyle(Color(hex: 0x514343))
+                                                Spacer()
+                                            }
+                                            .frame(height: 52)
+                                        }
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(Color(hex: 0xFFFFFF))
+                                        .buttonStyle(.glassProminent)
+                                        .disabled(false)
+                                        .shadow(color: Color(hex:0x000000).opacity(0.1), radius: 8, x: 0, y: -2)
+                                    }
+                                }
+                            } else {
+                                // ✅ Normal loaded state
+                                ForEach(filledSlots, id: \.self) { slot in
+                                    HStack {
+                                        Button {
+                                            if let list = featuredLists[slot] {
+                                                selectedFeaturedList = list
+                                            }
+                                        } label: {
+                                            if let list = featuredLists[slot] {
+                                                if list.type == "default" {
+                                                    DefaultListIndividualGallery(listData: list, type: "featured", onUnpin: {
+                                                        slotToUnpin = slot
+                                                        showUnpinAlert = true
+                                                    })
+                                                    .contextMenu {
+                                                        Button(action: {
+                                                            slotToUnpin = slot
+                                                            showUnpinAlert = true
+                                                        }) {
+                                                            Label("Unpin", systemImage: "pin.slash")
+                                                        }
+                                                        .foregroundColor(Color(hex: 0xFF9864))
+                                                    }
+                                                    .simultaneousGesture(
+                                                        LongPressGesture(minimumDuration: 1.2).onEnded(({ _ in
+                                                                slotToUnpin = slot
+                                                                showUnpinAlert = true
+                                                        }))
+                                                    )
+                                                } else {
+                                                    GroupListIndividualGallery(listData: list, type: "featured", onUnpin: {
+                                                        slotToUnpin = slot
+                                                        showUnpinAlert = true
+                                                    })
+                                                }
+                                            }
+                                        }
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(Color(hex: 0xFFFFFF))
+                                        .buttonStyle(.glassProminent)
+                                        .shadow(color: Color(hex:0x000000).opacity(0.1), radius: 8, x: 0, y: -2)
+                                    }
+                                }
+                                
+                                ForEach(emptySlots, id: \.self) { slot in
+                                    HStack {
+                                        Button {
+                                            slotToSelect = slot
+                                        } label: {
+                                            HStack {
+                                                Spacer()
+                                                Image(systemName: "plus")
+                                                    .font(.system(size: 24, weight: .black))
+                                                    .foregroundStyle(Color(hex: 0x514343))
+                                                Spacer()
+                                            }
+                                            .frame(height: 52)
+                                        }
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(Color(hex: 0xFFFFFF))
+                                        .buttonStyle(.glassProminent)
+                                        .shadow(color: Color(hex:0x000000).opacity(0.1), radius: 8, x: 0, y: -2)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 70)
+                        Spacer()
+                    }
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showUserFollowers) {
+            SearchFollowersView()
+        }
+        .fullScreenCover(isPresented: $showUserFollowing) {
+            SearchFollowingView()
+        }
+        .fullScreenCover(isPresented: $showSearchRankos) {
+            SearchRankosView()
+                .navigationTransition(
+                    .zoom(sourceID: "searchRankos", in: transition)
+                )
+        }
+        .fullScreenCover(isPresented: $showUserFinder) {
+            SearchUsersView()
+                .navigationTransition(
+                    .zoom(sourceID: "userFinder", in: transition)
+                )
+        }
+        .sheet(isPresented: $appIconCustomiserView) {
+            CustomiseAppIconView()
+                .navigationTransition(
+                    .zoom(sourceID: "customiseApp", in: transition)
+                )
+        }
+        .sheet(item: $slotToSelect) { slot in
+            SelectFeaturedRankosView { selected in
+                // Dismiss sheet first
+                DispatchQueue.main.async {
+                    slotToSelect = nil
+                }
+
+                // Delay slightly to ensure dismissal is finished
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    // Save to Firebase
+                    let ref = Database.database()
+                        .reference()
+                        .child("UserData")
+                        .child(user_data.userID)
+                        .child("UserRankos")
+                        .child("UserFeaturedRankos")
+                        .child("\(slot)")
+                    ref.setValue(selected.id)
+
+                    // Update local UI state
+                    featuredLists[slot] = selected
+                }
+            }
+        }
+        .fullScreenCover(item: $selectedFeaturedList) { list in
+            if list.type == "default" {
+                DefaultListPersonal(
+                  listID: list.id,
+                  onDelete: {
+                      listViewID     = UUID()
+                      isLoadingLists = true
+                      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                          isLoadingLists = false
+                          retryFeaturedLoading()
+                          loadFollowStats()
+                      }
+                  }
+                )
+            } else if list.type == "group" {
+                GroupListPersonal(
+                  listID: list.id,
+                  onDelete: {
+                      listViewID     = UUID()
+                      isLoadingLists = true
+                      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                          isLoadingLists = false
+                          retryFeaturedLoading()
+                          loadFollowStats()
+                      }
+                  }
+                )
+            }
+            
+        }
+        .fullScreenCover(isPresented: $showEditProfile) {
+            EditProfileView(
+                originalImage:       user_data.ProfilePicture,
+                username:            user_data.username,
+                userDescription:     user_data.userDescription,
+                // → make initialTags a [String], not a single String
+                initialTags:         user_data.userInterests
+                                        .split(separator: ",")
+                                        .map { $0.trimmingCharacters(in: .whitespaces) },
+                onSave: { name, bioText, tags, newImg in
+                    user_data.username        = name
+                    user_data.userDescription = bioText
+                    user_data.userInterests   = tags.joined(separator: ", ")
+                    saveUserDataToFirebase(
+                        name:        name,
+                        description: bioText,
+                        interests:   tags
+                    )
+
+                    // animate tags…
+                    Task {
+                        for (index, tag) in tags.enumerated() {
+                            try? await Task.sleep(for: .milliseconds(200 * index))
+                            _ = withAnimation(.easeOut(duration: 0.4)) {
+                                animatedTags.insert(tag)
+                            }
+                        }
+                    }
+
+                    // handle image
+                    guard let img = newImg else {
+                        showEditProfile = false
+                        return
+                    }
+                    loadingProfileImage = true
+                    profileImage        = nil
+                    showEditProfile     = false
+                    uploadImageToFirebase(img)
+                },
+                onCancel: {
+                    showEditProfile = false
+                }
+            )
+            .navigationTransition(
+                .zoom(sourceID: "editProfileButton", in: transition)
+            )
+            .interactiveDismissDisabled(true)
+        }
+        .refreshable {
+            listViewID     = UUID()
+            if !isSimulator {
+                isLoadingLists = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    isLoadingLists = false
+                }
+                loadFollowStats()
+                tryLoadFeaturedRankos()
+            }
+        }
+        .onAppear {
+            listViewID     = UUID()
+            if !isSimulator {
+                loadNumberOfRankos()
+                syncUserDataFromFirebase()
+                isLoadingLists = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    isLoadingLists = false
+                }
+                loadFollowStats()
+                tryLoadFeaturedRankos()
+            }
+            
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                let tags = user_data.userInterests
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                
+                Task {
+                    for (index, tag) in tags.enumerated() {
+                        try? await Task.sleep(for: .milliseconds(200 * index))
+                        _ = withAnimation(.easeOut(duration: 0.4)) {
+                            animatedTags.insert(tag)
+                        }
+                    }
+                }
+            }
+            
+            
+            Analytics.logEvent(AnalyticsEventScreenView, parameters: [
+                AnalyticsParameterScreenName: "Profile",
+                AnalyticsParameterScreenClass: "ProfileView"
+            ])                }
+        .alert(
+            "Unpin Ranko?",
+            isPresented: $showUnpinAlert,
+            presenting: slotToUnpin
+        ) { slot in
+            Button("Yes, unpin", role: .destructive) {
+                unpin(slot)
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: { slot in
+            Text("Are you sure you want to remove this featured Ranko from slot \(slot)?")
+        }
+    }
+    
+    private struct RowWidthKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = max(value, nextValue())
+        }
+    }
+    
+    private let isSimulator: Bool = {
+        var isSim = false
+        #if targetEnvironment(simulator)
+        isSim = true
+        #endif
+        return isSim
+    }()
+    
+    
+    private func loadNumberOfRankos() {
+        guard !user_data.userID.isEmpty else { print("Skipping loadNumberOfRankos: userID is empty"); return }
+        
+        let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
+                                  apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
+        let index = client.index(withName: "RankoLists")
+        var query = Query("").set(\.hitsPerPage, to: 0) // 0 results, just want count
+        query.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
+
+        index.search(query: query) { (result: Result<SearchResponse, Error>) in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let response):
+                    let totalResults = response.nbHits
+                    user_data.userStatsRankos = totalResults!
+                    print("✅ Total Algolia Results: \(String(describing: totalResults))")
+                    let db = Database.database().reference()
+                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserRankoCount")
+                    dbRef.setValue(totalResults!)
+                case .failure(let error):
+                    print("❌ Error fetching Algolia results: \(error)")
+                }
+            }
+        }
+    }
+    
+    private func uploadImageToFirebase(_ image: UIImage) {
+        loadingProfileImage = true
+        guard let data = image.jpegData(compressionQuality: 0.8) else {
+            loadingProfileImage = false
+            return
+        }
+
+        let filePath = "\(user_data.userID).jpg"
+        
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
+        let storageRef = Storage.storage()
+            .reference()
+            .child("profilePictures")
+            .child(filePath)
+
+        storageRef.putData(data, metadata: metadata) { _, error in
+            if let e = error {
+                print("Upload error:", e)
+                DispatchQueue.main.async { loadingProfileImage = false }
+                return
+            }
+            
+            let dbRef = Database.database().reference()
+                .child("UserData")
+                .child(user_data.userID)
+                .child("UserProfilePicture")
+                .child("UserProfilePicturePath")
+            dbRef.setValue(filePath) { _, _ in
+                // 3️⃣ Now download it back and cache
+                downloadAndCacheProfileImage(from: filePath)
+            }
+            
+            let now = Date()
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
+            fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
+            fmt.dateFormat = "yyyyMMddHHmmss"
+            let ts = fmt.string(from: now)
+            Database.database().reference()
+                .child("UserData")
+                .child(user_data.userID)
+                .child("UserProfilePicture")
+                .child("UserProfilePictureModified")
+                .setValue(ts)
+        }
+    }
+    
+    private func downloadAndCacheProfileImage(from path: String) {
+        let storageRef = Storage.storage().reference().child("profilePictures").child(path)
+        storageRef.getData(maxSize: Int64(2 * 1024 * 1024)) { data, error in
+            guard let data = data, let uiImage = UIImage(data: data) else {
+                print("❌ Failed to download profile image.")
+                return
+            }
+
+            profileImage = uiImage
+            user_data.ProfilePicture = uiImage
+            saveImageToDisk(image: uiImage)
+            
+            let url = getProfileImagePath()
+            do {
+                try data.write(to: url)
+                print("✅ Cached to disk at", url)
+            } catch {
+                print("❌ Could not cache:", error)
+            }
+        }
+    }
+    
+    private func getProfileImagePath() -> URL {
+        let filename = "cached_profile_image.jpg"
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(filename)
+    }
+
+    private func saveImageToDisk(image: UIImage) {
+        if let data = image.jpegData(compressionQuality: 0.95) {
+            do {
+                try data.write(to: getProfileImagePath(), options: .atomic)
+                print("💾 Profile image saved to disk.")
+            } catch {
+                print("❌ Failed to save profile image: \(error)")
+            }
+        }
+    }
+
+    private func loadImageFromDisk() -> UIImage? {
+        let path = getProfileImagePath()
+        if FileManager.default.fileExists(atPath: path.path) {
+            if let data = try? Data(contentsOf: path),
+               let image = UIImage(data: data) {
+                print("📂 Loaded profile image from disk.")
+                return image
+            }
+        }
+        return nil
+    }
+    
+    private func syncUserDataFromFirebase() {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("❌ No current user logged in. Aborting sync.")
+            return
+        }
+        
+        let userDetails = Database.database().reference().child("UserData").child(uid).child("UserDetails")
+        let userProfilePicture = Database.database().reference().child("UserData").child(uid).child("UserProfilePicture")
+        let userStats = Database.database().reference().child("UserData").child(uid).child("UserStats")
+        
+        print("UserID: \(uid)")
+        
+        userDetails.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Failed To Fetch User Data From Firebase.")
+                return
+            }
+            
+            user_data.userID = value["UserID"] as? String ?? ""
+            user_data.username = value["UserName"] as? String ?? ""
+            user_data.userDescription = value["UserDescription"] as? String ?? ""
+            user_data.userPrivacy = value["UserPrivacy"] as? String ?? ""
+            user_data.userInterests = value["UserInterests"] as? String ?? ""
+            user_data.userJoined = value["UserJoined"] as? String ?? ""
+            user_data.userYear = value["UserYear"] as? Int ?? 0
+            user_data.userFoundUs = value["UserFoundUs"] as? String ?? ""
+            user_data.userLoginService = value["UserSignInMethod"] as? String ?? ""
+            
+            print("✅ Successfully Loaded User Details.")
+            
+        }
+        
+        userProfilePicture.observe(.value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Failed To Fetch User Data From Firebase.")
+                return
+            }
+            
+            user_data.userProfilePictureFile = value["UserProfilePictureFile"] as? String ?? ""
+            let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
+            user_data.userProfilePicturePath = value["UserProfilePicturePath"] as? String ?? ""
+            
+            print("✅ Successfully Loaded Profile Picture Details.")
+            print("🤔 Checking For New Image...")
+            
+            // Only load profile image if the modified string has changed
+            if modifiedTimestamp != user_data.userProfilePictureModified {
+                print("🔁 Profile Picture Modified Date Changed, Reloading Image...")
+                user_data.userProfilePictureModified = modifiedTimestamp
+                imageService.refreshFromRemote(path: user_data.userProfilePicturePath)
+            } else {
+                print("✅ Using Cached Profile Image From Disk.")
+                imageService.reloadFromDisk()
+            }
+        }
+        
+        userStats.observeSingleEvent(of: .value) { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Failed To Fetch User Data From Firebase.")
+                return
+            }
+            
+            user_data.userStatsFollowers = value["UserFollowerCount"] as? Int ?? 0
+            user_data.userStatsFollowing = value["UserFollowingCount"] as? Int ?? 0
+            user_data.userStatsRankos = value["UserRankoCount"] as? Int ?? 0
+            
+            print("✅ Successfully Loaded Statistics Details.")
+            print("✅ Successfully Loaded All User Data.")
+        }
+    }
+    
+    private func loadFollowStats() {
+        guard !user_data.userID.isEmpty else { print("Skipping loadFollowStats: userID is empty"); return }
+        
+        let db = Database.database().reference()
+        let group = DispatchGroup()
+
+        group.enter()
+        db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowers")
+            .observeSingleEvent(of: .value) { snapshot in
+                DispatchQueue.main.async {
+                    self.user_data.userStatsFollowers = Int(snapshot.childrenCount)
+                    let db = Database.database().reference()
+                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowerCount")
+                    dbRef.setValue(user_data.userStatsFollowers)
+                }
+                group.leave()
+            }
+
+        group.enter()
+        db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowing")
+            .observeSingleEvent(of: .value) { snapshot in
+                DispatchQueue.main.async {
+                    self.user_data.userStatsFollowing = Int(snapshot.childrenCount)
+                    let db = Database.database().reference()
+                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowingCount")
+                    dbRef.setValue(user_data.userStatsFollowing)
+                }
+                group.leave()
+            }
+
+        group.notify(queue: .main) {
+            print("✅ Finished loading follow stats")
+        }
+    }
+    
+    private func retryFeaturedLoading() {
+        featuredLoadFailed = false
+        featuredLoading = true
+        retryCount = 0
+        tryLoadFeaturedRankos()
+    }
+
+    private func tryLoadFeaturedRankos() {
+        guard retryCount < 3 else {
+            DispatchQueue.main.async {
+                self.featuredLoading = false
+                self.featuredLoadFailed = true
+            }
+            return
+        }
+        retryCount += 1
+
+        // Attempt Firebase fetch
+        guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
+            print("❌ No UID found, retrying...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
+            return
+        }
+
+        let baseRef = Database.database()
+            .reference()
+            .child("UserData")
+            .child(uid)
+            .child("UserRankos")
+            .child("UserFeaturedRankos")
+
+        baseRef.getData { error, snapshot in
+            if let error = error {
+                print("❌ Firebase error: \(error.localizedDescription), retrying...")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
+                return
+            }
+
+            guard let snap = snapshot, snap.exists() else {
+                print("⚠️ No featured rankos found")
+                DispatchQueue.main.async {
+                    self.featuredLists = [:]
+                    self.featuredLoading = false
+                }
+                return
+            }
+
+            // ✅ Successfully connected
+            var tempLists: [Int: RankoList] = [:]
+            let group = DispatchGroup()
+
+            for child in snap.children.allObjects as? [DataSnapshot] ?? [] {
+                if let slot = Int(child.key), let listID = child.value as? String {
+                    group.enter()
+                    fetchFeaturedList(slot: slot, listID: listID) {
+                        if let list = $0 { tempLists[slot] = list }
+                        group.leave()
+                    }
+                }
+            }
+
+            group.notify(queue: .main) {
+                self.featuredLists = tempLists
+                self.featuredLoading = false
+                print("✅ Featured Rankos loaded successfully")
+            }
+        }
+    }
+
+    // ✅ Modified fetchFeaturedList to support completion
+    private func fetchFeaturedList(slot: Int, listID: String, completion: @escaping (RankoList?) -> Void) {
+        let listRef = Database.database()
+            .reference()
+            .child("RankoData")
+            .child(listID)
+
+        listRef.observeSingleEvent(of: .value) { snap in
+            guard let dict = snap.value as? [String: Any],
+                  let rl = parseListData(dict: dict, id: listID) else {
+                completion(nil)
+                return
+            }
+            completion(rl)
+        }
+    }
+    
+    private func parseListData(dict: [String: Any], id: String) -> RankoList? {
+        guard
+            let listName      = dict["RankoName"]        as? String,
+            let description   = dict["RankoDescription"] as? String,
+            let category      = dict["RankoCategory"]    as? String,
+            let type          = dict["RankoType"]        as? String,
+            let privacy       = dict["RankoPrivacy"]     as? Bool,
+            let dateTime      = dict["RankoDateTime"]    as? String,
+            let userCreator   = dict["RankoUserID"]      as? String,
+            let itemsDict     = dict["RankoItems"]       as? [String: Any]
+        else { return nil }
+
+        let isPrivateString = privacy ? "Private" : "Public"
+        var rankoItems: [RankoItem] = []
+
+        for (_, value) in itemsDict {
+            guard
+                let itemDict  = value as? [String: Any],
+                let itemID    = itemDict["ItemID"]          as? String,
+                let itemName  = itemDict["ItemName"]        as? String,
+                let itemDesc  = itemDict["ItemDescription"] as? String,
+                let itemImg   = itemDict["ItemImage"]       as? String,
+                let itemVotes = itemDict["ItemVotes"]       as? Int,
+                let itemRank  = itemDict["ItemRank"]        as? Int
+            else { continue }
+
+            let record = RankoRecord(
+                objectID:        itemID,
+                ItemName:        itemName,
+                ItemDescription: itemDesc,
+                ItemCategory: "",
+                ItemImage:       itemImg
+            )
+            rankoItems.append(RankoItem(id: itemID,
+                                        rank: itemRank,
+                                        votes: itemVotes,
+                                        record: record))
+        }
+
+        rankoItems.sort { $0.rank < $1.rank }
+
+        return RankoList(
+            id:               id,
+            listName:         listName,
+            listDescription:  description,
+            type:             type,
+            category:         category,
+            isPrivate:        isPrivateString,
+            userCreator:      userCreator,
+            dateTime:         dateTime,
+            items:            rankoItems
+        )
+    }
+    
+    private func unpin(_ slot: Int) {
+        guard !user_data.userID.isEmpty else { print("Skipping unpin: userID is empty"); return }
+        
+        let ref = Database.database()
+            .reference()
+            .child("UserData")
+            .child(user_data.userID)
+            .child("UserRankos")
+            .child("UserFeaturedRankos")
+            .child("\(slot)")
+        ref.removeValue { error, _ in
+            guard error == nil else { return }
+            DispatchQueue.main.async {
+                featuredLists.removeValue(forKey: slot)
+            }
+        }
+    }
+    
+    private func saveUserDataToFirebase(name: String, description: String, interests: [String]) {
+        guard !user_data.userID.isEmpty else {
+            print("❌ Cannot save: userID is empty")
+            return
+        }
+
+        let ref = Database.database().reference().child("UserData").child(user_data.userID).child("UserDetails")
+
+        let updates: [String: Any] = [
+            "UserName": name,
+            "UserDescription": description,
+            "UserInterests": interests.joined(separator: ", ")
+        ]
+
+        ref.updateChildValues(updates) { error, _ in
+            if let error = error {
+                print("❌ Error updating user data: \(error.localizedDescription)")
+            } else {
+                print("✅ User data updated successfully")
+            }
+        }
+    }
+}
+
+struct ProfileView1: View {
     @StateObject private var user_data = UserInformation.shared
     @Namespace private var transition
 
@@ -322,16 +1434,10 @@ struct ProfileView: View {
                             // ✅ If loading or failed, show placeholders
                             if featuredLoading {
                                 HStack {
-                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 60, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.3)
-                                        .frame(height: 60)
-                                        .padding(60)
+                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
                                 }
                                 .background(RoundedRectangle(cornerRadius: 10)
-                                    .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                                         startPoint: .top,
-                                                         endPoint: .bottom
-                                                        )
-                                          )
+                                    .fill(Color(hex: 0xFFFFFF))
                                 )
                                 .padding(.top, 40)
                                 .padding(.bottom, 120)
@@ -491,10 +1597,10 @@ struct ProfileView: View {
                     .interactiveDismissDisabled(true)
                 }
                 .sheet(isPresented: $showUserFollowers) {
-                    SearchFollowersView(userID: user_data.userID)
+                    SearchFollowersView()
                 }
                 .sheet(isPresented: $showUserFollowing) {
-                    SearchFollowingView(userID: user_data.userID)
+                    SearchFollowingView()
                 }
                 .sheet(isPresented: $showSearchRankos) {
                     SearchRankosView()
@@ -633,7 +1739,9 @@ struct ProfileView: View {
                     }
                     loadFollowStats()
                     tryLoadFeaturedRankos()
-                    loadNumberOfRankos()
+                    if !isSimulator {
+                        loadNumberOfRankos()
+                    }
                     
                     let tags = user_data.userInterests
                         .split(separator: ",")
@@ -668,6 +1776,14 @@ struct ProfileView: View {
             
         }
     }
+    
+    private let isSimulator: Bool = {
+        var isSim = false
+        #if targetEnvironment(simulator)
+        isSim = true
+        #endif
+        return isSim
+    }()
     
     
     private func loadNumberOfRankos() {
@@ -1082,7 +2198,7 @@ class AlgoliaRankoView {
 
     private let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
                                       apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
-    private let index: Index
+    private let index: AIndex
 
     private init() {
         self.index = client.index(withName: "RankoLists")
@@ -1113,207 +2229,187 @@ struct FacetCategory: Identifiable {
     let facetCount: Int
 }
 
+
+
 struct SearchRankosView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
+    @FocusState private var searchFocused: Bool
+    
     @State private var lists: [RankoList] = []
     @State private var selectedFacet: String? = nil
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
-    @State private var searchText: String = ""
+    @State private var rankoQuery: String = ""
+    @State private var searchField: String = ""
     @State private var selectedList: RankoList?
-    @State private var activeFacet: FacetCategory?
-
-    var facets: [FacetCategory] {
-        guard let start = user_data.userRankoCategories.range(of: "["),
-              let end = user_data.userRankoCategories.range(of: "]") else {
-            return []
+    
+    // Dynamic filtering + facets that react to the remaining lists
+    private var filteredLists: [RankoList] {
+        lists.filter { list in
+            (selectedFacet == nil || list.category == selectedFacet) &&
+            (rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased()))
         }
-
-        let inner = user_data.userRankoCategories[start.upperBound..<end.lowerBound]
-        let entries = inner.components(separatedBy: ", ")
-
-        return entries.compactMap { entry in
-            if let openParen = entry.lastIndex(of: "("),
-               let closeParen = entry.lastIndex(of: ")") {
-                let name = entry[..<openParen].trimmingCharacters(in: .whitespaces)
-                let countString = entry[entry.index(after: openParen)..<closeParen]
-                if let count = Int(countString) {
-                    return FacetCategory(facetName: name, facetCount: count)
-                }
-            }
-            return nil
-        }
-        .sorted { $0.facetCount > $1.facetCount }
     }
 
+    private var dynamicFacets: [FacetCategory] {
+        // facet counts based on what's left after the search query (but before facet selection)
+        let base = lists.filter { list in
+            rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased())
+        }
+        
+        let grouped = Dictionary(grouping: base, by: { $0.category })
+        return grouped
+            .map { FacetCategory(facetName: $0.key, facetCount: $0.value.count) }
+            .sorted { $0.facetCount > $1.facetCount }
+    }
+    
+    // Fallback color helper so we never force-unwrap
+    private func chipColor(for name: String) -> Color {
+        categoryChipIconColors[name] ?? Color.gray
+    }
+
+
     var body: some View {
-        GeometryReader { geo in
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    // Search Bar
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                            .padding(6)
-                        TextField("Search Rankos", text: $searchText)
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.6) : Color(hex: 0x7E5F46).opacity(0.9))
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                            .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
-                        Spacer()
-                        if !searchText.isEmpty {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .heavy))
-                                .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                                .onTapGesture {searchText = ""}
-                        }
-                    }
-                    .padding(18)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                                 startPoint: .top,
-                                                 endPoint: .bottom
-                                                ))
-                            .shadow(color: Color(hex: 0xDBC252).opacity(0.8), radius: 5, x: 0, y: 3)
-                            .padding(8)
-                    )
-                    .cornerRadius(12)
-                    .padding(.leading, 10)
-                    .padding(.top, 15)
-                    
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .fontWeight(.heavy)
-                    }
-                    .foregroundColor(Color(hex: 0x7E5F46))
-                    .tint(Color(hex: 0xFEF4E7))
-                    .padding(.trailing, 20)
-                    .padding(.top, 15)
-                    .buttonStyle(.glassProminent)
-                }
-                
-                // Facet Chips
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(facets) { facet in
-                            let isSelected = selectedFacet == facet.facetName
-                            let shouldShow = selectedFacet == nil || isSelected
-
-                            if shouldShow {
-                                Button(action: {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        if isSelected {
-                                            selectedFacet = nil
-                                        } else {
-                                            selectedFacet = facet.facetName
-                                        }
-                                    }
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: FilterChip.icon(named: facet.facetName, in: defaultFilterChips) ?? "circle.fill")
-                                        Text(facet.facetName).bold()
-                                        Image(systemName: "\(facet.facetCount).circle.fill")
-
-                                        if isSelected {
-                                            Image(systemName: "xmark.circle")
-                                        }
-                                    }
-                                    .font(.caption)
-                                    .padding(6)
-                                    .foregroundColor(isSelected ? .white : categoryChipIconColors[facet.facetName])
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(isSelected ? categoryChipIconColors[facet.facetName]! : categoryChipIconColors[facet.facetName]!.opacity(0.2))
-                                    )
-                                    .transition(.scale.combined(with: .opacity))
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .scrollTargetBehavior(.viewAligned)
-                
-                ScrollView(.vertical, showsIndicators: false) {
-                    
-                    // Loading + Error
+        TabView {
+            NavigationStack {
+                // MAIN CONTENT
+                ScrollView {
+                    // loading / error
                     if isLoading {
-                        ProgressView("Loading Rankos...").padding()
+                        VStack(spacing: 10) {
+                            ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
+                            Text("Loading Rankos...")
+                                .font(.custom("Nunito-Black", size: 16))
+                                .foregroundColor(Color(hex: 0xA2A2A1))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 50)
                     }
-                    
                     if let error = errorMessage {
                         Text(error).foregroundColor(.red).padding()
                     }
-                    
-                    // Filtered Ranko Lists
+                    // filtered results
                     VStack(spacing: 8) {
-                        let filtered = lists.filter { list in
-                            (selectedFacet == nil || list.category == selectedFacet) &&
-                            (searchText.isEmpty || list.listName.lowercased().contains(searchText.lowercased()))
+                        ForEach(filteredLists) { list in
+                            Button {
+                                selectedList = list
+                            } label: {
+                                if list.type == "default" {
+                                    DefaultListIndividualGallery(listData: list, type: "", onUnpin: {})
+                                } else {
+                                    GroupListIndividualGallery(listData: list, type: "", onUnpin: {})
+                                }
+                            }
+                            .foregroundColor(Color(hex: 0xFF9864))
+                            .tint(Color(hex: 0xFFFFFF))
+                            .buttonStyle(.glassProminent)
+                            .shadow(color: Color(hex:0x000000).opacity(0.1), radius: 8, x: 0, y: -2)
                         }
-                        
-                        ForEach(filtered) { list in
-                            HStack {
-                                Button {
-                                    print("Tapped: \(list.listName)")
-                                    selectedList = list
-                                } label: {
-                                    if list.type == "default" {
-                                        DefaultListIndividualGallery(listData: list, type: "", onUnpin: {})
-                                    } else {
-                                        GroupListIndividualGallery(listData: list, type: "", onUnpin: {})
+                    }
+                    .padding(.vertical, 20)
+                    .padding(.horizontal, 15)
+                }
+                // SEARCH IN NAV BAR
+                .searchable(text: $searchField, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Rankos")
+                .searchFocused($searchFocused)
+                .scrollDismissesKeyboard(.immediately)
+                .onAppear {
+                    // give NavigationStack a tick to mount before focusing
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        searchFocused = true
+                    }
+                }
+                .onChange(of: searchField) { _, newVal in
+                    withAnimation(.easeInOut(duration: 0.3)) { rankoQuery = newVal }
+                }
+                // NAV BAR CONFIG (attach INSIDE the NavigationStack!)
+                .navigationTitle("Search Rankos")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarRole(.navigationStack)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: { dismiss() }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .black))
+                        }
+                        .tint(Color(hex: 0x514343))
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Text("Search Rankos")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0x514343))
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                }
+                
+                // CHIPS UNDER TOOLBAR
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if !dynamicFacets.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(dynamicFacets) { facet in
+                                    let isSelected = selectedFacet == facet.facetName
+                                    if selectedFacet == nil || isSelected {
+                                        Button {
+                                            withAnimation(.easeInOut(duration: 0.25)) {
+                                                selectedFacet = isSelected ? nil : facet.facetName
+                                            }
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: FilterChip.icon(named: facet.facetName, in: defaultFilterChips) ?? "circle.fill")
+                                                Text(facet.facetName).bold()
+                                                Text("\(facet.facetCount)")
+                                                    .font(.caption2.weight(.black))
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(.ultraThinMaterial, in: Capsule())
+                                                if isSelected { Image(systemName: "xmark.circle.fill") }
+                                            }
+                                            .font(.caption)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 8)
+                                            .foregroundStyle(isSelected ? .white : chipColor(for: facet.facetName))
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    .fill(isSelected ? chipColor(for: facet.facetName)
+                                                          : chipColor(for: facet.facetName).opacity(0.18))
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .transition(.scale.combined(with: .opacity))
                                     }
                                 }
-                                .foregroundColor(Color(hex: 0xFF9864))
-                                .tint(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .buttonStyle(.glassProminent)
-                                Spacer()
+                                .scrollTargetLayout()
                             }
-                            .padding(.horizontal)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
                         }
-                        Spacer()
+                        .scrollTargetBehavior(.viewAligned)
+                        .background(Color(.systemBackground))
+                        .overlay(Divider(), alignment: .bottom)
                     }
-                    .padding(.bottom, 30)
-                    .frame(minHeight: geo.size.height)
-                    Spacer()
+                }
+                .fullScreenCover(item: $selectedList) { list in
+                    if list.type == "default" {
+                        DefaultListPersonal(listID: list.id, onDelete: { dismiss() })
+                    } else {
+                        GroupListPersonal(listID: list.id, onDelete: { dismiss() })
+                    }
+                }
+                .onAppear {
+                    if !isSimulator {
+                        fetchFacetData()
+                        loadAllData()
+                    }
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 25)
-                    .fill(
-                        LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                       startPoint: .top,
-                                       endPoint: .bottom
-                                      )
-                    )
-            )
-            .ignoresSafeArea()
+            .tabItem { Label("", systemImage: "magnifyingglass") }
         }
-        .fullScreenCover(item: $selectedList) { list in
-            if list.type == "default" {
-                DefaultListPersonal(listID: list.id, onDelete: { dismiss() })
-            } else if list.type == "group" {
-                GroupListPersonal(listID: list.id, onDelete: { dismiss() })
-            }
-        }
-        .onAppear {
-            fetchFacetData()
-            loadAllData()
-        }
+        .interactiveDismissDisabled(true)
     }
-
 
     private func fetchFacetData() {
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
@@ -1437,151 +2533,66 @@ struct SearchRankosView: View {
 struct SelectFeaturedRankosView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
+    @FocusState private var searchFocused: Bool
+    
     @State private var lists: [RankoList] = []
     @State private var selectedFacet: String? = nil
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
-    @State private var searchText: String = ""
+    @State private var rankoQuery: String = ""
+    @State private var searchField: String = ""
     @State private var selectedList: RankoList?
-    @State private var activeFacet: FacetCategory?
     
     var onSelect: (RankoList) -> Void
-
-    var facets: [FacetCategory] {
-        guard let start = user_data.userRankoCategories.range(of: "["),
-              let end = user_data.userRankoCategories.range(of: "]") else {
-            return []
+    
+    // Dynamic filtering + facets that react to the remaining lists
+    private var filteredLists: [RankoList] {
+        lists.filter { list in
+            (selectedFacet == nil || list.category == selectedFacet) &&
+            (rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased()))
         }
-
-        let inner = user_data.userRankoCategories[start.upperBound..<end.lowerBound]
-        let entries = inner.components(separatedBy: ", ")
-
-        return entries.compactMap { entry in
-            if let openParen = entry.lastIndex(of: "("),
-               let closeParen = entry.lastIndex(of: ")") {
-                let name = entry[..<openParen].trimmingCharacters(in: .whitespaces)
-                let countString = entry[entry.index(after: openParen)..<closeParen]
-                if let count = Int(countString) {
-                    return FacetCategory(facetName: name, facetCount: count)
-                }
-            }
-            return nil
-        }
-        .sorted { $0.facetCount > $1.facetCount }
     }
 
+    private var dynamicFacets: [FacetCategory] {
+        // facet counts based on what's left after the search query (but before facet selection)
+        let base = lists.filter { list in
+            rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased())
+        }
+        
+        let grouped = Dictionary(grouping: base, by: { $0.category })
+        return grouped
+            .map { FacetCategory(facetName: $0.key, facetCount: $0.value.count) }
+            .sorted { $0.facetCount > $1.facetCount }
+    }
+    
+    // Fallback color helper so we never force-unwrap
+    private func chipColor(for name: String) -> Color {
+        categoryChipIconColors[name] ?? Color.gray
+    }
+
+
     var body: some View {
-        GeometryReader { geo in
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    // Search Bar
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                            .padding(6)
-                        TextField("Search Rankos", text: $searchText)
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.6) : Color(hex: 0x7E5F46).opacity(0.9))
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                            .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
-                        Spacer()
-                        if !searchText.isEmpty {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .heavy))
-                                .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                                .onTapGesture {searchText = ""}
-                        }
-                    }
-                    .padding(18)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                                 startPoint: .top,
-                                                 endPoint: .bottom
-                                                ))
-                            .shadow(color: Color(hex: 0xDBC252).opacity(0.8), radius: 5, x: 0, y: 3)
-                            .padding(8)
-                    )
-                    .cornerRadius(12)
-                    .padding(.leading, 10)
-                    .padding(.top, 15)
-                    
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .fontWeight(.heavy)
-                    }
-                    .foregroundColor(Color(hex: 0x7E5F46))
-                    .tint(Color(hex: 0xFEF4E7))
-                    .padding(.trailing, 20)
-                    .padding(.top, 15)
-                    .buttonStyle(.glassProminent)
-                }
-                
-                // Facet Chips
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(facets) { facet in
-                            let isSelected = selectedFacet == facet.facetName
-                            let shouldShow = selectedFacet == nil || isSelected
-
-                            if shouldShow {
-                                Button(action: {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        if isSelected {
-                                            selectedFacet = nil
-                                        } else {
-                                            selectedFacet = facet.facetName
-                                        }
-                                    }
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: FilterChip.icon(named: facet.facetName, in: defaultFilterChips) ?? "circle.fill")
-                                        Text(facet.facetName).bold()
-                                        Image(systemName: "\(facet.facetCount).circle.fill")
-
-                                        if isSelected {
-                                            Image(systemName: "xmark.circle")
-                                        }
-                                    }
-                                    .font(.caption)
-                                    .padding(6)
-                                    .foregroundColor(isSelected ? .white : categoryChipIconColors[facet.facetName])
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(isSelected ? categoryChipIconColors[facet.facetName]! : categoryChipIconColors[facet.facetName]!.opacity(0.2))
-                                    )
-                                    .transition(.scale.combined(with: .opacity))
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .scrollTargetBehavior(.viewAligned)
-                
-                ScrollView(.vertical, showsIndicators: false) {
-                    
-                    // Loading + Error
+        TabView {
+            NavigationStack {
+                // MAIN CONTENT
+                ScrollView {
+                    // loading / error
                     if isLoading {
-                        ProgressView("Loading Rankos...").padding()
+                        VStack(spacing: 10) {
+                            ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
+                            Text("Loading Rankos...")
+                                .font(.custom("Nunito-Black", size: 16))
+                                .foregroundColor(Color(hex: 0xA2A2A1))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 50)
                     }
-                    
                     if let error = errorMessage {
                         Text(error).foregroundColor(.red).padding()
                     }
-                    
-                    // Filtered Ranko Lists
+                    // filtered results
                     VStack(spacing: 8) {
-                        let filtered = lists.filter { list in
-                            (selectedFacet == nil || list.category == selectedFacet) &&
-                            (searchText.isEmpty || list.listName.lowercased().contains(searchText.lowercased()))
-                        }
-                        
-                        ForEach(filtered) { list in
+                        ForEach(filteredLists) { list in
                             HStack {
                                 Button {
                                     print("Tapped: \(list.listName)")
@@ -1608,28 +2619,102 @@ struct SelectFeaturedRankosView: View {
                         }
                         Spacer()
                     }
-                    .padding(.bottom, 30)
-                    .frame(minHeight: geo.size.height)
-                    Spacer()
+                    .padding(.vertical, 20)
+                    .padding(.horizontal, 15)
+                }
+                // SEARCH IN NAV BAR
+                .searchable(text: $searchField, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Rankos")
+                .searchFocused($searchFocused)
+                .scrollDismissesKeyboard(.immediately)
+                .onAppear {
+                    // give NavigationStack a tick to mount before focusing
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        searchFocused = true
+                    }
+                }
+                .onChange(of: searchField) { _, newVal in
+                    withAnimation(.easeInOut(duration: 0.3)) { rankoQuery = newVal }
+                }
+                // NAV BAR CONFIG (attach INSIDE the NavigationStack!)
+                .navigationTitle("Search Rankos")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarRole(.navigationStack)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: { dismiss() }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .black))
+                        }
+                        .tint(Color(hex: 0x514343))
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Text("Search Rankos")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0x514343))
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                }
+                
+                // CHIPS UNDER TOOLBAR
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if !dynamicFacets.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(dynamicFacets) { facet in
+                                    let isSelected = selectedFacet == facet.facetName
+                                    if selectedFacet == nil || isSelected {
+                                        Button {
+                                            withAnimation(.easeInOut(duration: 0.25)) {
+                                                selectedFacet = isSelected ? nil : facet.facetName
+                                            }
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: FilterChip.icon(named: facet.facetName, in: defaultFilterChips) ?? "circle.fill")
+                                                Text(facet.facetName).bold()
+                                                Text("\(facet.facetCount)")
+                                                    .font(.caption2.weight(.black))
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(.ultraThinMaterial, in: Capsule())
+                                                if isSelected { Image(systemName: "xmark.circle.fill") }
+                                            }
+                                            .font(.caption)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 8)
+                                            .foregroundStyle(isSelected ? .white : chipColor(for: facet.facetName))
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    .fill(isSelected ? chipColor(for: facet.facetName)
+                                                          : chipColor(for: facet.facetName).opacity(0.18))
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .transition(.scale.combined(with: .opacity))
+                                    }
+                                }
+                                .scrollTargetLayout()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                        }
+                        .scrollTargetBehavior(.viewAligned)
+                        .background(Color(.systemBackground))
+                        .overlay(Divider(), alignment: .bottom)
+                    }
+                }
+                .onAppear {
+                    if !isSimulator {
+                        fetchFacetData()
+                        loadAllData()
+                    }
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 25)
-                    .fill(
-                        LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                       startPoint: .top,
-                                       endPoint: .bottom
-                                      )
-                    )
-            )
-            .ignoresSafeArea()
+            .tabItem { Label("", systemImage: "magnifyingglass") }
         }
-        .onAppear {
-            fetchFacetData()
-            loadAllData()
-        }
+        .interactiveDismissDisabled(true)
     }
-
 
     private func fetchFacetData() {
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
@@ -1640,7 +2725,7 @@ struct SelectFeaturedRankosView: View {
         facetQuery.facets = ["RankoCategory"]
         facetQuery.hitsPerPage = 0
         facetQuery.maxFacetHits = 50
-        facetQuery.filters = "RankoUserID:\(user_data.userID) AND RankoPrivacy:false AND RankoStatus:active"
+        facetQuery.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
 
         index.search(query: facetQuery) { result in
             switch result {
@@ -1666,7 +2751,7 @@ struct SelectFeaturedRankosView: View {
                                   apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
         let index = client.index(withName: "RankoLists")
         var query = Query("").set(\.hitsPerPage, to: 20)
-        query.filters = "RankoUserID:\(user_data.userID) AND RankoPrivacy:false AND RankoStatus:active"
+        query.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
 
         index.search(query: query) { result in
             switch result {
@@ -2001,138 +3086,106 @@ struct UserGalleryView: View {
 struct SearchFollowersView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
+    @FocusState private var searchFocused: Bool
     
     @State private var users: [RankoUser] = []
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
-    @State private var searchText: String = ""
+    @State private var userQuery: String = ""
+    @State private var searchField: String = ""
     @State private var selectedUser: RankoUser?
     @State private var filteredUsers: [RankoUser] = []
     @State private var followerIDs: [String] = []
-    
-    let userID: String
-    
+
     var body: some View {
-        GeometryReader { geo in
-            VStack(alignment: .leading, spacing: 10) {
-                // Search Bar (optional filtering)
-                HStack {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                            .padding(6)
-                        TextField("Search Followers", text: $searchText)
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.6) : Color(hex: 0x7E5F46).opacity(0.9))
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                            .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
-                        Spacer()
-                        if !searchText.isEmpty {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .heavy))
-                                .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                                .onTapGesture {searchText = ""}
-                        }
-                    }
-                    .padding(18)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                                 startPoint: .top,
-                                                 endPoint: .bottom
-                                                ))
-                            .shadow(color: Color(hex: 0xDBC252).opacity(0.8), radius: 5, x: 0, y: 3)
-                            .padding(8)
-                    )
-                    .cornerRadius(12)
-                    .padding(.leading, 10)
-                    .padding(.top, 15)
-                    
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .fontWeight(.heavy)
-                    }
-                    .foregroundColor(Color(hex: 0x7E5F46))
-                    .tint(Color(hex: 0xFEF4E7))
-                    .padding(.trailing, 20)
-                    .padding(.top, 15)
-                    .buttonStyle(.glassProminent)
-                }
-                
-                ScrollView(.vertical, showsIndicators: false) {
+        TabView {
+            NavigationStack {
+                // MAIN CONTENT
+                ScrollView {
+                    // loading / error
                     if isLoading {
-                        ProgressView("Loading Followers…")
-                            .frame(maxWidth: .infinity)
+                        VStack(spacing: 10) {
+                            ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
+                            Text("Loading Followers...")
+                                .font(.custom("Nunito-Black", size: 16))
+                                .foregroundColor(Color(hex: 0xA2A2A1))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 50)
                     }
-                    
                     if let error = errorMessage {
-                        Text(error)
-                            .foregroundColor(.red)
-                            .padding()
+                        Text(error).foregroundColor(.red).padding()
                     }
-                    
+                    // filtered results
                     VStack(spacing: 8) {
                         ForEach(filteredUsers) { user in
-                            HStack {
-                                Button {
-                                    selectedUser = user
-                                } label: {
-                                    UserGalleryView(user: user)
-                                }
-                                .foregroundColor(Color(hex: 0xFF9864))
-                                .tint(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .buttonStyle(.glassProminent)
-                                Spacer()
+                            NavigationLink {
+                                ProfileSpectateView(userID: user.id)
+                            } label: {
+                                UserGalleryView(user: user)
                             }
-                            .padding(.horizontal)
+                            .foregroundColor(Color(hex: 0xFF9864))
+                            .tint(Color(hex: 0xFFFFFF))
+                            .buttonStyle(.glassProminent)
+                            .shadow(color: Color(hex:0x000000).opacity(0.1), radius: 8, x: 0, y: -2)
                         }
-                        Spacer()
                     }
-                    .padding(.bottom, 30)
-                    .frame(minHeight: geo.size.height)
-                    Spacer()
+                    .padding(.vertical, 20)
+                    .padding(.horizontal, 15)
+                }
+                // SEARCH IN NAV BAR
+                .searchable(text: $searchField, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Followers")
+                .searchFocused($searchFocused)
+                .scrollDismissesKeyboard(.immediately)
+                .onAppear {
+                    // give NavigationStack a tick to mount before focusing
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        searchFocused = true
+                    }
+                }
+                // NAV BAR CONFIG (attach INSIDE the NavigationStack!)
+                .navigationTitle("Search Followers")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarRole(.navigationStack)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: { dismiss() }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .black))
+                        }
+                        .tint(Color(hex: 0x514343))
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Text("Search Followers")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0x514343))
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                }
+                .onAppear {
+                    loadFollowers()
+                }
+                .onChange(of: searchField) { _, newValue in
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        // if the search field is empty, show all; otherwise filter by username
+                        if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                            filteredUsers = users
+                        } else {
+                            let lc = newValue.lowercased()
+                            filteredUsers = users.filter {
+                                $0.userName.lowercased().contains(lc)
+                            }
+                        }
+                    }
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 25)
-                    .fill(
-                        LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                       startPoint: .top,
-                                       endPoint: .bottom
-                                      )
-                    )
-            )
-            .ignoresSafeArea()
+            .tabItem { Label("", systemImage: "magnifyingglass") }
         }
-        .sheet(item: $selectedUser) { user in
-            ProfileSpectateView(userID: user.id)
-        }
-        .onAppear {
-            loadFollowers()
-        }
-        .onChange(of: searchText) { _, newValue in
-            // if the search field is empty, show all; otherwise filter by username
-            if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
-                filteredUsers = users
-            } else {
-                let lc = newValue.lowercased()
-                filteredUsers = users.filter {
-                    $0.userName.lowercased().contains(lc)
-                }
-            }
-        }
+        .interactiveDismissDisabled(true)
     }
-    
+
     private func loadFollowers() {
         isLoading = true
         errorMessage = nil
@@ -2140,7 +3193,7 @@ struct SearchFollowersView: View {
         let followersRef = Database.database()
             .reference()
             .child("UserData")
-            .child(userID)
+            .child(user_data.userID)
             .child("UserSocial")
             .child("UserFollowers")
 
@@ -2221,10 +3274,10 @@ struct SearchFollowersView: View {
         group.notify(queue: .main) {
             self.users = loaded
 
-            if self.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if self.userQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.filteredUsers = loaded
             } else {
-                let lc = self.searchText.lowercased()
+                let lc = self.userQuery.lowercased()
                 self.filteredUsers = loaded.filter { $0.userName.lowercased().contains(lc) }
             }
 
@@ -2238,149 +3291,117 @@ struct SearchFollowersView: View {
 struct SearchFollowingView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
+    @FocusState private var searchFocused: Bool
     
     @State private var users: [RankoUser] = []
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
-    @State private var searchText: String = ""
+    @State private var userQuery: String = ""
+    @State private var searchField: String = ""
     @State private var selectedUser: RankoUser?
     @State private var filteredUsers: [RankoUser] = []
     @State private var followingIDs: [String] = []
-    
-    let userID: String
-    
+
     var body: some View {
-        GeometryReader { geo in
-            VStack(alignment: .leading, spacing: 10) {
-                // Search Bar (optional filtering)
-                HStack {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                            .padding(6)
-                        TextField("Search Following", text: $searchText)
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.6) : Color(hex: 0x7E5F46).opacity(0.9))
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                            .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
-                        Spacer()
-                        if !searchText.isEmpty {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .heavy))
-                                .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                                .onTapGesture {searchText = ""}
-                        }
-                    }
-                    .padding(18)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                                 startPoint: .top,
-                                                 endPoint: .bottom
-                                                ))
-                            .shadow(color: Color(hex: 0xDBC252).opacity(0.8), radius: 5, x: 0, y: 3)
-                            .padding(8)
-                    )
-                    .cornerRadius(12)
-                    .padding(.leading, 10)
-                    .padding(.top, 15)
-                    
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .fontWeight(.heavy)
-                    }
-                    .foregroundColor(Color(hex: 0x7E5F46))
-                    .tint(Color(hex: 0xFEF4E7))
-                    .padding(.trailing, 20)
-                    .padding(.top, 15)
-                    .buttonStyle(.glassProminent)
-                }
-                
-                ScrollView(.vertical, showsIndicators: false) {
+        TabView {
+            NavigationStack {
+                // MAIN CONTENT
+                ScrollView {
+                    // loading / error
                     if isLoading {
-                        ProgressView("Loading Following…")
-                            .frame(maxWidth: .infinity)
+                        VStack(spacing: 10) {
+                            ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
+                            Text("Loading Following...")
+                                .font(.custom("Nunito-Black", size: 16))
+                                .foregroundColor(Color(hex: 0xA2A2A1))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 50)
                     }
-                    
                     if let error = errorMessage {
-                        Text(error)
-                            .foregroundColor(.red)
-                            .padding()
+                        Text(error).foregroundColor(.red).padding()
                     }
-                    
+                    // filtered results
                     VStack(spacing: 8) {
                         ForEach(filteredUsers) { user in
-                            HStack {
-                                Button {
-                                    selectedUser = user
-                                } label: {
-                                    UserGalleryView(user: user)
-                                }
-                                .foregroundColor(Color(hex: 0xFF9864))
-                                .tint(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .buttonStyle(.glassProminent)
-                                Spacer()
+                            NavigationLink {
+                                ProfileSpectateView(userID: user.id)
+                            } label: {
+                                UserGalleryView(user: user)
                             }
-                            .padding(.horizontal)
+                            .foregroundColor(Color(hex: 0xFF9864))
+                            .tint(Color(hex: 0xFFFFFF))
+                            .buttonStyle(.glassProminent)
+                            .shadow(color: Color(hex:0x000000).opacity(0.1), radius: 8, x: 0, y: -2)
                         }
-                        Spacer()
                     }
-                    .padding(.bottom, 30)
-                    .frame(minHeight: geo.size.height)
-                    Spacer()
+                    .padding(.vertical, 20)
+                    .padding(.horizontal, 15)
+                }
+                // SEARCH IN NAV BAR
+                .searchable(text: $searchField, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Following")
+                .searchFocused($searchFocused)
+                .scrollDismissesKeyboard(.immediately)
+                .onAppear {
+                    // give NavigationStack a tick to mount before focusing
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        searchFocused = true
+                    }
+                }
+                // NAV BAR CONFIG (attach INSIDE the NavigationStack!)
+                .navigationTitle("Search Following")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarRole(.navigationStack)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: { dismiss() }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .black))
+                        }
+                        .tint(Color(hex: 0x514343))
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Text("Search Following")
+                            .font(.custom("Nunito-Black", size: 24))
+                            .foregroundColor(Color(hex: 0x514343))
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                }
+                .onAppear {
+                    loadFollowing()
+                }
+                .onChange(of: searchField) { _, newValue in
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        // if the search field is empty, show all; otherwise filter by username
+                        if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                            filteredUsers = users
+                        } else {
+                            let lc = newValue.lowercased()
+                            filteredUsers = users.filter {
+                                $0.userName.lowercased().contains(lc)
+                            }
+                        }
+                    }
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 25)
-                    .fill(
-                        LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                       startPoint: .top,
-                                       endPoint: .bottom
-                                      )
-                    )
-            )
-            .ignoresSafeArea()
+            .tabItem { Label("", systemImage: "magnifyingglass") }
         }
-        .sheet(item: $selectedUser) { user in
-            ProfileSpectateView(userID: user.id)
-        }
-        .onAppear {
-            loadFollowing()
-        }
-        .onChange(of: searchText) { _, newValue in
-            // if the search field is empty, show all; otherwise filter by username
-            if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
-                filteredUsers = users
-            } else {
-                let lc = newValue.lowercased()
-                filteredUsers = users.filter {
-                    $0.userName.lowercased().contains(lc)
-                }
-            }
-        }
+        .interactiveDismissDisabled(true)
     }
-    
+
     private func loadFollowing() {
         isLoading = true
         errorMessage = nil
-        
+
         let followingRef = Database.database()
             .reference()
             .child("UserData")
-            .child(userID)
+            .child(user_data.userID)
             .child("UserSocial")
             .child("UserFollowing")
-        
+
         followingRef.observeSingleEvent(of: .value) { snap in
             // Handle "no following" represented as "" or null
             if snap.value is NSNull || (snap.value as? String) == "" {
@@ -2419,7 +3440,7 @@ struct SearchFollowingView: View {
         }
     }
     
-    private func fetchFollowingProfiles(ids: [String]) {
+    func fetchFollowingProfiles(ids: [String]) {
         let group = DispatchGroup()
         var loaded: [RankoUser] = []
         let appendQueue = DispatchQueue(label: "following.append.queue") // serialize appends
@@ -2458,10 +3479,10 @@ struct SearchFollowingView: View {
         group.notify(queue: .main) {
             self.users = loaded
 
-            if self.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if self.userQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 self.filteredUsers = loaded
             } else {
-                let lc = self.searchText.lowercased()
+                let lc = self.userQuery.lowercased()
                 self.filteredUsers = loaded.filter { $0.userName.lowercased().contains(lc) }
             }
 
@@ -2787,16 +3808,10 @@ struct ProfileSpectateView: View {
                             // ✅ If loading or failed, show placeholders
                             if featuredLoading {
                                 HStack {
-                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 60, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.3)
-                                        .frame(height: 60)
-                                        .padding(60)
+                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
                                 }
                                 .background(RoundedRectangle(cornerRadius: 10)
-                                    .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                                         startPoint: .top,
-                                                         endPoint: .bottom
-                                                        )
-                                          )
+                                    .fill(Color(hex: 0xFFFFFF))
                                 )
                                 .padding(.top, 40)
                                 .padding(.bottom, 120)
@@ -2931,10 +3946,10 @@ struct ProfileSpectateView: View {
                     }
                 }
                 .sheet(isPresented: $showUserFollowers) {
-                    SearchFollowersView(userID: userID)
+                    SearchFollowersView()
                 }
                 .sheet(isPresented: $showUserFollowing) {
-                    SearchFollowingView(userID: userID)
+                    SearchFollowingView()
                 }
                 .refreshable {
                     listViewID     = UUID()

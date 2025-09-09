@@ -96,6 +96,9 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     @AppStorage("user_privacy_displayProfilePicture") var privacyDisplayProfilePicture: Bool = false
     @AppStorage("user_privacy_allowClones") var privacyAllowClones: Bool = false
     
+    @AppStorage("device_height") var deviceHeight: Int = 0
+    @AppStorage("device_width") var deviceWidth: Int = 0
+    @AppStorage("device_keyboardHeight") var deviceKeyboardHeight: Int = 250
     
     @Published var ProfilePicture: UIImage? = loadCachedProfileImage()
     
@@ -199,7 +202,7 @@ class AlgoliaLoader<T: Decodable> {
     
     // MARK: - Important Variables -
     private var client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID), apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
-    private let index: Index
+    private let index: AIndex
 
 
     init(

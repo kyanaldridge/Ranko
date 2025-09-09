@@ -81,7 +81,7 @@ struct GroupListEditDetails: View {
                 .background(RoundedRectangle(cornerRadius: 8)
                     .fill(Color.gray.opacity(0.08)))
             }
-            .modifier(ShakeEffect(animatableData: rankoNameShake))
+            .modifier(ShakeEffect(travelDistance: 10, shakesPerUnit: 3, animatableData: rankoNameShake))
             
             // MARK: – Description Field (optional)
             VStack(alignment: .leading, spacing: 4) {
@@ -135,7 +135,7 @@ struct GroupListEditDetails: View {
                         .background(RoundedRectangle(cornerRadius: 8)
                             .fill((categoryChipIconColors[selectedCategoryChip?.name ?? ""] ?? .gray)))
                     }
-                    .modifier(ShakeEffect(animatableData: categoryShake))
+                    .modifier(ShakeEffect(travelDistance: 10, shakesPerUnit: 3, animatableData: categoryShake))
                 }
                 Spacer()
                 Toggle(isOn: $isPrivate) {

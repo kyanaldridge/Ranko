@@ -177,7 +177,7 @@ struct GroupListSpectate: View {
                                             .frame(width: 18, height: 18)
                                         HStack {
                                             Spacer()
-                                            ThreeRectanglesAnimation(rectangleWidth: 4, rectangleMaxHeight: 12, rectangleSpacing: 1, rectangleCornerRadius: 1, animationDuration: 0.4)
+                                            ThreeRectanglesAnimation(rectangleWidth: 4, rectangleMaxHeight: 12, rectangleSpacing: 1, rectangleCornerRadius: 1, animationDuration: 0.7)
                                                 .frame(height: 18)
                                             Spacer()
                                         }

@@ -15,6 +15,14 @@ enum Secrets {
     static var algoliaAPIKey: String {
         return getPlistValue(for: "ALGOLIA_API_KEY")
     }
+    
+    static var firebaseToken: String {
+        return getPlistValue(for: "FIREBASE_TOKEN")
+    }
+    
+    static var spotifyClientID: String {
+        return getPlistValue(for: "SPOTIFY_CLIENT_ID")
+    }
 
     private static func getPlistValue(for key: String) -> String {
         guard let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),

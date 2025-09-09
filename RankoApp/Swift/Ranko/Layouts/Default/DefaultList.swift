@@ -31,13 +31,213 @@ extension Int: @retroactive Identifiable {
 }
 
 
+struct DefaultListAccessory: View {
+    @Environment(\.tabViewBottomAccessoryPlacement) var placement
 
 
+    var body: some View {
+        switch placement {
+        case .inline:
+            RankoCoachAccessory(onDismiss: {})
+        case .expanded:
+            EmptyView()
+        case .none:
+            EmptyView()
+        case .some(_):
+            EmptyView()
+        }
+    }
+}
+
+struct RankoCoachAccessory: View {
+    var onDismiss: () -> Void
+    @State private var accessoryWidth: CGFloat = 388.0
+    @State private var accessoryHeight: CGFloat = 48.0
+    
+    @State private var pointerOffset: CGFloat = .zero
+    @State private var pointerImage: String = "hand.point.up.left.fill"
+    @State private var showPointer: Bool = false
+    @State private var showDemoTabBar: Bool = false
+    
+    @State private var message1: Bool = false
+    @State private var message2: Bool = false
+    @State private var message3: Bool = false
+    @State private var message4: Bool = false
+    @State private var message5: Bool = false
+    @State private var message6: Bool = false
+    
+    @State private var timelineTask: Task<Void, Never>?
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Rectangle()
+                    .fill(.clear)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onAppear {
+                        print("Height of Accessory: \(geometry.size.height)")
+                        print("Width of Accessory: \(geometry.size.width)")
+                        accessoryHeight = geometry.size.height
+                        accessoryWidth = geometry.size.width
+                    }
+                HStack(alignment: .center, spacing: 5) {
+                    Spacer(minLength: 0)
+                    VStack {
+                        Image(systemName: "plus.square.fill.on.square.fill")
+                            .font(.system(size: 14, weight: .bold, design: .default))
+                            .frame(height: accessoryHeight * 0.35)
+                        Text("Add Items")
+                            .font(.system(size: 7, weight: .semibold, design: .default))
+                    }
+                    .frame(width: 50/388 * accessoryWidth)
+                    .frame(maxHeight: .infinity, alignment: .center)
+                    VStack {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 14, weight: .bold, design: .default))
+                            .frame(height: accessoryHeight * 0.35)
+                        Text("Details")
+                            .font(.system(size: 7, weight: .semibold, design: .default))
+                    }
+                    .frame(width: 50/388 * accessoryWidth)
+                    .frame(maxHeight: .infinity, alignment: .center)
+                    VStack {
+                        Image(systemName: "arrow.left.and.right")
+                            .font(.system(size: 14, weight: .bold, design: .default))
+                            .frame(height: accessoryHeight * 0.35)
+                    }
+                    .frame(width: 56/388 * accessoryWidth)
+                    .frame(maxHeight: .infinity, alignment: .center)
+                    VStack {
+                        Image(systemName: "rectangle.arrowtriangle.2.outward")
+                            .font(.system(size: 14, weight: .bold, design: .default))
+                            .frame(height: accessoryHeight * 0.35)
+                        Text("Re-Rank")
+                            .font(.system(size: 7, weight: .semibold, design: .default))
+                    }
+                    .frame(width: 50/388 * accessoryWidth)
+                    .frame(maxHeight: .infinity, alignment: .center)
+                    VStack {
+                        Image(systemName: "square.and.arrow.down.on.square.fill")
+                            .font(.system(size: 14, weight: .bold, design: .default))
+                            .frame(height: accessoryHeight * 0.35)
+                        Text("Save")
+                            .font(.system(size: 7, weight: .semibold, design: .default))
+                    }
+                    .frame(width: 50/388 * accessoryWidth)
+                    .frame(maxHeight: .infinity, alignment: .center)
+                    
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 7)
+                .frame(maxWidth: .infinity)
+                .frame(height: accessoryHeight)
+                .opacity(showDemoTabBar ? 1 : 0)
+                
+                VStack {
+                    if message1 {
+                        Text("Welcome to RankoCreate!")
+                            .font(.custom("Nunito-Black", size: 13))
+                    } else if message2 {
+                        Text("To Add Items, Swipe to ADD ITEMS!")
+                            .font(.custom("Nunito-Black", size: 13))
+                    } else if message3 {
+                        Text("To Edit the Name, Description, Category or Privacy of Your Ranko, Swipe to DETAILS!")
+                            .font(.custom("Nunito-Black", size: 13))
+                    } else if message4 {
+                        Text("To Re-Order Your Items, Swipe to RE-RANK!")
+                            .font(.custom("Nunito-Black", size: 13))
+                    } else if message5 {
+                        Text("To Exit & Save or Delete Your Ranko, Swipe to SAVE!")
+                            .font(.custom("Nunito-Black", size: 13))
+                    } else if message6 {
+                        Text("Enjoy Ranking!")
+                            .font(.custom("Nunito-Black", size: 13))
+                    }
+                }
+                .padding(.horizontal, 10)
+                
+                if showPointer {
+                    Image(systemName: "\(pointerImage)")
+                        .padding(8)
+                        .background(
+                            Circle()
+                                .fill(Color(hex: 0xFFFFFF))
+                                .blur(radius: 2)
+                        )
+                        .offset(x: pointerOffset)
+                }
+                
+            }
+            .onAppear { startTimeline() }
+            .onDisappear { timelineTask?.cancel() }
+        }
+    }
+    
+    // MARK: - Timeline runner
+    private func startTimeline() {
+        timelineTask?.cancel()
+        timelineTask = Task { await runTimeline() }
+    }
+    
+    @MainActor
+    private func runTimeline() async {
+        // helpers
+        func sleep(_ s: TimeInterval) async { try? await Task.sleep(nanoseconds: UInt64(s * 1_000_000_000)) }
+        func resetPointer() { pointerOffset = 0 }
+        
+        // a reusable block for the “show bar → show pointer → tap → slide → point → hide” beat
+        @MainActor
+        func showAndPoint(to fractionOfWidth: CGFloat) async {
+            withAnimation { showDemoTabBar = true }
+            await sleep(0.4)
+            withAnimation { showPointer = true }
+            await sleep(0.4)
+            withAnimation { pointerImage = "hand.tap.fill" }
+            await sleep(1.4)
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
+                pointerOffset = fractionOfWidth * accessoryWidth
+            }
+            await sleep(1.4)
+            withAnimation { pointerImage = "hand.point.up.left.fill" }
+            await sleep(1.4)
+            withAnimation {
+                showDemoTabBar = false
+                showPointer = false
+            }
+        }
+        
+        // === timeline ===
+        await sleep(1.2); withAnimation { message1.toggle() }
+        await sleep(2.1); withAnimation { message1.toggle() }
+        
+        await sleep(0.7); withAnimation { message2.toggle() }
+        await sleep(3.1); withAnimation { message2.toggle() }
+        
+        await sleep(0.7); await showAndPoint(to: -113/388.0)   // far-left slot
+        await sleep(0.7); resetPointer(); withAnimation { message3.toggle() }
+        await sleep(3.2); withAnimation { message3.toggle() }
+        
+        await sleep(0.7); await showAndPoint(to: -58/388.0)    // mid-left slot
+        await sleep(0.7); resetPointer(); withAnimation { message4.toggle() }
+        await sleep(3.2); withAnimation { message4.toggle() }
+        
+        await sleep(0.7); await showAndPoint(to: 58/388.0)     // mid-right slot
+        await sleep(0.7); resetPointer(); withAnimation { message5.toggle() }
+        await sleep(3.2); withAnimation { message5.toggle() }
+        
+        await sleep(0.7); await showAndPoint(to: 113/388.0)     // far-right slot
+        await sleep(0.7); resetPointer(); withAnimation { message6.toggle() }
+        await sleep(3.2); withAnimation { message6.toggle() }
+        
+        await sleep(3.2); onDismiss()
+    }
+}
 
 
 struct DefaultListView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var user_data = UserInformation.shared
+    @Environment(\.tabViewBottomAccessoryPlacement) var placement
 
     // Init properties
     @State private var listUUID: String = UUID().uuidString
@@ -53,31 +253,28 @@ struct DefaultListView: View {
     @State private var originalCategory: CategoryChip?
 
     // Sheet states
-    @State private var showTabBar = true
-    @State private var tabBarPresent = false
-    @State var showEditDetailsSheet = false
-    @State var showAddItemsSheet = false
-    @State var showReorderSheet = false
     @State var showEditItemSheet = false
+    @State var showAddItemsSheet = false
+    @State var showEditDetailsSheet = false
+    @State var showReorderSheet = false
     @State var showExitSheet = false
-    
-    @State private var activeTab: DefaultListTab = .addItems
     
     // Item states
     @State private var selectedRankoItems: [RankoItem]
     @State private var selectedItem: RankoItem? = nil
     @State private var itemToEdit: RankoItem? = nil
     @State private var onSave: (RankoItem) -> Void
-
-    // Active tab
-    @State private var selectedTab: TabType? = nil
     
     @State private var imageReloadToken = UUID()
-
-    enum TabType {
-        case edit, add, reorder
-    }
     
+    @State private var selectedTab: TabType = .empty
+    @State private var isPresentingSheet = false
+    @State private var shouldShowTutorial: Bool = false
+    
+    enum TabType: Hashable {
+        case addItems, editDetails, reRank, exit, empty
+    }
+
     init(
         rankoName: String,
         description: String,
@@ -100,271 +297,406 @@ struct DefaultListView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color(hex: 0xFFF5E1).ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 7) {
-                    HStack {
-                        Text(rankoName)
-                            .font(.system(size: 28, weight: .black, design: .default))
-                            .foregroundColor(Color(hex: 0x6D400F))
-                        Spacer()
-                    }
-                    .padding(.top, 20)
-                    .padding(.leading, 20)
-                    
-                    HStack {
-                        Text(description.isEmpty ? "No description yet…" : description)
-                            .lineLimit(3)
-                            .font(.system(size: 12, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0x925611))
-                        Spacer()
-                    }
-                    .padding(.top, 5)
-                    .padding(.leading, 20)
-                    
-                    HStack(spacing: 8) {
-                        HStack(spacing: 4) {
-                            Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
-                                .font(.system(size: 12, weight: .bold, design: .default))
-                                .foregroundColor(.white)
-                                .padding(.leading, 10)
-                            Text(isPrivate ? "Private" : "Public")
-                                .font(.system(size: 12, weight: .bold, design: .default))
-                                .foregroundColor(.white)
-                                .padding(.trailing, 10)
-                                .padding(.vertical, 8)
-                        }
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(hex: 0xF2AB69))
-                        )
-                        
-                        if let cat = category {
-                            HStack(spacing: 4) {
-                                Image(systemName: cat.icon)
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .padding(.leading, 10)
-                                Text(cat.name)
-                                    .font(.system(size: 12, weight: .bold, design: .default))
-                                    .foregroundColor(.white)
-                                    .padding(.trailing, 10)
-                                    .padding(.vertical, 8)
-                                
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(categoryChipIconColors[cat.name] ?? .gray)
-                                    .opacity(0.6)
-                            )
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding(.top, 5)
-                    .padding(.leading, 20)
+        TabView(selection: $selectedTab) {
+            // all tabs reuse the SAME content view
+            rankoView
+                .tabItem { Label("Add Items", systemImage: "plus.square.fill.on.square.fill") }
+                .tabItem {
+                    Image(systemName: "plus.square.fill.on.square.fill")
                 }
-                .padding(.bottom, 5)
-                
-                VStack {
-                    ScrollView {
-                        Group {
-                            ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
-                                DefaultListItemRow(item: item)
-                                    .onTapGesture {
-                                        selectedItem = item
-                                    }
-                                    .contextMenu {
-                                        Button(action: {
-                                            itemToEdit = item
-                                        }) {
-                                            Label("Edit", systemImage: "pencil")
-                                        }
-                                        .foregroundColor(.orange)
-                                        
-                                        Divider()
-                                        
-                                        Button(action: { moveToTop(item) }) {
-                                            Label("Move to Top", systemImage: "arrow.up.to.line.compact")
-                                        }
-                                        
-                                        Button(action: { moveToBottom(item) }) {
-                                            Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
-                                        }
-                                        
-                                        Divider()
-                                        
-                                        Button(role: .destructive) {
-                                            delete(item)
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                    .sheet(isPresented: $showEditItemSheet) {
-                                        // Determine which item is centered
-                                        EditItemView(
-                                            item: item,
-                                            listID: listUUID
-                                        ) { newName, newDesc in
-                                            // build updated record & item
-                                            let rec = item.record
-                                            let updatedRecord = RankoRecord(
-                                                objectID: rec.objectID,
-                                                ItemName: newName,
-                                                ItemDescription: newDesc,
-                                                ItemCategory: "",
-                                                ItemImage: rec.ItemImage
-                                            )
-                                            let updatedItem = RankoItem(
-                                                id: item.id,
-                                                rank: item.rank,
-                                                votes: item.votes,
-                                                record: updatedRecord
-                                            )
-                                            // callback to parent
-                                            onSave(updatedItem)
-                                        }
-                                    }
-                            }
-                        }
-                        .id(imageReloadToken)
-                        .padding(.top, 5)
-                        .padding(.bottom, 70)
-                    }
-                    Spacer()
+                .tag(TabType.addItems)
+            
+            rankoView
+                .tabItem { Label("        Details        ", systemImage: "pencil") }
+                .tabItem {
+                    Image(systemName: "pencil")
                 }
-            }
+                .tag(TabType.editDetails)
             
-            VStack {
-                Spacer()
-                Rectangle()
-                    .frame(height: 90)
-                    .foregroundColor(tabBarPresent ? Color(hex: 0xFFEBC2) : .white)
-                    .blur(radius: 23)
-                    .opacity(tabBarPresent ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.4), value: tabBarPresent) // ✅ Fast fade animation
-                    .ignoresSafeArea()
-            }
-            .ignoresSafeArea()
+            rankoView
+                .tabItem { Label("", systemImage: "arrow.left.and.right") } // arrow.left.and.right   hand.point.up.fill
+                .tag(TabType.empty)
             
+            rankoView
+                .tabItem { Label("        Re-Rank        ", systemImage: "rectangle.arrowtriangle.2.outward") }
+                .tabItem {
+                    Image(systemName: "rectangle.arrowtriangle.2.outward")
+                }
+                .tag(TabType.reRank)
+            
+            rankoView
+                .tabItem { Label("Delete", systemImage: "trash") }
+                .tabItem {
+                    Image(systemName: "square.and.arrow.down.on.square.fill")
+                }
+                .tag(TabType.exit)
         }
-        .refreshable {
-            refreshItemImages()
-        }
+//        .tabViewBottomAccessory {
+//            if shouldShowTutorial {
+//                RankoCoachAccessory {
+//                    withAnimation { shouldShowTutorial = false }
+//                }
+//                .transition(.move(edge: .bottom).combined(with: .opacity))
+//            } else {
+//                HStack {
+//                    Button {
+//                        
+//                    } label: {
+//                        HStack {
+//                            Text("Save Ranko")
+//                                .font(.custom("Nunito-Black", size: 17))
+//                                .foregroundStyle(Color(hex: 0xFFFFFF))
+//                                .padding(.horizontal, 20)
+//                                .padding(.vertical, 7)
+//                        }
+//                        .background(Color(hex: 0xC34F01))
+//                        .mask(Capsule())
+//                    }
+//                    .buttonStyle(.glassProminent)
+//                    
+//                    Button {} label: {
+//                        HStack {
+//                            Image(systemName: "questionmark")
+//                                .font(.system(size: 12, weight: .black, design: .default))
+//                                .foregroundStyle(Color(hex: 0xFFFFFF))
+//                                .padding(.horizontal, 12)
+//                                .padding(.vertical, 9)
+//                        }
+//                        .background(Color(hex: 0xC34F01))
+//                        .mask(Circle())
+//                    }
+//                    .buttonStyle(.glassProminent)
+//                }
+//            }
+//        }
+//        
+        .tabViewBottomAccessory(content: DefaultListAccessory.init)
+        .tabBarMinimizeBehavior(.onScrollDown)
+        // ensure we start from a neutral tab that is NOT shown in the bar
         .onAppear {
-            refreshItemImages()
+            selectedTab = .empty
+            if selectedRankoItems.count == 0 {
+                shouldShowTutorial = true
+            } else {
+                shouldShowTutorial = false
+            }
         }
-        .sheet(isPresented: $showAddItemsSheet) {
-            FilterChipPickerView(
-                selectedRankoItems: $selectedRankoItems
-            )
+        .onChange(of: selectedRankoItems.count) {
+            if selectedRankoItems.count == 0 {
+                shouldShowTutorial = true
+            } else {
+                shouldShowTutorial = false
+            }
         }
-        .sheet(isPresented: $showEditDetailsSheet) {
+        // when the user switches tabs, pop the matching sheet, then reset back to .empty
+        .onChange(of: selectedTab) { oldValue, newValue in
+            guard !isPresentingSheet else { return }
+            switch newValue {
+            case .addItems:
+                present { showAddItemsSheet = true }
+            case .editDetails:
+                present { showEditDetailsSheet = true }
+            case .reRank:
+                present { showReorderSheet = true }
+            case .exit:
+                present { showExitSheet = true }
+            case .empty:
+                break
+            }
+        }
+        .sheet(isPresented: $showAddItemsSheet, onDismiss: resetTrigger) {
+            FilterChipPickerView(selectedRankoItems: $selectedRankoItems)
+                .presentationDetents([.height(480)])
+                .interactiveDismissDisabled(true)
+        }
+        .sheet(isPresented: $showEditDetailsSheet, onDismiss: resetTrigger) {
             DefaultListEditDetails(
                 rankoName: rankoName,
                 description: description,
                 isPrivate: isPrivate,
                 category: category
             ) { newName, newDescription, newPrivate, newCategory in
-                rankoName    = newName
-                description  = newDescription
-                isPrivate    = newPrivate
-                category     = newCategory
+                rankoName   = newName
+                description = newDescription
+                isPrivate   = newPrivate
+                category    = newCategory
             }
         }
-        .sheet(isPresented: $showReorderSheet) {
-            DefaultListReRank(
-                items: selectedRankoItems,
-                onSave: { newOrder in
-                    selectedRankoItems = newOrder
-                }
-            )
+        .sheet(isPresented: $showReorderSheet, onDismiss: resetTrigger) {
+            DefaultListReRank(items: selectedRankoItems) { newOrder in
+                selectedRankoItems = newOrder
+            }
         }
-        .sheet(isPresented: $showExitSheet) {
+        .sheet(isPresented: $showExitSheet, onDismiss: resetTrigger) {
             DefaultListExit(
                 onSave: {
                     saveRankedListToAlgolia()
                     saveRankedListToFirebase()
-                    showTabBar = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                        dismiss()
-                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { dismiss() }
                 },
                 onDelete: {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                        dismiss()   // dismiss DefaultListView without saving
-                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { dismiss() }
                 }
             )
         }
-        .sheet(isPresented: $showTabBar) {
-            VStack {
-                HStack(spacing: 0) {
-                    ForEach(DefaultListTab.visibleCases, id: \.rawValue) { tab in
-                        VStack(spacing: 6) {
-                            Image(systemName: tab.symbolImage)
-                                .font(.title3)
-                                .symbolVariant(.fill)
-                                .frame(height: 28)
+        
+        // SINGLE edit sheet bound to the selected item (no per-row sheets)
+        .sheet(item: $itemToEdit, onDismiss: resetTrigger) { item in
+            EditItemView(item: item, listID: listUUID) { newName, newDesc in
+                let rec = item.record
+                let updatedRecord = RankoRecord(
+                    objectID: rec.objectID,
+                    ItemName: newName,
+                    ItemDescription: newDesc,
+                    ItemCategory: "",
+                    ItemImage: rec.ItemImage
+                )
+                let updatedItem = RankoItem(
+                    id: item.id,
+                    rank: item.rank,
+                    votes: item.votes,
+                    record: updatedRecord
+                )
+                onSave(updatedItem)
+            }
+        }
+        .onAppear {
+            refreshItemImages()
+        }
+    }
+    
+    @ViewBuilder
+    var rankoView: some View {
+        ZStack(alignment: .top) {
+            LinearGradient(colors: [Color(hex: 0x514343), Color(hex: 0x000000)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Color(hex: 0xFFFFFF)
+                .ignoresSafeArea()
+            VStack(spacing: 6) {
+                HStack {
+                    Text(rankoName)
+                        .font(.custom("Nunito-Black", size: 24))
+                        .foregroundStyle(Color(hex: 0x514343))
+                        .kerning(-0.4)
+                    Spacer()
+                }
+                .padding(.top, 20)
+                .padding(.leading, 20)
+                
+                HStack {
+                    Text(description.isEmpty ? "No description yet…" : description)
+                        .lineLimit(3)
+                        .font(.custom("Nunito-Black", size: 13))
+                        .foregroundStyle(Color(hex: 0x514343))
+                    Spacer()
+                }
+                .padding(.top, 5)
+                .padding(.leading, 20)
+                
+                HStack(spacing: 8) {
+                    HStack(spacing: 4) {
+                        Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
+                            .font(.system(size: 12, weight: .bold, design: .default))
+                            .foregroundColor(.white)
+                            .padding(.leading, 10)
+                        Text(isPrivate ? "Private" : "Public")
+                            .font(.system(size: 12, weight: .bold, design: .default))
+                            .foregroundColor(.white)
+                            .padding(.trailing, 10)
+                            .padding(.vertical, 8)
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(hex: 0xF2AB69))
+                    )
+                    
+                    if let cat = category {
+                        HStack(spacing: 4) {
+                            Image(systemName: cat.icon)
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding(.leading, 10)
+                            Text(cat.name)
+                                .font(.system(size: 12, weight: .bold, design: .default))
+                                .foregroundColor(.white)
+                                .padding(.trailing, 10)
+                                .padding(.vertical, 8)
                             
-                            Text(tab.rawValue)
-                                .font(.caption2)
-                                .fontWeight(.semibold)
                         }
-                        .foregroundStyle(Color(hex: 0x925610))
-                        .frame(maxWidth: .infinity)
-                        .contentShape(.rect)
-                        .onTapGesture {
-                            activeTab = tab
-                            switch tab {
-                            case .addItems:
-                                showAddItemsSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(categoryChipIconColors[cat.name] ?? .gray)
+                                .opacity(0.6)
+                        )
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.top, 5)
+                .padding(.leading, 20)
+                
+                ZStack(alignment: .bottom) {
+                    
+                    ScrollView {
+                        VStack {
+                            ScrollView {
+                                Group {
+                                    ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
+                                        DefaultListItemRow(item: item)
+                                            .onTapGesture {
+                                                selectedItem = item
+                                            }
+                                            .contextMenu {
+                                                Button(action: {
+                                                    itemToEdit = item
+                                                }) {
+                                                    Label("Edit", systemImage: "pencil")
+                                                }
+                                                .foregroundColor(.orange)
+                                                
+                                                Divider()
+                                                
+                                                Button(action: { moveToTop(item) }) {
+                                                    Label("Move to Top", systemImage: "arrow.up.to.line.compact")
+                                                }
+                                                
+                                                Button(action: { moveToBottom(item) }) {
+                                                    Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
+                                                }
+                                                
+                                                Divider()
+                                                
+                                                Button(role: .destructive) {
+                                                    delete(item)
+                                                } label: {
+                                                    Label("Delete", systemImage: "trash")
+                                                }
+                                            }
+                                            .sheet(isPresented: $showEditItemSheet) {
+                                                // Determine which item is centered
+                                                EditItemView(
+                                                    item: item,
+                                                    listID: listUUID
+                                                ) { newName, newDesc in
+                                                    // build updated record & item
+                                                    let rec = item.record
+                                                    let updatedRecord = RankoRecord(
+                                                        objectID: rec.objectID,
+                                                        ItemName: newName,
+                                                        ItemDescription: newDesc,
+                                                        ItemCategory: "",
+                                                        ItemImage: rec.ItemImage
+                                                    )
+                                                    let updatedItem = RankoItem(
+                                                        id: item.id,
+                                                        rank: item.rank,
+                                                        votes: item.votes,
+                                                        record: updatedRecord
+                                                    )
+                                                    // callback to parent
+                                                    onSave(updatedItem)
+                                                }
+                                            }
+                                    }
                                 }
-                            case .editDetails:
-                                showEditDetailsSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
-                            case .reRank:
-                                showReorderSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
-                            case .exit:
-                                showExitSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
-                            case .empty:
-                                dismiss()
+                                .id(imageReloadToken)
+                                .padding(.top, 25)
+                                .padding(.bottom, 100)
                             }
                         }
                     }
                 }
-                .padding(.horizontal, 20)
+                .ignoresSafeArea()
             }
-            .interactiveDismissDisabled(true)
-            .presentationDetents([.height(80)])
-            .presentationBackground((Color(hex: 0xfff9ee)))
-            .presentationBackgroundInteraction(.enabled)
-            .onAppear {
-                tabBarPresent = false      // Start from invisible
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        tabBarPresent = true
-                    }
-                }
-            }
-            .onDisappear {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    tabBarPresent = false
-                }
+            
+        }
+        .refreshable {
+            refreshItemImages()
+        }
+//        .sheet(isPresented: $showTabBar) {
+//            VStack {
+//                HStack(spacing: 0) {
+//                    ForEach(DefaultListTab.visibleCases, id: \.rawValue) { tab in
+//                        VStack(spacing: 6) {
+//                            Image(systemName: tab.symbolImage)
+//                                .font(.title3)
+//                                .symbolVariant(.fill)
+//                                .frame(height: 28)
+//
+//                            Text(tab.rawValue)
+//                                .font(.caption2)
+//                                .fontWeight(.semibold)
+//                        }
+//                        .foregroundStyle(Color(hex: 0x925610))
+//                        .frame(maxWidth: .infinity)
+//                        .contentShape(.rect)
+//                        .onTapGesture {
+//                            activeTab = tab
+//                            switch tab {
+//                            case .addItems:
+//                                showAddItemsSheet = true
+//                                withAnimation(.easeInOut(duration: 0.2)) {
+//                                    tabBarPresent = false
+//                                }
+//                            case .editDetails:
+//                                showEditDetailsSheet = true
+//                                withAnimation(.easeInOut(duration: 0.2)) {
+//                                    tabBarPresent = false
+//                                }
+//                            case .reRank:
+//                                showReorderSheet = true
+//                                withAnimation(.easeInOut(duration: 0.2)) {
+//                                    tabBarPresent = false
+//                                }
+//                            case .exit:
+//                                showExitSheet = true
+//                                withAnimation(.easeInOut(duration: 0.2)) {
+//                                    tabBarPresent = false
+//                                }
+//                            case .empty:
+//                                dismiss()
+//                            }
+//                        }
+//                    }
+//                }
+//                .padding(.horizontal, 20)
+//            }
+//            .interactiveDismissDisabled(true)
+//            .presentationDetents([.height(80)])
+//            .presentationBackground((Color(hex: 0xfff9ee)))
+//            .presentationBackgroundInteraction(.enabled)
+//            .onAppear {
+//                tabBarPresent = false      // Start from invisible
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+//                    withAnimation(.easeInOut(duration: 0.2)) {
+//                        tabBarPresent = true
+//                    }
+//                }
+//            }
+//            .onDisappear {
+//                withAnimation(.easeInOut(duration: 0.2)) {
+//                    tabBarPresent = false
+//                }
+//            }
+//        }
+    }
+    // MARK: - Sheet trigger helpers
+    private func present(_ action: @escaping () -> Void) {
+        isPresentingSheet = true
+        // perform on next runloop to avoid selection race with TabView
+        DispatchQueue.main.async {
+            action()
+            // reset selection so no tab stays highlighted
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                selectedTab = .empty
             }
         }
+    }
+
+    private func resetTrigger() {
+        // allow new triggers after a sheet closes
+        isPresentingSheet = false
+        selectedTab = .empty
     }
     private func refreshItemImages() {
         guard !selectedRankoItems.isEmpty else { return }
@@ -639,7 +971,7 @@ struct DefaultListEditDetails: View {
                     )
                 }
                 .padding(.top, 30)
-                .modifier(ShakeEffect(animatableData: rankoNameShake))
+                .modifier(ShakeEffect(travelDistance: 10, shakesPerUnit: 3, animatableData: rankoNameShake))
                 
                 // Description Field
                 VStack(alignment: .leading, spacing: 4) {
@@ -714,7 +1046,7 @@ struct DefaultListEditDetails: View {
                                     )
                             )
                         }
-                        .modifier(ShakeEffect(animatableData: categoryShake))
+                        .modifier(ShakeEffect(travelDistance: 10, shakesPerUnit: 3, animatableData: categoryShake))
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -1170,7 +1502,8 @@ struct DefaultListView_Previews: PreviewProvider {
             // no-op in preview
         }
          // Optional: wrap in a NavigationView or set a fixed frame for better preview layout
-        .previewLayout(.sizeThatFits)
+        .colorScheme(.light)
+        .accentColor(Color(hex: 0xC34F01))
     }
 }
 

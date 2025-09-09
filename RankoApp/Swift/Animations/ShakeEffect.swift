@@ -9,8 +9,8 @@ import SwiftUI
 
 /// A custom geometry effect for creating a shake animation.
 struct ShakeEffect: GeometryEffect {
-    var travelDistance: CGFloat = 10
-    var shakesPerUnit: CGFloat = 3
+    var travelDistance: CGFloat
+    var shakesPerUnit: CGFloat
     var animatableData: CGFloat
 
     func effectValue(size: CGSize) -> ProjectionTransform {

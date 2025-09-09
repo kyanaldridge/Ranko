@@ -1577,7 +1577,7 @@ var defaultFilterChips: [FilterChip] = [
     )
 ]
 // MARK: - FilterChip Button View
-struct FilterChipButtonView: View {
+struct FilterChipButtonViewHorizontal: View {
     let chip: FilterChip
     let isSelected: Bool
     let action: () -> Void
@@ -1612,80 +1612,197 @@ struct FilterChipButtonView: View {
     }
 }
 
+struct FilterChipButtonViewVertical: View {
+    let chip: FilterChip
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        let isDisabled = !chip.available
+
+        Button(action: action) {
+            if isSelected {
+                ZStack(alignment: .topTrailing) {
+                    VStack(spacing: 4) {
+                        Image(systemName: chip.icon)
+                            .font(.system(size: 20, weight: .black, design: .default))
+                            .foregroundColor(isDisabled ? .white.opacity(0.8) : .white)
+                            .frame(width: 20, height: 20)
+                            .padding(.vertical, 7)
+                            .padding(.horizontal, 25)
+                        Text(chip.name)
+                            .font(.custom("Nunito-Black", size: 14))
+                            .foregroundColor(isDisabled ? .white.opacity(0.8) : .white)
+                            .padding(.horizontal, 8)
+                    }
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .black, design: .default))
+                        .foregroundColor(.white)
+                        .fontWeight(.black)
+                }
+                .padding(8)
+                .background(isDisabled ? .gray : (filterChipIconColors[chip.name] ?? .blue))
+                .brightness(-0.10)
+                .cornerRadius(8)
+                .shadow(color: .gray.opacity(0.6), radius: 3, x: 0, y: 2)
+            } else {
+                VStack(spacing: 4) {
+                    Image(systemName: chip.icon)
+                        .font(.system(size: 20, weight: .black, design: .default))
+                        .foregroundColor(isDisabled ? .white.opacity(0.8) : .white)
+                        .frame(width: 20, height: 20)
+                        .padding(.vertical, 7)
+                        .padding(.horizontal, 10)
+                    Text(chip.name)
+                        .font(.custom("Nunito-Black", size: 14))
+                        .foregroundColor(isDisabled ? .white.opacity(0.8) : .white)
+                        .padding(.horizontal, 8)
+                }
+                .padding(8)
+                .background(isDisabled ? .gray : (filterChipIconColors[chip.name] ?? .blue))
+                .brightness(-0.10)
+                .cornerRadius(8)
+                .shadow(color: .gray.opacity(0.6), radius: 3, x: 0, y: 2)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(isDisabled)
+    }
+}
+
 
 // MARK: - FilterChip Picker View
 struct FilterChipPickerView: View {
-    @State private var addItemsOpen: Bool = false
-    
     @Environment(\.dismiss) private var dismiss
     
     @Binding var selectedRankoItems: [RankoItem]
-
     @State private var chipStack: [FilterChip] = []
     @State private var currentChips: [FilterChip] = defaultFilterChips.sorted { $0.order < $1.order }
+    @State private var addItemsOpen: Bool = false
+    @State private var isDisabled: Bool = true
+    
+    var isDisabledVariable: Bool {
+        guard let last = chipStack.last else { return true } // no chip -> disabled
+        return !last.children.isEmpty || (last.available == false)
+    }
 
     var body: some View {
-        VStack {
-            Text("Pick Categories to Filter Items (until 'Done' button is enabled)")
-                .padding()
-                .font(.system(size: 11, weight: .medium, design: .default))
-            // Selected chips row
-            if !chipStack.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(chipStack) { chip in
-                            FilterChipButtonView(chip: chip, isSelected: true) {
-                                backTo(chip)
+        NavigationStack {
+            VStack {
+                // Selected chips row
+                if !chipStack.isEmpty {
+                    ZStack {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(chipStack) { chip in
+                                    FilterChipButtonViewVertical(chip: chip, isSelected: true) {
+                                        backTo(chip)
+                                    }
+                                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                                }
                             }
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .padding(.horizontal, 10)
+                        }
+                        HStack {
+                            Rectangle()
+                                .fill(Color(hex: 0xFFFFFF))
+                                .blur(radius: 2)
+                                .frame(width: 25, height: 60)
+                                .offset(x: -17)
+                            Spacer()
+                            Rectangle()
+                                .fill(Color(hex: 0xFFFFFF))
+                                .blur(radius: 2)
+                                .frame(width: 25, height: 60)
+                                .offset(x: 17)
                         }
                     }
-                    .padding(5)
                 }
-                .padding(.horizontal, 5)
+                
+                // Current chips flow
+                ScrollView {
+                    FlowLayout(spacing: 8) {
+                        ForEach(currentChips.sorted(by: { $0.order < $1.order })) { chip in
+                            FilterChipButtonViewVertical(chip: chip, isSelected: false) {
+                                chipTapped(chip)
+                            }
+                            .transition(.opacity)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                }
             }
-            
-            // Current chips flow
-            ScrollView {
-                FlowLayout(spacing: 8) {
-                    ForEach(currentChips.sorted(by: { $0.order < $1.order })) { chip in
-                        FilterChipButtonView(chip: chip, isSelected: false) {
-                            chipTapped(chip)
-                        }
-                        .transition(.opacity)
-                    }
+            .onChange(of: isDisabledVariable) { _, newValue in
+                withAnimation(.easeInOut) {
+                    isDisabled = newValue
                 }
-                .padding(5)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 5)
-            
-            Spacer()
-            
-            // Done Button
-            Button(action: {
-                if let last = chipStack.last, last.children.isEmpty, last.available {
-                    let path = chipStack.map(\..name).dropLast()
-                    print("Path: \(path)")
-                    print("Last Chip Selected: \(last.name)")
-                    print("Set Index: \(last.nameIndex)")
-                    print("Set Filters: \(last.filter)")
-                    addItemsOpen.toggle()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    ZStack {
+                        Button { } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .black, design: .default))
+                        }
+                        .disabled(isDisabled)
+                        
+                        if !isDisabled {
+                            Button {
+                                if let last = chipStack.last, last.children.isEmpty, last.available {
+                                    let path = chipStack.map(\..name).dropLast()
+                                    print("Path: \(path)")
+                                    print("Last Chip Selected: \(last.name)")
+                                    print("Set Index: \(last.nameIndex)")
+                                    print("Set Filters: \(last.filter)")
+                                    addItemsOpen.toggle()
+                                }
+                            } label: {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .black, design: .default))
+                            }
+                            .tint(Color(hex: 0x01991D))
+                            .buttonStyle(.glassProminent)
+                        }
+                    }
                 }
-            }) {
-                Text((chipStack.last?.available == false) ? "Coming Soon..." : "Done")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .foregroundColor((chipStack.last?.available == false) ? .gray : .white)
-                    .background((chipStack.last?.children.isEmpty ?? false) && (chipStack.last?.available ?? false) ? Color.blue : Color.gray)
-                    .cornerRadius(10)
+                ToolbarItemGroup(placement: .principal) {
+                    Text("Add Items")
+                        .font(.custom("Nunito-Black", size: 26))
+                        .foregroundColor(Color(hex: 0x000000))
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .black, design: .default))
+                    }
+                    .tint(Color(hex: 0xD10000))
+                    .buttonStyle(.glassProminent)
+                }
             }
-            .disabled(!(chipStack.last?.children.isEmpty ?? false) || (chipStack.last?.available == false))
-            .padding(.horizontal)
-            .padding(.bottom)
+            .toolbarBackground(Color(hex:0xFFFFFF))
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing:0) {
+                    Text("Pick Categories to Filter Items (until 'Done' button is enabled)")
+                        .font(.system(size: 11, weight: .medium, design: .default))
+                        .frame(maxWidth: .infinity)
+                        .background(Color.white)
+                        .zIndex(1)
+                    Rectangle()
+                        .fill(Color(hex: 0xFFFFFF))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 20)
+                        .blur(radius: 4)
+                        .offset(y: -10)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
         }
         .animation(.default, value: chipStack)
         .animation(.default, value: currentChips)
+        .presentationBackground(Color(hex: 0xFFFFFF))
         .fullScreenCover(isPresented: $addItemsOpen) {
             if let last = chipStack.last, last.children.isEmpty {
                 AddItemView(filterChip: last, existingCount: selectedRankoItems.count) { newItems in

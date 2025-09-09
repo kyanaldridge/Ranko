@@ -33,6 +33,7 @@ struct BlindSequence: View {
     @State private var currentLetter: Character? = nil
     @State private var showingRandomizing = false
     @State private var animateRotation = false
+    @State private var boxShakeValues: [CGFloat] = []
 
     // Challenge stats
     @State private var lives = 3
@@ -343,250 +344,6 @@ struct BlindSequence: View {
         
     }
     
-    var mainMenuView2: some View {
-        ZStack {
-            // Background Layer
-            GeometryReader { proxy in
-                let size = proxy.size
-                Image("BlindSequence_Background")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: size.width, height: size.height)
-                    .colorMultiply(Color(hex: 0xFFA500))
-                    .brightness(0.5)
-            }
-            .ignoresSafeArea()
-            VStack(spacing: 20) {
-                // Time and Icons
-                HStack {
-                    HStack(spacing: 20) {
-                        Button(action: { showLeaderboard = true }) {
-                            Image(systemName: "trophy.fill")
-                                .foregroundColor(Color(hex: 0xD9741C))
-                        }
-                        .sheet(isPresented: $showLeaderboard) {
-                            BlindSequenceLeaderboard()
-                                .presentationDragIndicator(.visible)
-                                .presentationDetents([.medium, .large])
-                        }
-                        
-                        Button(action: { showSettings = true }) {
-                            Image(systemName: "gearshape.fill")
-                                .foregroundColor(Color(hex: 0xD9741C))
-                        }
-                        .sheet(isPresented: $showSettings) {
-                            BlindSequenceSettings(
-                                totalGamesPlayed: $totalGamesPlayed,
-                                highScore: $highScore,
-                                highScoreTime: $highScoreTime
-                            )
-                            .presentationDragIndicator(.visible)
-                            .presentationDetents([.medium])
-                        }
-                    }
-                    Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(Color(hex: 0xD9741C))
-                    }
-                }
-                .font(.title2)
-                .padding(.horizontal)
-                .padding(.top, 20)
-                .padding(.horizontal, 20)
-                
-                Text("Blind Sequence")
-                    .font(.system(size: 36, weight: .black, design: .rounded))
-                    .textCase(.uppercase)
-                    .overlay(
-                        LinearGradient(
-                            colors: [Color(hex: 0xd36918), Color(hex: 0xdf831e)],
-                            startPoint: .top,
-                            endPoint: .bottom)
-                    )
-                    .mask(
-                        Text("Blind Sequence")
-                            .font(.system(size: 36, weight: .black, design: .rounded))
-                            .textCase(.uppercase)
-                    )
-                    .padding()
-                
-                // Horizontal Scroll of Cards
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        DailyChallengeCard()
-                        ThemeCard()
-                        EventCard()
-                    }
-                    .padding(.horizontal)
-                }
-                
-                // Goals
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Today's Challenges")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .textCase(.uppercase)
-                        .foregroundColor(Color(hex: 0xAC5F19))
-                        .padding(.horizontal)
-                    
-                    HStack(spacing: 0) {
-                        Text("Coming Soon...")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(hex: 0x873F0F))
-                            .padding()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(hex: 0xFFEBBC))
-                            .shadow(color: Color(hex: 0x873F0F).opacity(0.2), radius: 3)
-                    )
-                    .padding(.horizontal)
-                    .padding(.bottom, 6)
-                    
-                    ProgressView(value: 0.45)
-                        .accentColor(.blue)
-                        .padding(.horizontal)
-                }
-                
-                
-                Spacer()
-                
-                VStack {
-                    // New Game Button
-                    Button(action: {
-                        gameType = .challenge
-                        startChallenge()
-                    }) {
-                        Text("New Game")
-                            .font(.system(size: 16, weight: .heavy))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 15)
-                    }
-                    .foregroundColor(Color(hex: 0x873F0F))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
-                    .buttonStyle(.glassProminent)
-                    .padding(.bottom, 8)
-                    
-                    Button(action: {
-                        gameType = .free
-                        mode = .freeSetup
-                        freePlayScore = 0
-                    }) {
-                        Text("Free Play")
-                            .font(.system(size: 16, weight: .heavy))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 15)
-                    }
-                    .foregroundColor(Color(hex: 0x873F0F))
-                    .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                         startPoint: .top,
-                                         endPoint: .bottom
-                                        ))
-                    .buttonStyle(.glassProminent)
-                }
-                .padding(.horizontal, 60)
-                
-                Spacer()
-                
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Records")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .textCase(.uppercase)
-                        .foregroundColor(Color(hex: 0xAC5F19))
-                        .padding(.horizontal)
-                    
-//                    VStack(alignment: .leading, spacing: 4) {
-//                        Text("Games Played: \(totalGamesPlayed)")
-//                            .font(.system(size: 16, weight: .bold, design: .rounded))
-//                            .foregroundColor(Color(hex: 0x873F0F))
-//                        Text("High Score: \(highScore)")
-//                            .font(.system(size: 16, weight: .bold, design: .rounded))
-//                            .foregroundColor(Color(hex: 0x873F0F))
-//                        if highScore > 0 {
-//                            Text("Time to High Score: \(Int(highScoreTime))s")
-//                                .font(.system(size: 16, weight: .bold, design: .rounded))
-//                                .foregroundColor(Color(hex: 0x873F0F))
-//                        }
-//                    }
-//                    .font(.system(size: 14, weight: .bold))
-//                    .padding()
-//                    .frame(maxWidth: .infinity, alignment: .leading)
-//                    .background(
-//                        RoundedRectangle(cornerRadius: 16)
-//                            .fill(Color(hex: 0xFFEBBC))
-//                            .shadow(color: Color(hex: 0x873F0F).opacity(0.2), radius: 3)
-//                    )
-                    
-                    ScrollView(.horizontal, showsIndicators: true) {
-                        HStack {
-                            VStack {
-                                Text("\(totalGamesPlayed)")
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                                    .foregroundColor(Color(hex: 0x873F0F))
-                                    .lineLimit(1)
-                                    .allowsTightening(true)
-                                Text("Games Played")
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundColor(Color(hex: 0x873F0F))
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color(hex: 0xFFEBBC))
-                                    .shadow(color: Color(hex: 0x873F0F).opacity(0.2), radius: 3)
-                            )
-                            VStack {
-                                Text("\(highScore)")
-                                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                                    .foregroundColor(Color(hex: 0x873F0F))
-                                    .lineLimit(1)
-                                    .allowsTightening(true)
-                                Text("High Score")
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundColor(Color(hex: 0x873F0F))
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color(hex: 0xFFEBBC))
-                                    .shadow(color: Color(hex: 0x873F0F).opacity(0.2), radius: 3)
-                            )
-                            if highScore > 0 {
-                                VStack {
-                                    Text("\(Int(highScoreTime))s")
-                                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                                        .foregroundColor(Color(hex: 0x873F0F))
-                                        .lineLimit(1)
-                                        .allowsTightening(true)
-                                    Text("Time To Beat")
-                                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                                        .foregroundColor(Color(hex: 0x873F0F))
-                                }
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(Color(hex: 0xFFEBBC))
-                                        .shadow(color: Color(hex: 0x873F0F).opacity(0.2), radius: 3)
-                                )
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-                }
-                
-                Spacer()
-            }
-        }
-        
-        
-    }
-
-    
     // MARK: - Free Play Setup
     var freeSetupView: some View {
         ZStack {
@@ -847,6 +604,7 @@ struct BlindSequence: View {
                                             )
                                             .accessibilityLabel("box \(idx + 1)")
                                             .onTapGesture { placeLetter(at: idx) }
+                                            .modifier(ShakeEffect(travelDistance: 10, shakesPerUnit: 3, animatableData: boxShakeValues.indices.contains(idx) ? boxShakeValues[idx] : 0))
                                     }
                                 }
                             }
@@ -924,152 +682,6 @@ struct BlindSequence: View {
             remaining -= take
         }
         return res
-    }
-    
-    // MARK: - Game Board
-    @available(iOS 26.0, *)
-    @ViewBuilder
-    var gameView2: some View {
-        NavigationStack {
-            ZStack {
-                // Background Layer
-                GeometryReader { proxy in
-                    let size = proxy.size
-                    Image("BlindSequence_Background")
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: size.width, height: size.height)
-                        .colorMultiply(Color(hex: 0xFFA500))
-                        .brightness(0.5)
-                }
-                .ignoresSafeArea()
-
-                VStack(spacing: 24) {
-                    // Top Toolbar Buttons
-                    HStack {
-                        Button {
-                            if gameType == .challenge {
-                                startChallenge()
-                            } else if gameType == .free {
-                                restartRound()
-                                freePlayScore = 0
-                                score = 0
-                            }
-                        } label: {
-                            Image(systemName: "arrow.counterclockwise")
-                                .font(.title2)
-                                .foregroundColor(Color(hex: 0x884110))
-                                .padding(4)
-                                .fontWeight(.semibold)
-                        }
-                        .padding(10)
-                        .buttonStyle(.glass)
-                        .shadow(color: Color(hex: 0xE18938).opacity(0.8), radius: 3)
-                        
-
-                        Spacer()
-
-                        Button {
-                            score = 0
-                            freePlayScore = 0
-                            mode = .mainMenu
-                        } label: {
-                            Image(systemName: "house.fill")
-                                .font(.title2)
-                                .foregroundColor(Color(hex: 0x884110))
-                                .padding(4)
-                                .fontWeight(.semibold)
-                        }
-                        .padding(10)
-                        .glassEffect()
-                        .shadow(color: Color(hex: 0xE18938).opacity(0.8), radius: 3)
-                    }
-                    .padding(.horizontal)
-
-                    // Glass Letter Box (Square)
-                    
-                    Text(showingRandomizing ? "?" : String(currentLetter ?? " "))
-                        .font(.system(size: 72, weight: .bold))
-                        .foregroundColor(Color(hex: 0x884110))
-                        .rotationEffect(.degrees(animateRotation ? 360 : 0))
-                        .animation(
-                            showingRandomizing
-                            ? .linear(duration: 0.7).repeatCount(1, autoreverses: false)
-                            : .default,
-                            value: animateRotation
-                        )
-                        .frame(width: 150, height: 150)
-                        .glassEffect(in: .rect(cornerRadius: 16))
-
-                    // Status (Score, Lives, Timer)
-                    HStack {
-                        if gameType == .challenge {
-                            Text("\(score)")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-
-                            Spacer()
-
-                            HStack(spacing: 12) {
-                                ForEach(0..<maxLives, id: \.self) { index in
-                                    HeartView(index: index,
-                                              lives: lives,
-                                              lostLifeIndex: lostLifeIndex,
-                                              newLifeAnimation: newLifeAnimation)
-                                }
-                            }
-
-                            Spacer()
-
-                            Text("\(Int(elapsedTime))s")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                        } else if gameType == .free {
-                            Text("\(freePlayScore)/\(currentBoxCount)")
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-
-                            Spacer()
-
-                            ProgressView(value: Float(freePlayScore), total: Float(currentBoxCount))
-                                .animation(.easeInOut(duration: 0.5), value: freePlayScore)
-                        }
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.white.opacity(0.7))
-                    )
-                    .padding(.horizontal)
-
-                    // Boxes Grid
-                    let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: min(currentBoxCount, 5))
-                    LazyVGrid(columns: columns, spacing: 10) {
-                        ForEach(0..<currentBoxCount, id: \.self) { idx in
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.clear.opacity(0.7), lineWidth: 2)
-                                    .glassEffect(.regular.interactive())
-                                    .frame(width: 70, height: 70)
-
-                                Text(boxes.indices.contains(idx) ? boxes[idx] : "")
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundColor(Color(hex: 0x884110))
-                                    .bold()
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture { placeLetter(at: idx) }
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    Spacer()
-                }
-                .padding(.top, 40)
-                .onAppear(perform: generateLetter)
-            }
-        }
     }
     
     // MARK: - Overlay Panel
@@ -1222,11 +834,13 @@ struct BlindSequence: View {
                 let count = boxCount(for: next)
                 currentBoxCount = count
                 boxes = Array(repeating: "", count: count)
+                boxShakeValues = Array(repeating: 0, count: currentBoxCount)
             }
         } else {
             // existing challenge behavior
             currentBoxCount += 1
             boxes = Array(repeating: "", count: currentBoxCount)
+            boxShakeValues = Array(repeating: 0, count: currentBoxCount)
         }
         
         pool = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -1253,6 +867,7 @@ struct BlindSequence: View {
         score = 0
         
         boxes = Array(repeating: "", count: currentBoxCount)
+        boxShakeValues = Array(repeating: 0, count: currentBoxCount)
         pool = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
         currentLetter = nil
         showingRandomizing = false
@@ -1271,6 +886,7 @@ struct BlindSequence: View {
         sessionScore = 0
         currentBoxCount = boxCount
         boxes = Array(repeating: "", count: boxCount)
+        boxShakeValues = Array(repeating: 0, count: boxCount)
         pool = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
         currentLetter = nil
         showingRandomizing = false
@@ -1359,7 +975,11 @@ struct BlindSequence: View {
             isLetterReady = false
             generateLetter()
         } else if boxes[idx].isEmpty {
-            loseLife()
+            if boxShakeValues.indices.contains(idx) {
+                withAnimation(.default) {
+                    boxShakeValues[idx] += 1   // increment to drive ShakeEffect
+                }
+            }
         }
     }
     

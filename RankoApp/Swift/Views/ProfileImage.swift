@@ -48,64 +48,114 @@ struct ImagePicker: UIViewControllerRepresentable {
     }
 }
 
+struct SampleProfiles: Identifiable {
+    let id: Int
+    let name: String
+    let bio: String
+    let interests: String
+    let image: String
+    let rankos: Int
+    let followers: Int
+    let following: Int
+}
+
 struct ProfileIconView: View {
+    @StateObject private var user_data = UserInformation.shared
     @EnvironmentObject private var imageService: ProfileImageService
     let diameter: CGFloat
+    @State var image: String = ""
     
     var body: some View {
         Group {
-            if imageService.isLoading {
-                SkeletonView(Circle())
+            if isSimulator {
+                AsyncImage(url: URL(string: "\(image)")) { phase in
+                    switch phase {
+                    case .empty:
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(UIColor.systemGray5))
+                            Image(systemName: "photo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 16, height: 16)
+                                .foregroundColor(.gray)
+                        }
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .failure:
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(UIColor.systemGray5))
+                            Image(systemName: "xmark.octagon")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 16, height: 16)
+                                .foregroundColor(.gray)
+                        }
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
             } else if let img = imageService.image {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
-            } else {
-                SkeletonView(Circle())
             }
         }
         .frame(width: diameter, height: diameter)
         .clipShape(Circle())
-        .overlay(
-            Circle()
-                .stroke(Color(hex: 0xFECF88), lineWidth: 3)
-        )
+        .onAppear {
+            guard isSimulator else { return }
+            
+            let sampleUsers: [SampleProfiles] = [
+                .init(id: 1, name: "YanksBest", bio: "", interests: "Football, Geography, Dogs", image: "https://static01.nyt.com/images/2021/10/02/sports/01kepner-mets-print/01kepner-mets-1-mediumSquareAt3X.jpg", rankos: 29, followers: 4970, following: 12934),
+                .init(id: 2, name: "louisa_pola", bio: "Kpopium 🧛", interests: "Cats, Food, Science", image: "https://i.scdn.co/image/ab67616100005174ba50ca67ffc3097f6ea1710a", rankos: 610, followers: 18519, following: 8),
+                .init(id: 3, name: "Juli", bio: "#1 marietta fan!", interests: "Planets, Music, Travel", image: "https://www.diggers.com.au/cdn/shop/products/marigold-red-marietta-seed-s641_b3aca1da-89a9-4737-b444-02939aeae5ab_2000x.jpg?v=1637122379", rankos: 1019, followers: 12, following: 6),
+                .init(id: 4, name: "micheltitan", bio: "", interests: "Coffee, Ice Cream, Shapes", image: "https://i1.sndcdn.com/artworks-eTJeeUgDQ63ptKy2-xRE9nQ-t500x500.jpg", rankos: 3, followers: 19, following: 82),
+                .init(id: 5, name: "anthony", bio: "Juice is 🔥", interests: "Baseball, Gym, Shows", image: "https://svgames.me/jpg/juice-wrld-1.jpg", rankos: 29, followers: 43, following: 18),
+                .init(id: 6, name: "Gracie", bio: "Bye tucker hated me", interests: "Trees, Movies, Vegetables", image: "https://images.wsj.net/im-31376774/?width=1280&height=1280", rankos: 107, followers: 1, following: 13)
+            ]
+            
+            let roll = Int.random(in: 1...6)
+            if let picked = sampleUsers.first(where: { $0.id == roll }) {
+                user_data.username = picked.name
+                user_data.userDescription = picked.bio
+                user_data.userInterests = picked.interests
+                self.image = picked.image
+                user_data.userStatsRankos = picked.rankos
+                user_data.userStatsFollowers = picked.followers
+                user_data.userStatsFollowing = picked.following
+            }
+        }
     }
+    
+    private let isSimulator: Bool = {
+        var isSim = false
+        #if targetEnvironment(simulator)
+        isSim = true
+        #endif
+        return isSim
+    }()
 }
 
 final class ProfileImageService: ObservableObject {
     @Published var image: UIImage?
     @Published var isLoading = false
-
+    
+    private var user_data = UserInformation.shared
     private var cancellables = Set<AnyCancellable>()
-    private let userData: UserInformation   // hold a normal reference, not @StateObject
-
-    // Convenience accessor
-    private var userID: String { userData.userID }
-
-    init(userData: UserInformation = .shared) {
-        self.userData = userData
-
-        // 1) Start from cache
-        self.image = loadCachedImage()
-
-        // 2) Re-download when UserDefaults changes (e.g., path/modified updated)
-        NotificationCenter.default
-            .publisher(for: UserDefaults.didChangeNotification)
-            .sink { [weak self] _ in
-                self?.downloadAndCache()
-            }
-            .store(in: &cancellables)
-
-        // 3) Initial download if needed
-        downloadAndCache()
+    
+    init(user_data: UserInformation = .shared) {
+        self.image = loadCachedImage() // start from cache only
     }
-
+    
     func upload(_ newImage: UIImage) {
         guard let data = newImage.jpegData(compressionQuality: 0.8) else { return }
         isLoading = true
-
-        let fileName = "\(userID).jpg"
+        
+        let fileName = "\(user_data.userID).jpg"
         
         let metadata = StorageMetadata()
         metadata.contentType = "image/jpeg"
@@ -114,77 +164,75 @@ final class ProfileImageService: ObservableObject {
             .reference()
             .child("profilePictures")
             .child(fileName)
-
+        
         storageRef.putData(data, metadata: metadata) { [weak self] _, err in
             guard let self = self else { return }
-
+            
             if let e = err {
                 print("Upload error:", e)
                 DispatchQueue.main.async { self.isLoading = false }
                 return
             }
-
+            
             // Update the stored path & timestamp so observers refresh
             DispatchQueue.main.async {
-                self.userData.userProfilePicturePath = fileName
-                self.userData.userProfilePictureModified = Self.timestampString()
+                self.user_data.userProfilePicturePath = fileName
+                self.user_data.userProfilePictureModified = Self.timestampString()
             }
         }
     }
-
-    private func downloadAndCache() {
-        let path = userData.userProfilePicturePath
-        guard !path.isEmpty else { return }
-
-        DispatchQueue.main.async { [weak self] in
-            self?.isLoading = true
-        }
-
-        let storageRef = Storage.storage()
+    
+    func refreshFromRemote(path: String? = nil) {
+        let pathToUse = path ?? user_data.userProfilePicturePath
+        guard !pathToUse.isEmpty else { return }
+        downloadAndCache(path: pathToUse)
+    }
+    
+    func reloadFromDisk() {
+        self.image = loadCachedImage()
+    }
+    
+    private func downloadAndCache(path: String) {
+        DispatchQueue.main.async { [weak self] in self?.isLoading = true }
+        
+        Storage.storage()
             .reference()
             .child("profilePictures")
             .child(path)
-
-        storageRef.getData(maxSize: 2 * 1024 * 1024) { [weak self] data, error in
-            guard let self = self else { return }
-
-            DispatchQueue.global(qos: .userInitiated).async {
-                var newImage: UIImage? = nil
-
-                if let d = data, let ui = UIImage(data: d) {
-                    newImage = ui
-                    do {
-                        try d.write(to: self.diskURL())
-                    } catch {
-                        print("Cache write failed:", error)
+            .getData(maxSize: Int64(2 * 1024 * 1024)) { [weak self] data, error in
+                guard let self = self else { return }
+                
+                DispatchQueue.global(qos: .userInitiated).async {
+                    var newImage: UIImage? = nil
+                    
+                    if let d = data, let ui = UIImage(data: d) {
+                        newImage = ui
+                        do { try d.write(to: self.diskURL()) }
+                        catch { print("Cache write failed:", error) }
+                    } else if let error = error {
+                        print("Download error:", error)
                     }
-                } else if let error = error {
-                    print("Download error:", error)
-                }
-
-                DispatchQueue.main.async {
-                    self.image = newImage
-                    self.isLoading = false
+                    
+                    DispatchQueue.main.async {
+                        self.image = newImage
+                        self.isLoading = false
+                    }
                 }
             }
-        }
     }
-
+    
     private func loadCachedImage() -> UIImage? {
-        let url = diskURL()
-        guard let d = try? Data(contentsOf: url),
+        guard let d = try? Data(contentsOf: diskURL()),
               let ui = UIImage(data: d) else { return nil }
         return ui
     }
-
-    // Now an instance method so it can use self.userID
+    
     private func diskURL() -> URL {
-        let filename = "cached_profile_image.jpg"
-        return FileManager.default
+        FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(filename)
+            .appendingPathComponent("cached_profile_image.jpg")
     }
-
+    
     private static func timestampString() -> String {
         let fmt = DateFormatter()
         fmt.locale = .init(identifier: "en_US_POSIX")

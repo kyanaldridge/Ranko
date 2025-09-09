@@ -20,30 +20,31 @@ struct ThreeRectanglesAnimation: View {
     
     var body: some View {
         VStack {
-            Spacer()
+            Spacer(minLength: 0)
             HStack(alignment: .bottom, spacing: rectangleSpacing) {
                 // Left Rectangle
                 RoundedRectangle(cornerRadius: rectangleCornerRadius)
                     .fill(LinearGradient(colors: [Color(hex: 0xFFDE5C), Color(hex: 0xFFC456)], startPoint: .leading, endPoint: .trailing))
                     .frame(width: rectangleWidth,
-                           height: animateLeft ? rectangleMaxHeight * 0.6 : rectangleMaxHeight * 0.1)
-                    .animation(.easeInOut(duration: 0.7), value: animateLeft)
+                           height: animateLeft ? rectangleMaxHeight * 0.65 : rectangleMaxHeight * 0.1)
+                    .animation(.easeInOut(duration: animationDuration), value: animateLeft)
                 
                 // Middle Rectangle
                 RoundedRectangle(cornerRadius: rectangleCornerRadius)
                     .fill(LinearGradient(colors: [Color(hex: 0xFFC355), Color(hex: 0xFFAB51)], startPoint: .leading, endPoint: .trailing))
                     .frame(width: rectangleWidth,
-                           height: animateMiddle ? rectangleMaxHeight * 0.9 : rectangleMaxHeight * 0.1)
-                    .animation(.easeInOut(duration: 0.7), value: animateMiddle)
+                           height: animateMiddle ? rectangleMaxHeight * 1 : rectangleMaxHeight * 0.1)
+                    .animation(.easeInOut(duration: animationDuration), value: animateMiddle)
                 
                 // Right Rectangle
                 RoundedRectangle(cornerRadius: rectangleCornerRadius)
                     .fill(LinearGradient(colors: [Color(hex: 0xFFAA51), Color(hex: 0xFF914D)], startPoint: .leading, endPoint: .trailing))
                     .frame(width: rectangleWidth,
-                           height: animateRight ? rectangleMaxHeight * 0.4 : rectangleMaxHeight * 0.1)
-                    .animation(.easeInOut(duration: 0.7), value: animateRight)
+                           height: animateRight ? rectangleMaxHeight * 0.5 : rectangleMaxHeight * 0.1)
+                    .animation(.easeInOut(duration: animationDuration), value: animateRight)
             }
         }
+        .frame(height: rectangleMaxHeight)
         .onAppear {
             startAnimation()
         }
@@ -51,7 +52,7 @@ struct ThreeRectanglesAnimation: View {
     
     private func startAnimation() {
         let delay = animationDuration
-        Timer.scheduledTimer(withTimeInterval: delay * 3, repeats: true) { _ in
+        Timer.scheduledTimer(withTimeInterval: delay * 3 - 0.4, repeats: true) { _ in
             animateSequence(delay: delay)
         }
         animateSequence(delay: delay)
@@ -67,18 +68,18 @@ struct ThreeRectanglesAnimation: View {
         }
         
         // Middle animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay - 0.4) {
             withAnimation { animateMiddle = true }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay * 2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay * 2 - 0.4) {
             withAnimation { animateMiddle = false }
         }
         
         // Right animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay * 2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay * 2 - 0.8) {
             withAnimation { animateRight = true }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay * 3 - 0.1) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay * 3 - 1) {
             withAnimation { animateRight = false }
         }
     }
@@ -86,9 +87,20 @@ struct ThreeRectanglesAnimation: View {
 
 struct ThreeRectanglesAnimation_Previews: PreviewProvider {
     static var previews: some View {
-        ThreeRectanglesAnimation(rectangleWidth: 80, rectangleMaxHeight: 200, rectangleSpacing: 10, rectangleCornerRadius: 10, animationDuration: 0.7)
-            .frame(height: 250)
-            .padding()
+        ScrollView {
+            VStack(spacing: 50) {
+                RoundedRectangle(cornerRadius: 10)
+                    .frame(width: 380, height: 400)
+                ThreeRectanglesAnimation(rectangleWidth: 80, rectangleMaxHeight: 250, rectangleSpacing: 10, rectangleCornerRadius: 10, animationDuration: 0.7)
+                    .frame(height: 250)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .frame(width: 380, height: 260)
+                    )
+                ThreeRectanglesAnimation(rectangleWidth: 4, rectangleMaxHeight: 12, rectangleSpacing: 1, rectangleCornerRadius: 1, animationDuration: 0.7)
+                    .frame(height: 18)
+            }
+        }
     }
 }
 

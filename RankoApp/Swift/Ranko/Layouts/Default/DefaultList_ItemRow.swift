@@ -14,10 +14,22 @@ struct DefaultListItemRow: View {
     private var badge: some View {
         Group {
             switch item.rank {
-            case 1: Image(systemName: "1.circle.fill").foregroundColor(Color(red: 1, green: 0.65, blue: 0)).font(.body).padding(2)
-            case 2: Image(systemName: "2.circle.fill").foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698)).font(.body).padding(2)
-            case 3: Image(systemName: "3.circle.fill").foregroundColor(Color(red: 0.56, green: 0.33, blue: 0)).font(.body).padding(2)
-            default: Image(systemName: "\(item.rank).circle.fill").foregroundColor(Color(hex: 0x925611)).font(.body).padding(2)
+            case 1: Image(systemName: "1.circle.fill")
+                    .foregroundColor(Color(red: 1, green: 0.65, blue: 0))
+                    .font(.system(size: 17, weight: .black, design: .default))
+                    .padding(2)
+            case 2: Image(systemName: "2.circle.fill")
+                    .foregroundColor(Color(red: 0.635, green: 0.7, blue: 0.698))
+                    .font(.system(size: 17, weight: .black, design: .default))
+                    .padding(2)
+            case 3: Image(systemName: "3.circle.fill")
+                    .foregroundColor(Color(red: 0.56, green: 0.33, blue: 0))
+                    .font(.system(size: 17, weight: .black, design: .default))
+                    .padding(2)
+            default: Image(systemName: "\(item.rank).circle.fill")
+                    .foregroundColor(Color(hex: 0x514343))
+                    .font(.system(size: 17, weight: .black, design: .default))
+                    .padding(2)
             }
         }
         .background(Circle().fill(Color(hex: 0xfff9ee)))
@@ -68,11 +80,11 @@ struct DefaultListItemRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.itemName)
-                    .font(.system(size: 18, weight: .bold, design: .default))
-                    .foregroundColor(Color(hex: 0x6D400F))
+                    .font(.custom("Nunito-Black", size: 18))
+                    .foregroundStyle(Color(hex: 0x514343))
                 Text(item.itemDescription)
-                    .font(.system(size: 10, weight: .medium, design: .default))
-                    .foregroundColor(Color(hex: 0x925611))
+                    .font(.custom("Nunito-Black", size: 12))
+                    .foregroundStyle(Color(hex: 0x514343))
             }
 
             Spacer()
@@ -80,9 +92,8 @@ struct DefaultListItemRow: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(hex: 0xfff9ee))
-                .stroke(Color(hex: 0xFFEBC2), lineWidth: 2)
-                .shadow(color: Color(hex: 0xFFEBC2), radius: 12)
+                .fill(Color(hex: 0xFFFFFF))
+                .shadow(color: Color(hex: 0x000000).opacity(0.25), radius: 7)
         )
         .padding(.horizontal)
     }

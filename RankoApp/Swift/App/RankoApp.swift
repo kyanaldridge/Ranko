@@ -89,7 +89,7 @@ struct LaunchScreenView: View {
     @State private var scale: CGFloat = 1  // Initial scale for zoom-in effect
     @State private var opacity: Double = 1  // Initial opacity for fade-out effect
     @State private var showMainContent = false  // Flag to control when to show main content
-    let animationDuration: Double = 0.4
+    let animationDuration: Double = 0.9
     let delay: Double = 3  // Time before the zoom and fade effect starts
 
     var body: some View {

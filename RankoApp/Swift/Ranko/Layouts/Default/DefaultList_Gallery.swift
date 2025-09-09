@@ -24,14 +24,14 @@ struct DefaultListIndividualGallery: View {
             overlappingImages
             VStack(alignment: .leading, spacing: 4) {
                 Text(listData.listName)
-                    .font(.system(size: 15, weight: .heavy))
-                    .foregroundColor(Color(hex: 0x7E5F46))
+                    .font(.custom("Nunito-Black", size: 16))
+                    .foregroundColor(Color(hex: 0x514343))
                     .multilineTextAlignment(.leading)
                 HStack(spacing: 6) {
                     FeaturedCategoryBadge(text: listData.category)
                     Text("• \(timeAgo(from: String(listData.dateTime)))")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(Color(hex: 0x7E5F46))
+                        .font(.custom("Nunito-Black", size: 9))
+                        .foregroundColor(Color(hex: 0x514343))
                 }
             }
             Spacer()
@@ -40,8 +40,8 @@ struct DefaultListIndividualGallery: View {
                     onUnpin?()
                 } label: {
                     Image(systemName: "pin.fill")
-                        .font(.system(size: 12, weight: .heavy))
-                        .foregroundColor(Color(hex: 0x7E5F46))
+                        .font(.custom("Nunito-Black", size: 12))
+                        .foregroundColor(Color(hex: 0x514343))
                         .padding(.trailing, 6)
                 }
             }
@@ -50,7 +50,7 @@ struct DefaultListIndividualGallery: View {
         .padding(.horizontal, 4)
         // white background
         .background(.clear)
-        .padding(.vertical, 4)
+        .padding(.vertical, 1)
     }
 
     private var overlappingImages: some View {
@@ -67,8 +67,8 @@ struct DefaultListIndividualGallery: View {
                 }
                 .frame(width: 40, height: 40)
                 .clipShape(Circle())
-                .overlay(Circle().stroke(LinearGradient(colors: [Color(hex: 0xFFFAEF), Color(hex: 0xFEF6EA)], startPoint: .top, endPoint: .bottom), lineWidth: 2))
-                .background(Circle().fill(LinearGradient(colors: [Color(hex: 0xFFFAEF), Color(hex: 0xFEF6EA)], startPoint: .top, endPoint: .bottom)))
+                .overlay(Circle().stroke(Color(hex: 0xFFFFFF), lineWidth: 2))
+                .background(Circle().fill(Color(hex: 0xFFFFFF)))
             }
         }
     }
@@ -109,18 +109,19 @@ struct DefaultListIndividualGallery: View {
 #Preview {
     VStack {
         Spacer()
-        DefaultListIndividualGallery(
-            listData: RankoList(
-                id: "",
-                listName: "Top 10 Albums of the 1970s to 2010s",
-                listDescription: "my fav albums",
-                type: "default",
-                category: "Albums",
-                isPrivate: "false",
-                userCreator: "",
-                dateTime: "20230718094500",
-                items: [
-                RankoItem(id: "", rank: 5, votes: 23, record:
+        Button {} label: {
+            DefaultListIndividualGallery(
+                listData: RankoList(
+                    id: "",
+                    listName: "Top 10 Albums of the 1970s to 2010s",
+                    listDescription: "my fav albums",
+                    type: "default",
+                    category: "Albums",
+                    isPrivate: "false",
+                    userCreator: "",
+                    dateTime: "20230718094500",
+                    items: [
+                        RankoItem(id: "", rank: 5, votes: 23, record:
                                     RankoRecord(
                                         objectID: "",
                                         ItemName: "Madvillainy",
@@ -128,8 +129,8 @@ struct DefaultListIndividualGallery: View {
                                         ItemCategory: "",
                                         ItemImage: "https://upload.wikimedia.org/wikipedia/en/5/5e/Madvillainy_cover.png"
                                     )
-                                ),
-                RankoItem(id: "", rank: 4, votes: 19, record:
+                                 ),
+                        RankoItem(id: "", rank: 4, votes: 19, record:
                                     RankoRecord(
                                         objectID: "",
                                         ItemName: "Wish You Were Here",
@@ -137,8 +138,8 @@ struct DefaultListIndividualGallery: View {
                                         ItemCategory: "",
                                         ItemImage: "https://www.emp.co.uk/dw/image/v2/BBQV_PRD/on/demandware.static/-/Sites-master-emp/default/dw74154f22/images/4/0/6/0/406025.jpg?sw=1000&sh=800&sm=fit&sfrm=png"
                                     )
-                                ),
-                RankoItem(id: "", rank: 3, votes: 26, record:
+                                 ),
+                        RankoItem(id: "", rank: 3, votes: 26, record:
                                     RankoRecord(
                                         objectID: "",
                                         ItemName: "In Rainbows",
@@ -146,8 +147,8 @@ struct DefaultListIndividualGallery: View {
                                         ItemCategory: "",
                                         ItemImage: "https://m.media-amazon.com/images/I/A1MwaIeBpwL._UF894,1000_QL80_.jpg"
                                     )
-                                ),
-                RankoItem(id: "", rank: 2, votes: 26, record:
+                                 ),
+                        RankoItem(id: "", rank: 2, votes: 26, record:
                                     RankoRecord(
                                         objectID: "",
                                         ItemName: "OK Computer",
@@ -155,8 +156,8 @@ struct DefaultListIndividualGallery: View {
                                         ItemCategory: "",
                                         ItemImage: "https://upload.wikimedia.org/wikipedia/en/thumb/b/ba/Radioheadokcomputer.png/250px-Radioheadokcomputer.png"
                                     )
-                                ),
-                RankoItem(id: "", rank: 1, votes: 26, record:
+                                 ),
+                        RankoItem(id: "", rank: 1, votes: 26, record:
                                     RankoRecord(
                                         objectID: "",
                                         ItemName: "To Pimp a Butterfly",
@@ -164,21 +165,17 @@ struct DefaultListIndividualGallery: View {
                                         ItemCategory: "",
                                         ItemImage: "https://upload.wikimedia.org/wikipedia/en/f/f6/Kendrick_Lamar_-_To_Pimp_a_Butterfly.png"
                                     )
-                                )
-                ]
-            ), type: "", onUnpin: {}
-        )
+                                 )
+                    ]
+                ), type: "", onUnpin: {}
+            )
+        }
+        .foregroundColor(Color(hex: 0xFF9864))
+        .tint(Color(hex: 0xFFFFFF))
+        .buttonStyle(.glassProminent)
         Spacer()
     }
     .environmentObject(ProfileImageService())
-    .background(
-        RoundedRectangle(cornerRadius: 25)
-            .fill(
-                LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                               startPoint: .top,
-                               endPoint: .bottom
-                              )
-            )
-    )
+    .background(Color(hex: 0xFFFFFF))
     .ignoresSafeArea()
 }

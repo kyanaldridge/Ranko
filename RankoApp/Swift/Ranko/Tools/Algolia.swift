@@ -9,6 +9,12 @@ import SwiftUI
 import InstantSearchSwiftUI
 import InstantSearchCore
 
+typealias AClient    = AlgoliaSearchClient.SearchClient
+typealias AIndex     = AlgoliaSearchClient.Index
+typealias AIndexName = AlgoliaSearchClient.IndexName
+typealias AQuery     = AlgoliaSearchClient.Query
+typealias AJSON      = AlgoliaSearchClient.JSON
+
 class AlgoliaAddRecords<T: Decodable> {
     // MARK: - Editable Variables -
     private let AlgoliaIndex: String
@@ -18,7 +24,7 @@ class AlgoliaAddRecords<T: Decodable> {
     
     // MARK: - Important Variables -
     private var client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID), apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
-    private let index: Index
+    private let index: AIndex
 
 
     init(
