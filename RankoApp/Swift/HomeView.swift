@@ -1035,30 +1035,21 @@ struct HomeListsDisplay: View {
                     .foregroundColor(.red)
                     .padding()
             } else {
-                ForEach($lists, id: \.id) { $list in
-                    NavigationLink {
-                        Group {
-                            if list.type == "default" {
-                                DefaultListVote(listID: list.id, creatorID: list.userCreator)
-                                    .navigationTransition(.zoom(sourceID: "zoom", in: transition))
-                            } else {
-                                GroupListSpectate(listID: list.id, creatorID: list.userCreator)
-                                    .navigationTransition(.zoom(sourceID: "zoom", in: transition))
-                            }
+                ForEach(lists, id: \.id) { list in
+                    if list.type == "group" {
+                        GroupListHomeView(listData: list, showToastHelper: { msg in
+                            showToastHelper(msg)
+                        })
+                        .onTapGesture {
+                            selectedList = list
                         }
-                    } label: {
-                        Group {
-                            if list.type == "default" {
-                                DefaultListHomeView(listData: list, onCommentTap: { msg in
-                                    showToastHelper(msg)
-                                })
-                                .matchedTransitionSource(id: "zoom", in: transition)
-                            } else {
-                                GroupListHomeView(listData: list, showToastHelper: { msg in
-                                    showToastHelper(msg)
-                                })
-                                .matchedTransitionSource(id: "zoom", in: transition)
-                            }
+                    } else {
+                        DefaultListHomeView(listData: list, onCommentTap: { msg in
+                            showToastHelper(msg)
+                        }
+                        )
+                        .onTapGesture {
+                            selectedList = list
                         }
                     }
                 }
@@ -1082,7 +1073,7 @@ struct HomeListsDisplay: View {
     private func loadAllData(attempt: Int = 1) {
         isLoading = true
         errorMessage = nil
-
+        
         let rankoDataRef = Database.database().reference().child("RankoData")
         
         rankoDataRef.observeSingleEvent(of: .value) { snapshot,anything  in
@@ -1091,9 +1082,9 @@ struct HomeListsDisplay: View {
                 self.isLoading = false
                 return
             }
-
+            
             var fetchedLists: [RankoList] = []
-
+            
             for (objectID, listData) in value {
                 guard let listDict = listData as? [String: Any],
                       let name = listDict["RankoName"] as? String,
@@ -1106,17 +1097,17 @@ struct HomeListsDisplay: View {
                       let itemsDict = listDict["RankoItems"] as? [String: [String: Any]] else {
                     continue
                 }
-
+                
                 let items: [RankoItem] = itemsDict.compactMap { itemID, item in
                     guard let itemName = item["ItemName"] as? String,
                           let itemDesc = item["ItemDescription"] as? String,
                           let itemImage = item["ItemImage"] as? String else {
                         return nil
                     }
-
+                    
                     let rank = item["ItemRank"] as? Int ?? 0
                     let votes = item["ItemVotes"] as? Int ?? 0
-
+                    
                     let record = RankoRecord(
                         objectID: itemID,
                         ItemName: itemName,
@@ -1124,10 +1115,10 @@ struct HomeListsDisplay: View {
                         ItemCategory: category,
                         ItemImage: itemImage
                     )
-
+                    
                     return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
                 }
-
+                
                 let rankoList = RankoList(
                     id: objectID,
                     listName: name,
@@ -1139,10 +1130,10 @@ struct HomeListsDisplay: View {
                     dateTime: dateTimeStr,
                     items: items
                 )
-
+                
                 fetchedLists.append(rankoList)
             }
-
+            
             DispatchQueue.main.async {
                 self.lists = fetchedLists
                 self.isLoading = false
@@ -1154,7 +1145,7 @@ struct HomeListsDisplay: View {
 struct GroupListHomeView: View {
     let listData: RankoList
     var showToastHelper: (String) -> Void
-
+    
     private var adjustedItems: [RankoItem] {
         listData.items.map { item in
             var newItem = item
@@ -1165,7 +1156,7 @@ struct GroupListHomeView: View {
             return newItem
         }
     }
-
+    
     var body: some View {
         DefaultListHomeView(listData: RankoList(
             id: listData.id,
@@ -1179,9 +1170,10 @@ struct GroupListHomeView: View {
             items: adjustedItems
         ), onCommentTap: { msg in
             showToastHelper(msg)
-          })
+        })
     }
 }
+
 
 
 

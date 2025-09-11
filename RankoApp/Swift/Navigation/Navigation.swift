@@ -301,6 +301,7 @@ struct CreateRankoButtons: Identifiable {
     let shakeVariable: String
     let icon: String
     let iconFrame: CGFloat
+    var enabled: Bool
 }
 
 struct CurvedTabBarView: View {
@@ -330,15 +331,122 @@ struct CurvedTabBarView: View {
     @State private var categoryShake: CGFloat = 0
     @State private var layoutShake: CGFloat = 0
     @State private var selectedPath: [String] = []
+    @State private var privacyVisible: Bool = true        // drive quick fade out/in
+    @State private var privacyAnimKey = UUID()
+    @State private var buttonsWidth: CGFloat = 0
+    @State private var sheetWidth: CGFloat = 0
+    @State private var tutorialMode: Bool = false
+    @State private var tutorialIndex: Int = 0
+
+    /// One step = a description + a relative rect (0...1 in screen coords) + corner radius
+    // MARK: - Spotlight model in ABSOLUTE POINTS (no ratios)
+    private struct SpotlightStep: Equatable {
+        var description: String
+        var rect: CGRect
+        var cornerRadius: CGFloat
+    }
+
+    // Easy-to-edit map: step -> spec
+    // x/y are from the TOP-LEFT of the screen/container (in points).
+    // width/height are literal points. No relation to screen size.
+    private var tutorialSteps: [Int: SpotlightStep] {
+        // convert once
+        let screenW = CGFloat(user_data.deviceWidth)
+        let screenH = CGFloat(user_data.deviceHeight)
+        let kbdH    = CGFloat(user_data.deviceKeyboardHeight)
+        
+        let buttonsX = CGFloat((screenW - 279) / 2)
+        let buttonsPrivacyY = CGFloat(screenH - bottomSafeInset - kbdH - 300 + 10 + 35 - 2) // SCREEN HEIGHT - BOTTOM SAFE INSET - KEYBOARD HEIGHT - HEIGHT ABOVE KEYBOARD + TOP INDICATOR + BUTTONS - PADDING
+        
+        let nameY = CGFloat(screenH - bottomSafeInset - kbdH - 300 + 10 + 35 + 10 + 43.2 - 2) // SCREEN HEIGHT - BOTTOM SAFE INSET - KEYBOARD HEIGHT - HEIGHT ABOVE KEYBOARD + TOP INDICATOR + BUTTONS + PADDING + NAME - PADDING
+        let nameW = CGFloat(screenW - 28)
+        
+        let descriptionY = CGFloat(screenH - bottomSafeInset - kbdH - 300 + 10 + 35 + 10 + 40 - 2) // SCREEN HEIGHT - BOTTOM SAFE INSET - KEYBOARD HEIGHT - HEIGHT ABOVE KEYBOARD + TOP INDICATOR + BUTTONS + PADDING + NAME - PADDING
+        let descriptionW = CGFloat(screenW - 20)
+        
+        let categoryLayoutY = CGFloat(screenH - bottomSafeInset - kbdH - 300 + 10 + 35 + 10 + 40 - 10) // SCREEN HEIGHT - BOTTOM SAFE INSET - KEYBOARD HEIGHT - HEIGHT ABOVE KEYBOARD + TOP INDICATOR + BUTTONS + PADDING + NAME - PADDING
+        let categoryW = CGFloat(screenW - 20)
+        
+        let layoutW = CGFloat(screenW - 40)
+        
+        let privacyX = CGFloat(((screenW - 279) / 2) + 230)
+        
+        let finishX = CGFloat(screenW / 2)
+        let finishY = CGFloat(screenH - bottomSafeInset)
+        
+        return [
+            0: .init(
+                description: "this row lets you jump between Name, Description, Category and Layout.",
+                rect: CGRect(x: buttonsX, y: buttonsPrivacyY, width: 279, height: 39),
+                cornerRadius: 12
+            ),
+            1: .init(
+                description: "give your ranko a clear, memorable name.",
+                rect: CGRect(x: 14, y: nameY, width: nameW, height: 51.2),
+                cornerRadius: 12
+            ),
+            2: .init(
+                description: "add a short description for extra context (optional).",
+                rect: CGRect(x: 10, y: descriptionY, width: descriptionW, height: 90),
+                cornerRadius: 12
+            ),
+            3: .init(
+                description: "pick a category. tap a chip to drill into subcategories.",
+                rect: CGRect(x: 10, y: categoryLayoutY, width: categoryW, height: 300),
+                cornerRadius: 12
+            ),
+            4: .init(
+                description: "toggle privacy and then hit Create when you’re ready.",
+                rect: CGRect(x: 20, y: categoryLayoutY, width: layoutW, height: 200),
+                cornerRadius: 16
+            ),
+            5: .init(
+                description: "toggle privacy and then hit Create when you’re ready.",
+                rect: CGRect(x: privacyX, y: buttonsPrivacyY, width: 50, height: 39),
+                cornerRadius: 16
+            ),
+            6: .init(
+                description: "any issues please contact me in the feedback page in Settings, to get started click FINISH.",
+                rect: CGRect(x: finishX, y: finishY, width: 0, height: 0),
+                cornerRadius: 16
+            )
+        ]
+    }
+
+    // MARK: - Helper now just rounds to WHOLE POINTS and clamps inside the container
+    private func absRect(_ absoluteRect: CGRect, in containerSize: CGSize) -> CGRect {
+        // round x, y, w, h to whole points
+        var r = CGRect(
+            x: absoluteRect.origin.x.rounded(),
+            y: absoluteRect.origin.y.rounded(),
+            width: absoluteRect.size.width.rounded(),
+            height: absoluteRect.size.height.rounded()
+        )
+
+        // clamp size to container
+        r.size.width = min(max(0, r.size.width), containerSize.width)
+        r.size.height = min(max(0, r.size.height), containerSize.height)
+
+        // clamp origin so the rect stays fully on-screen
+        r.origin.x = min(max(0, r.origin.x), max(0, containerSize.width - r.size.width))
+        r.origin.y = min(max(0, r.origin.y), max(0, containerSize.height - r.size.height))
+
+        return r
+    }
     
-    let buttons: [CreateRankoButtons] = [
-        .init(name: "Help", shakeVariable: "", icon: "questionmark", iconFrame: 14),
-        .init(name: "Name", shakeVariable: "rankoNameShake", icon: "textformat", iconFrame: 20),
-        .init(name: "Description", shakeVariable: "", icon: "text.word.spacing", iconFrame: 18),
-        .init(name: "Category", shakeVariable: "categoryShake", icon: "tag.fill", iconFrame: 16),
-        .init(name: "Privacy", shakeVariable: "", icon: "lock.fill", iconFrame: 16),
-        .init(name: "Layout", shakeVariable: "layoutShake", icon: "square.grid.2x2.fill", iconFrame: 16),
+    @State private var buttons: [CreateRankoButtons] = [
+        .init(name: "Help",        shakeVariable: "",               icon: "questionmark",        iconFrame: 14, enabled: true),
+        .init(name: "Name",        shakeVariable: "rankoNameShake", icon: "textformat",          iconFrame: 20, enabled: true),
+        .init(name: "Description", shakeVariable: "",               icon: "text.word.spacing",   iconFrame: 18, enabled: true),
+        .init(name: "Category",    shakeVariable: "categoryShake",  icon: "tag.fill",            iconFrame: 16, enabled: false),
+        .init(name: "Layout",      shakeVariable: "layoutShake",    icon: "square.grid.2x2.fill",iconFrame: 16, enabled: false)
     ]
+    
+    private func setEnabled(_ name: String, _ value: Bool) {
+        if let i = buttons.firstIndex(where: { $0.name == name }) {
+            buttons[i].enabled = value
+        }
+    }
     
     private func ancestorsPath(to id: String) -> [String] {
         var path: [String] = [id]
@@ -384,11 +492,10 @@ struct CurvedTabBarView: View {
     
     private func sheetHeightAboveKeyboard(for currentTab: String) -> CGFloat {
         switch currentTab {
-        case "Help": return 140
+        case "Help": return 300
         case "Name": return 158.2
         case "Description": return 192.6
         case "Category": return 300
-        case "Privacy": return 125
         case "Layout": return 300
         default: return 125
         }
@@ -397,6 +504,29 @@ struct CurvedTabBarView: View {
     private var sheetHeightTarget: CGFloat {
         CGFloat(user_data.deviceKeyboardHeight) + bottomSafeInset
         + sheetHeightAboveKeyboard(for: currentTab)
+    }
+    
+    private func togglePrivacyAnimated() {
+        // haptic
+        let impact = UIImpactFeedbackGenerator(style: .rigid)
+        impact.prepare()
+
+        // 1) fast fade out current icon + text
+        withAnimation(.easeOut(duration: 0.08)) {
+            privacyVisible = false
+        }
+
+        // 2) swap the state while invisible, then spring back in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) {
+            rankoPrivacy.toggle()
+            privacyAnimKey = UUID()                   // new identity → spring anim will re-run
+
+            impact.impactOccurred(intensity: 1.0)     // haptic on reveal
+
+            withAnimation(.interpolatingSpring(stiffness: 320, damping: 22)) {
+                privacyVisible = true                 // springy fade-in
+            }
+        }
     }
 
     var body: some View {
@@ -472,12 +602,14 @@ struct CurvedTabBarView: View {
                     Button {
                         withAnimation {
                             showCreateSheet = true
+                            currentTab = "Name"
+                            rankoNameFocus = true
                             rankoName = ""
                             rankoDescription = ""
                             localSelection = nil
                             expandedParentID = nil
                             expandedSubID = nil
-                            currentTab = "Help"
+                            selectedPath = []
                         }
                     } label: {
                         HStack {
@@ -537,7 +669,7 @@ struct CurvedTabBarView: View {
                     
                     // SHEET
                     VStack(spacing: 0) {
-                        // MARK: - Top Indicator - 30pt
+                        // MARK: - Top Indicator - 35pt
                         ZStack {
                             HStack {
                                 let fieldH: CGFloat = 40
@@ -554,8 +686,32 @@ struct CurvedTabBarView: View {
                                 }
                                 .frame(height: fieldH)
                                 .onTapGesture {
-                                    withAnimation {
-                                        showCreateSheet = false
+                                    if currentTab == "Help" {
+                                        withAnimation {
+                                            showCreateSheet = false
+                                        }
+                                    } else if currentTab == "Name" {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                            withAnimation {
+                                                showCreateSheet = false
+                                            }
+                                        }
+                                        rankoNameFocus = false
+                                    } else if currentTab == "Description" {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                            withAnimation {
+                                                showCreateSheet = false
+                                            }
+                                        }
+                                        descriptionFocus = false
+                                    } else if currentTab == "Category" {
+                                        withAnimation {
+                                            showCreateSheet = false
+                                        }
+                                    } else if currentTab == "Layout" {
+                                        withAnimation {
+                                            showCreateSheet = false
+                                        }
                                     }
                                 }
                                 Spacer(minLength: 0)
@@ -606,24 +762,6 @@ struct CurvedTabBarView: View {
                                             withAnimation { rankoNameShake += 1 }
                                         } else {
                                             withAnimation {
-                                                currentTab = "Privacy"
-                                            }
-                                        }
-                                    } else if currentTab == "Privacy" {
-                                        if localSelection == nil && rankoName.isEmpty {
-                                            print("FUCK NO, NAME & CATEGORY IS EMPTY")
-                                            withAnimation {
-                                                rankoNameShake += 1
-                                                categoryShake += 1
-                                            }
-                                        } else if localSelection == nil {
-                                            print("FUCK NO, CATEGORY IS EMPTY")
-                                            withAnimation { categoryShake += 1 }
-                                        } else if rankoName.isEmpty {
-                                            print("FUCK NO, NAME IS EMPTY")
-                                            withAnimation { rankoNameShake += 1 }
-                                        } else {
-                                            withAnimation {
                                                 currentTab = "Layout"
                                             }
                                         }
@@ -645,14 +783,35 @@ struct CurvedTabBarView: View {
                             .frame(height: 30)
                         }
                         .frame(height: 35)
-                        
                         // MARK: - Padding - 10pt
                         Rectangle().fill(.clear).frame(height: 10)
                         
                         // MARK: - Buttons - 35pt
-                        HStack(spacing: 35) {
+                        HStack(spacing: 15) {
                             ForEach(buttons) { button in
+                                let enabled: Bool = {
+                                    switch button.name {
+                                    case "Category": return !rankoName.isEmpty
+                                    case "Layout":   return !rankoName.isEmpty && !selectedPath.isEmpty
+                                    default:         return true
+                                    }
+                                }()
+
                                 Button {
+                                    guard enabled else {
+                                        // shake / feedback
+                                        if (button.name == "Category" && rankoName.isEmpty) || (button.name == "Layout" && rankoName.isEmpty) {
+                                            withAnimation {
+                                                rankoNameShake += 1
+                                            }
+                                        }
+                                        if button.name == "Layout"   && selectedPath.isEmpty {
+                                            withAnimation {
+                                                categoryShake += 1
+                                            }
+                                        }
+                                        return
+                                    }
                                     print("\(button.name) is opened")
                                     currentTab = button.name
                                     rankoNameFocus   = (button.name == "Name")
@@ -665,7 +824,9 @@ struct CurvedTabBarView: View {
                                         .frame(width: button.iconFrame, height: button.iconFrame)
                                         .fontWeight(.black)
                                         .foregroundStyle(
-                                            currentTab == button.name ? Color(hex: 0x000000) : Color(hex: 0xFFFFFF)
+                                            currentTab == button.name
+                                            ? Color(hex: 0x000000)
+                                            : (enabled ? Color(hex: 0xFFFFFF) : Color(hex: 0xFFFFFF).opacity(0.3))
                                         )
                                         .background(
                                             RoundedRectangle(cornerRadius: 10)
@@ -674,74 +835,20 @@ struct CurvedTabBarView: View {
                                                 .frame(width: 30, height: 30)
                                         )
                                 }
+                                .frame(width: 30, height: 30)
                                 .buttonStyle(.plain)
                                 .modifier(ShakeEffect(travelDistance: 4, shakesPerUnit: 3, animatableData: shakeValue(for: button.shakeVariable)))
                             }
-                            Button {
-                                print("Ranko is \(rankoPrivacy ? "Private" : "Public")")
-                                withAnimation {
-                                    rankoPrivacy.toggle()
-                                }
-                            } label: {
-                                Image(systemName: rankoPrivacy ? "lock.fill" : "lock.open.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 18, height: 18)
-                                    .fontWeight(.black)
-                                    .foregroundStyle(Color(hex: 0xFFFFFF))
-                                    .contentTransition(.symbolEffect(.replace))
-                            }
-                            .buttonStyle(.plain)
+                            PrivacyLikeButton(isPrivate: $rankoPrivacy)
+                                .frame(width: 30, height: 30)
+                                .padding(.horizontal, 10)
                         }
                         .frame(height: 35)
-                        .padding(.horizontal)
-                        
                         // MARK: - Padding - 20pt
                         Rectangle().fill(.clear).frame(height: 20)
-                        
                         // MARK: - Content area swaps by tab
                         Group {
-                            if currentTab == "Help" {
-                                VStack {
-                                    Spacer(minLength: 0)
-                                    Text("Welcome to RankoCreate")
-                                        .font(.custom("Nunito-Black", size: 21))
-                                        .foregroundColor(.white)
-                                    Spacer(minLength: 0)
-                                    Text("Let's create your new Ranko. Before we get started, there's just a few things to set up")
-                                        .font(.custom("Nunito-Bold", size: 16))
-                                        .foregroundColor(.white)
-                                        .multilineTextAlignment(.center)
-                                    Spacer(minLength: 0)
-                                    Text("If the keyboard is obstructing your view at any time or any other issues, please hold the 'X' button to the left for 3 seconds")
-                                        .font(.custom("Nunito-Bold", size: 16))
-                                        .foregroundColor(.white)
-                                        .multilineTextAlignment(.center)
-                                    Spacer(minLength: 0)
-                                    Text("Click Get Started to begin")
-                                        .font(.custom("Nunito-Bold", size: 16))
-                                        .foregroundColor(.white)
-                                        .multilineTextAlignment(.center)
-                                    Spacer(minLength: 0)
-                                    Spacer(minLength: 0)
-                                    VStack {
-                                        Text("Get Started")
-                                            .font(.custom("Nunito-Black", size: 28))
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 20)
-                                            .padding(.vertical, 8)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0x1B2024)), in: RoundedRectangle(cornerRadius: 20))
-                                            .frame(height: 40)
-                                    }
-                                    .onTapGesture {
-                                        withAnimation {
-                                            currentTab = "Name"
-                                        }
-                                    }
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(.horizontal, 30)
-                            }
+                            if currentTab == "Help" {}
                             if currentTab == "Name" {
                                 // MARK: - Ranko Name Field - 43.2pt
                                 
@@ -772,7 +879,7 @@ struct CurvedTabBarView: View {
                                     .colorScheme(.dark)
                                 }
                                 .frame(height: fieldH)
-                                .padding(.horizontal)
+                                .padding(.horizontal, 20)
                                 // nice appear/disappear
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                                 
@@ -809,9 +916,6 @@ struct CurvedTabBarView: View {
                                     .textFieldStyle(.plain)
                                     .colorScheme(.dark)
                                     .multilineTextAlignment(.leading)
-                                    .onSubmit {
-                                        
-                                    }
                                     .lineLimit(3)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                                 }
@@ -840,11 +944,25 @@ struct CurvedTabBarView: View {
                                     .task { repo.loadOnce() }
                                     .padding(.horizontal, 16)
                                 }
+                                .padding(.horizontal, 10)
+                                .onChange(of: localSelection) { _, _ in
+                                    print("Change to Local Selection: \(String(describing: localSelection))")
+                                }
+                                .onChange(of: expandedParentID) { _, _ in
+                                    print("Change to Expanded Parent ID: \(String(describing: expandedParentID))")
+                                }
+                                .onChange(of: expandedSubID) { _, _ in
+                                    print("Change to Expanded Parent ID: \(String(describing: expandedSubID))")
+                                }
+                                .onChange(of: selectedPath) { _, _ in
+                                    print("Change to Selected Path: \(selectedPath)")
+                                }
                             } else {
                                 // other tabs (no purpose yet)
                                 Spacer(minLength: 0)
                             }
                         }
+                        
                         
                         // MARK: - Padding - 20pt (keeps spacing consistent)
                         Rectangle().fill(.clear).frame(height: 20)
@@ -855,55 +973,76 @@ struct CurvedTabBarView: View {
                         width: CGFloat(user_data.deviceWidth + 4),
                         height: animatedHeight
                     )
-                    .onChange(of: currentTab) { oldTabName, newTabName in
-                        animateSheetHeight()
-                        print("From \(oldTabName) to \(newTabName)")
-                        
-                        if oldTabName == "Help" {
-                            
-                        } else if oldTabName == "Name" {
-                            rankoNameFocus = false
-                        } else if oldTabName == "Description" {
-                            descriptionFocus = false
-                        } else if oldTabName == "Category" {
-                            
-                        } else if oldTabName == "Privacy" {
-                            
-                        } else if oldTabName == "Layout" {
-                            
-                        }
-                        
-                        if newTabName == "Help" {
+                    .onChange(of: rankoName) { _, newName in
+                        setEnabled("Category", !newName.isEmpty)
+                    }
+                    .onChange(of: selectedPath) { _, newPath in
+                        setEnabled("Layout", !newPath.isEmpty)
+                    }
+                    .onChange(of: rankoDescription) {
+                        if rankoDescription.isEmpty {
                             withAnimation {
-                                nextButtonString = "Get Started"
+                                nextButtonString = "Skip"
                             }
-                        } else if newTabName == "Name" {
-                            rankoNameFocus = true
+                        } else {
                             withAnimation {
                                 nextButtonString = "Next"
                             }
-                        } else if newTabName == "Description" {
-                            descriptionFocus = true
-                            if rankoDescription.isEmpty {
+                        }
+                    }
+                    .onChange(of: currentTab) { oldTabName, newTabName in
+                        if !tutorialMode {
+                            animateSheetHeight()
+                            print("From \(oldTabName) to \(newTabName)")
+                            
+                            if oldTabName == "Help" {
+                                
+                            } else if oldTabName == "Name" {
+                                rankoNameFocus = false
+                            } else if oldTabName == "Description" {
+                                descriptionFocus = false
+                            } else if oldTabName == "Category" {
+                                
+                            } else if oldTabName == "Layout" {
+                                
+                            }
+                            
+                            if newTabName == "Help" {
                                 withAnimation {
-                                    nextButtonString = "Skip"
+                                    nextButtonString = "Get Started"
                                 }
-                            } else {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    tutorialIndex = 0   // or 1/2/3/4
+                                    withAnimation { tutorialMode = true }
+                                }
+                            } else if newTabName == "Name" {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    rankoNameFocus = true
+                                }
                                 withAnimation {
                                     nextButtonString = "Next"
                                 }
-                            }
-                        } else if newTabName == "Category" {
-                            withAnimation {
-                                nextButtonString = "Next"
-                            }
-                        } else if newTabName == "Privacy" {
-                            withAnimation {
-                                nextButtonString = "Next"
-                            }
-                        } else if newTabName == "Layout" {
-                            withAnimation {
-                                nextButtonString = "Create"
+                            } else if newTabName == "Description" {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    descriptionFocus = true
+                                }
+                                if rankoDescription.isEmpty {
+                                    withAnimation {
+                                        nextButtonString = "Skip"
+                                    }
+                                } else {
+                                    withAnimation {
+                                        nextButtonString = "Next"
+                                    }
+                                }
+                            } else if newTabName == "Category" {
+                                withAnimation {
+                                    nextButtonString = "Next"
+                                }
+                            } else if newTabName == "Layout" {
+                                withAnimation {
+                                    nextButtonString = "Create"
+                                }
                             }
                         }
                     }
@@ -939,6 +1078,193 @@ struct CurvedTabBarView: View {
                         // drive the sheet animation with your constant duration
                         animateSheetHeight()
                     }
+                    
+                    if tutorialMode {
+                        GeometryReader { geo in
+                            let size = geo.size
+                            let lastStepIndex = (tutorialSteps.keys.max() ?? 0)
+                            let step = tutorialSteps[tutorialIndex] ?? tutorialSteps[0]!
+                            // was: let rect = absRect(step.relRect, in: size)
+                            let rect = absRect(step.rect, in: size)
+                            let radius = step.cornerRadius
+
+                            ZStack(alignment: .bottom) {
+                                // ---- Dim layer with a "hole" that animates position & size ----
+                                ZStack {
+                                    Color.black.opacity(0.93)
+                                    // the cutout that punches through the black
+                                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                                        .frame(width: rect.width, height: rect.height)
+                                        .position(x: rect.midX, y: rect.midY)
+                                        .blendMode(.destinationOut)
+                                        .animation(.spring(response: 0.42, dampingFraction: 0.88), value: tutorialIndex)
+
+                                    // optional white outline to emphasize the spotlight
+                                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                                        .stroke(.white.opacity(0.95), lineWidth: 2)
+                                        .frame(width: rect.width, height: rect.height)
+                                        .position(x: rect.midX, y: rect.midY)
+                                        .allowsHitTesting(false)
+                                        .animation(.spring(response: 0.42, dampingFraction: 0.88), value: tutorialIndex)
+                                }
+                                .compositingGroup()            // needed for destinationOut to work
+                                .ignoresSafeArea()
+                                .onAppear {
+                                    print("Bottom Safe Inset: \(bottomSafeInset)")
+                                    print("Animated Height: \(animatedHeight)")
+                                    print("Device Height: \(user_data.deviceHeight)")
+                                    print("Keyboard Height: \(user_data.deviceKeyboardHeight)")
+                                }
+                                // ---- Description + controls ----
+                                VStack(spacing: 14) {
+                                    // description bubble
+                                    Text(step.description)
+                                        .font(.custom("Nunito-Bold", size: 16))
+                                        .foregroundColor(.white)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal, 20)
+                                        .padding(.vertical, 12)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(.black.opacity(0.45))
+                                        )
+                                        .frame(maxWidth: min(size.width * 0.9, 520))
+                                        .transition(.opacity.combined(with: .scale))
+                                        .id(tutorialIndex)   // forces a smooth cross-fade per step
+
+                                    HStack(spacing: 14) {
+                                        Button {
+                                            guard tutorialIndex > 0 else { return }
+                                            withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
+                                                tutorialIndex -= 1
+                                            }
+                                        } label: {
+                                            Text("Previous")
+                                                .font(.custom("Nunito-Black", size: 16))
+                                                .padding(.horizontal, 18).padding(.vertical, 10)
+                                                .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.16)))
+                                                .foregroundStyle(.white)
+                                        }
+                                        .opacity(tutorialIndex == 0 ? 0.5 : 1)
+                                        .disabled(tutorialIndex == 0)
+
+                                        Button {
+                                            withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
+                                                if tutorialIndex < lastStepIndex {
+                                                    tutorialIndex += 1
+                                                } else {
+                                                    withAnimation(.easeInOut(duration: 0.5)) {
+                                                        currentTab = "Name"
+                                                        tutorialMode = false
+                                                        rankoNameFocus = true
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            Text(tutorialIndex == lastStepIndex ? "Finish" : "Next")
+                                                .font(.custom("Nunito-Black", size: 16))
+                                                .padding(.horizontal, 18).padding(.vertical, 10)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .fill(LinearGradient(colors: [Color(hex: 0xFF9864), Color(hex: 0xFCB34D)],
+                                                                             startPoint: .top, endPoint: .bottom))
+                                                )
+                                                .foregroundStyle(.white)
+                                        }
+                                    }
+
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.5)) {
+                                            currentTab = "Name"
+                                            rankoNameFocus = true
+                                            tutorialMode = false
+                                            localSelection = nil
+                                            expandedParentID = nil
+                                            expandedSubID = nil
+                                            selectedPath = []
+                                        }
+                                    } label: {
+                                        Text("Skip Tutorial")
+                                            .font(.custom("Nunito-ExtraBold", size: 14))
+                                            .foregroundStyle(.white.opacity(0.8))
+                                            .underline()
+                                    }
+                                    .padding(.top, 2)
+                                }
+                                .padding(.bottom, bottomSafeInset + 20)
+                                .padding(.horizontal, 16)
+                            }
+                            .onChange(of: tutorialIndex) { oldIndex, newIndex in
+                                if newIndex == 1 {
+                                    withAnimation {
+                                        currentTab = "Name"
+                                    }
+                                } else if newIndex == 2 {
+                                    withAnimation {
+                                        currentTab = "Description"
+                                        localSelection = nil
+                                        expandedParentID = nil
+                                        expandedSubID = nil
+                                        selectedPath = []
+                                    }
+                                } else if newIndex == 3 {
+                                    withAnimation { currentTab = "Category" }
+
+                                    // make sure data is loaded before you tap
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                                        if let sports = chipByID("sports-sports") {
+                                            withAnimation {
+                                                handleChipTap(sports)
+                                            }
+                                        }
+
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                                            if let leagues = chipByID("sports-leaguestournaments") {
+                                                withAnimation {
+                                                    handleChipTap(leagues)
+                                                }
+                                            }
+
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                                                if let bball = chipByID("sports-leaguestournaments-basketballleagues") {
+                                                    withAnimation {
+                                                        handleChipTap(bball)
+                                                    }
+                                                }
+                                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                                                    withAnimation {
+                                                        localSelection = nil
+                                                        expandedParentID = nil
+                                                        expandedSubID = nil
+                                                        selectedPath = []
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else if newIndex == 4 {
+                                    withAnimation {
+                                        currentTab = "Layout"
+                                        localSelection = nil
+                                        expandedParentID = nil
+                                        expandedSubID = nil
+                                        selectedPath = []
+                                    }
+                                } else if newIndex == 5 {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                                        rankoPrivacy.toggle()
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                            rankoPrivacy.toggle()
+                                        }
+                                    }
+                                } else if newIndex == 6 {
+                                    withAnimation {
+                                        currentTab = "Name"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -946,36 +1272,112 @@ struct CurvedTabBarView: View {
         .edgesIgnoringSafeArea(.all)
     }
     
-    private func handleChipTap(_ chip: SampleCategoryChip) {
-        if let idx = selectedPath.firstIndex(of: chip.id) {
-            // already selected → trim at this level (drop self + descendants)
-            selectedPath = Array(selectedPath.prefix(idx))
-        } else {
-            // not selected → select full ancestor chain (keeps parents highlighted)
-            selectedPath = ancestorsPath(to: chip.id)
-        }
+    struct PrivacyLikeButton: View {
+        @Binding var isPrivate: Bool
+        var onToggle: ((Bool) -> Void)? = nil
 
-        // keep your old localSelection working for validations (nil means nothing picked)
-        if let last = selectedPath.last {
-            // level is pathDepth - 1
-            localSelection = repo.chip(for: last, level: selectedPath.count - 1)
-        } else {
-            localSelection = nil
-        }
+        var body: some View {
+            Button {
+                // haptic
+                let impact = UIImpactFeedbackGenerator(style: .rigid)
+                impact.prepare()
 
-        // (optional) keep your expansion logic exactly as before
-        if repo.hasSubs(chip.id) {
-            if chip.level == 0 {
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    expandedParentID = (expandedParentID == chip.id) ? nil : chip.id
-                    if expandedParentID == nil { expandedSubID = nil }
+                withAnimation(.interpolatingSpring(stiffness: 170, damping: 15)) {
+                    isPrivate.toggle()
                 }
-            } else if chip.level == 1 {
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    expandedSubID = (expandedSubID == chip.id) ? nil : chip.id
+
+                onToggle?(isPrivate)
+                impact.impactOccurred(intensity: 1.0)
+            } label: {
+                ZStack {
+                    icon("lock.fill",      show: isPrivate)
+                    icon("lock.open.fill", show: !isPrivate)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+
+        private func icon(_ name: String, show: Bool) -> some View {
+            Image(systemName: name)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 14, height: 14)
+                .fontWeight(.black)
+                .foregroundStyle(Color(hex: 0xFFFFFF))
+                .scaleEffect(show ? 1 : 0)
+                .opacity(show ? 1 : 0)
+                .animation(.interpolatingSpring(stiffness: 90, damping: 15), value: show)
+        }
+    }
+    
+    private func handleChipTap(_ chip: SampleCategoryChip) {
+        // compute true ancestry from the repo (so we can infer the level reliably)
+        let path = ancestorsPath(to: chip.id)
+        let lvl  = max(0, path.count - 1)
+
+        if let idx = selectedPath.firstIndex(of: chip.id) {
+            // --- Already selected → UNSELECT this node and all deeper nodes ---
+            // keep only ancestors strictly above this node
+            selectedPath.removeSubrange(idx..<selectedPath.count)
+
+            // update the "current" selection (nil if nothing left)
+            if let last = selectedPath.last {
+                localSelection = repo.chip(for: last, level: max(0, selectedPath.count - 1))
+            } else {
+                localSelection = nil
+            }
+
+            // OPTIONAL: collapse expanders that belong to the deselected branch
+            withAnimation(.easeInOut(duration: 0.22)) {
+                switch lvl {
+                case 0:
+                    // deselected a top-level → collapse everything
+                    expandedParentID = nil
+                    expandedSubID = nil
+                case 1:
+                    // deselected a level-1 node → collapse its level-2 expander
+                    if expandedSubID == chip.id { expandedSubID = nil }
+                    // keep parent expanded so siblings remain visible
+                default:
+                    // level-2 (or deeper) deselect → no expander changes needed
+                    break
+                }
+            }
+            return
+        }
+
+        // --- Not selected → SELECT full ancestor chain (keeps parents highlighted) ---
+        selectedPath = path
+        localSelection = repo.chip(for: chip.id, level: lvl)
+
+        // ensure expanders reflect the path so the user sees what they tapped
+        withAnimation(.easeInOut(duration: 0.22)) {
+            if lvl == 0 {
+                // toggle parent expansion
+                expandedParentID = (expandedParentID == chip.id) ? nil : chip.id
+                if expandedParentID == nil { expandedSubID = nil }
+            } else if lvl == 1 {
+                // ensure parent expanded, then toggle this level-1 node
+                if let parent = path.first, expandedParentID != parent {
+                    expandedParentID = parent
+                }
+                expandedSubID = (expandedSubID == chip.id) ? nil : chip.id
+            } else {
+                // level-2: make sure both ancestors are expanded
+                if path.count >= 2 {
+                    let parent0 = path[0]
+                    let parent1 = path[1]
+                    if expandedParentID != parent0 { expandedParentID = parent0 }
+                    if expandedSubID != parent1   { expandedSubID = parent1 }
                 }
             }
         }
+    }
+    
+    private func chipByID(_ id: String) -> SampleCategoryChip? {
+        // derive level from the chain length to be safe
+        let path = ancestorsPath(to: id)
+        return repo.chip(for: id, level: max(0, path.count - 1))
     }
     
     private func animateSheetHeight(_ duration: Double? = nil) {

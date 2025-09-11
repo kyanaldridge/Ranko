@@ -8,13 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		A3A5E54C2E3396B50063B3ED /* SwiftUIGradientBlur in Frameworks */ = {isa = PBXBuildFile; productRef = A3A5E54B2E3396B50063B3ED /* SwiftUIGradientBlur */; };
-		A3BF510F2E7043620005AFC4 /* SpotifyiOS in Frameworks */ = {isa = PBXBuildFile; productRef = A3BF510E2E7043620005AFC4 /* SpotifyiOS */; };
+		A3BF512B2E7068720005AFC4 /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = A3BF512A2E7068720005AFC4 /* KeychainAccess */; };
 		A3C8370D2E547D1000F777C7 /* ScalingHeaderScrollView in Frameworks */ = {isa = PBXBuildFile; productRef = A3C8370C2E547D1000F777C7 /* ScalingHeaderScrollView */; };
 		A3EE3D232E3B331F00094E29 /* InstantSearch in Frameworks */ = {isa = PBXBuildFile; productRef = A3EE3D222E3B331F00094E29 /* InstantSearch */; };
 		A3EE3D252E3B331F00094E29 /* InstantSearchCore in Frameworks */ = {isa = PBXBuildFile; productRef = A3EE3D242E3B331F00094E29 /* InstantSearchCore */; };
 		A3EE3D272E3B331F00094E29 /* InstantSearchInsights in Frameworks */ = {isa = PBXBuildFile; productRef = A3EE3D262E3B331F00094E29 /* InstantSearchInsights */; };
 		A3EE3D292E3B331F00094E29 /* InstantSearchSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = A3EE3D282E3B331F00094E29 /* InstantSearchSwiftUI */; };
 		A3EE3D2C2E3B335E00094E29 /* AlgoliaSearchClient in Frameworks */ = {isa = PBXBuildFile; productRef = A3EE3D2B2E3B335E00094E29 /* AlgoliaSearchClient */; };
+		A3EF470C2E707CA800AAC657 /* SpotifyAPI in Frameworks */ = {isa = PBXBuildFile; productRef = A3EF470B2E707CA800AAC657 /* SpotifyAPI */; };
 		A3FB445A2E16BE67000E87F5 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = A3FB44592E16BE67000E87F5 /* GoogleSignIn */; };
 		A3FB445C2E16BE67000E87F5 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = A3FB445B2E16BE67000E87F5 /* GoogleSignInSwift */; };
 		A3FB44682E16BFEF000E87F5 /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = A3FB44672E16BFEF000E87F5 /* FirebaseAI */; };
@@ -84,6 +85,7 @@
 				A3FB44942E16BFEF000E87F5 /* FirebasePerformance in Frameworks */,
 				A3FB448C2E16BFEF000E87F5 /* FirebaseInAppMessaging-Beta in Frameworks */,
 				A3FB44862E16BFEF000E87F5 /* FirebaseFirestoreCombine-Community in Frameworks */,
+				A3EF470C2E707CA800AAC657 /* SpotifyAPI in Frameworks */,
 				A3FB44702E16BFEF000E87F5 /* FirebaseAnalyticsOnDeviceConversion in Frameworks */,
 				A3FB449A2E16BFEF000E87F5 /* FirebaseStorageCombine-Community in Frameworks */,
 				A3EE3D2C2E3B335E00094E29 /* AlgoliaSearchClient in Frameworks */,
@@ -94,6 +96,7 @@
 				A3FB44762E16BFEF000E87F5 /* FirebaseAppDistribution-Beta in Frameworks */,
 				A3EE3D232E3B331F00094E29 /* InstantSearch in Frameworks */,
 				A3FB449C2E16BFEF000E87F5 /* FirebaseVertexAI in Frameworks */,
+				A3BF512B2E7068720005AFC4 /* KeychainAccess in Frameworks */,
 				A3EE3D252E3B331F00094E29 /* InstantSearchCore in Frameworks */,
 				A3EE3D292E3B331F00094E29 /* InstantSearchSwiftUI in Frameworks */,
 				A3FB44722E16BFEF000E87F5 /* FirebaseAnalyticsWithoutAdIdSupport in Frameworks */,
@@ -111,7 +114,6 @@
 				A3EE3D272E3B331F00094E29 /* InstantSearchInsights in Frameworks */,
 				A3FB44902E16BFEF000E87F5 /* FirebaseMLModelDownloader in Frameworks */,
 				A3FB44842E16BFEF000E87F5 /* FirebaseFirestore in Frameworks */,
-				A3BF510F2E7043620005AFC4 /* SpotifyiOS in Frameworks */,
 				A3FB448A2E16BFEF000E87F5 /* FirebaseFunctionsCombine-Community in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -191,7 +193,8 @@
 				A3EE3D282E3B331F00094E29 /* InstantSearchSwiftUI */,
 				A3EE3D2B2E3B335E00094E29 /* AlgoliaSearchClient */,
 				A3C8370C2E547D1000F777C7 /* ScalingHeaderScrollView */,
-				A3BF510E2E7043620005AFC4 /* SpotifyiOS */,
+				A3BF512A2E7068720005AFC4 /* KeychainAccess */,
+				A3EF470B2E707CA800AAC657 /* SpotifyAPI */,
 			);
 			productName = RankoApp;
 			productReference = A3FB44032E16B370000E87F5 /* Ranko.app */;
@@ -228,7 +231,8 @@
 				A3EE3D212E3B331F00094E29 /* XCRemoteSwiftPackageReference "instantsearch-ios" */,
 				A3EE3D2A2E3B335E00094E29 /* XCRemoteSwiftPackageReference "algoliasearch-client-swift" */,
 				A3C8370B2E547D1000F777C7 /* XCRemoteSwiftPackageReference "ScalingHeaderScrollView" */,
-				A3BF510D2E7043620005AFC4 /* XCRemoteSwiftPackageReference "ios-sdk" */,
+				A3BF51292E7068720005AFC4 /* XCRemoteSwiftPackageReference "KeychainAccess" */,
+				A3EF470A2E707CA800AAC657 /* XCRemoteSwiftPackageReference "SpotifyAPI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A3FB44042E16B370000E87F5 /* Products */;
@@ -502,9 +506,9 @@
 				kind = branch;
 			};
 		};
-		A3BF510D2E7043620005AFC4 /* XCRemoteSwiftPackageReference "ios-sdk" */ = {
+		A3BF51292E7068720005AFC4 /* XCRemoteSwiftPackageReference "KeychainAccess" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/spotify/ios-sdk";
+			repositoryURL = "https://github.com/kishikawakatsumi/KeychainAccess.git";
 			requirement = {
 				branch = master;
 				kind = branch;
@@ -534,6 +538,14 @@
 				minimumVersion = 8.19.0;
 			};
 		};
+		A3EF470A2E707CA800AAC657 /* XCRemoteSwiftPackageReference "SpotifyAPI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Peter-Schorn/SpotifyAPI.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.0.2;
+			};
+		};
 		A3FB44582E16BE67000E87F5 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
@@ -558,10 +570,10 @@
 			package = A3A5E54A2E3396B50063B3ED /* XCRemoteSwiftPackageReference "SwiftUIGradientBlur" */;
 			productName = SwiftUIGradientBlur;
 		};
-		A3BF510E2E7043620005AFC4 /* SpotifyiOS */ = {
+		A3BF512A2E7068720005AFC4 /* KeychainAccess */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = A3BF510D2E7043620005AFC4 /* XCRemoteSwiftPackageReference "ios-sdk" */;
-			productName = SpotifyiOS;
+			package = A3BF51292E7068720005AFC4 /* XCRemoteSwiftPackageReference "KeychainAccess" */;
+			productName = KeychainAccess;
 		};
 		A3C8370C2E547D1000F777C7 /* ScalingHeaderScrollView */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -592,6 +604,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A3EE3D2A2E3B335E00094E29 /* XCRemoteSwiftPackageReference "algoliasearch-client-swift" */;
 			productName = AlgoliaSearchClient;
+		};
+		A3EF470B2E707CA800AAC657 /* SpotifyAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A3EF470A2E707CA800AAC657 /* XCRemoteSwiftPackageReference "SpotifyAPI" */;
+			productName = SpotifyAPI;
 		};
 		A3FB44592E16BE67000E87F5 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;

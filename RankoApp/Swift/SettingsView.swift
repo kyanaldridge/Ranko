@@ -11,6 +11,7 @@ import FirebaseAuth
 import InstantSearchCore
 import StoreKit
 import FirebaseAnalytics
+import SpotifyWebAPI
 
 struct SettingItem: Identifiable {
     let id = UUID()
@@ -25,6 +26,7 @@ struct SettingsView: View {
     @Namespace private var transition
     
     @StateObject private var auth = MusicAuthManager()
+    @StateObject var spotify = Spotify()
     @StateObject private var player = PlayerManager()
     @StateObject private var user_data = UserInformation.shared
     
@@ -44,6 +46,7 @@ struct SettingsView: View {
     
     init(rankoProView: Bool = false) {
         self._rankoProView = State(initialValue: rankoProView)
+        SpotifyAPILogHandler.bootstrap()
     }
 
     var body: some View {
@@ -170,11 +173,14 @@ struct SettingsView: View {
                     .zoom(sourceID: "Ranko Pro", in: transition)
                 )
         }
-        .sheet(isPresented: $notificationsView) {
-            NotificationsView()
+        .fullScreenCover(isPresented: $notificationsView) {
+            //NotificationsView()
+            SpotifyRootView()
+                .environmentObject(spotify)
                 .navigationTransition(
                     .zoom(sourceID: "Notifications", in: transition)
                 )
+                .interactiveDismissDisabled(true)
         }
         .sheet(isPresented: $preferencesView) {
             PreferencesView()

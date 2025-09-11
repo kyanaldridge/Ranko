@@ -23,6 +23,10 @@ enum Secrets {
     static var spotifyClientID: String {
         return getPlistValue(for: "SPOTIFY_CLIENT_ID")
     }
+    
+    static var spotifySecret: String {
+        return getPlistValue(for: "SPOTIFY_CLIENT_SECRET")
+    }
 
     private static func getPlistValue(for key: String) -> String {
         guard let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
