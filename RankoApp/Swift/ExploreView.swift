@@ -72,6 +72,197 @@ struct ExploreView: View {
         .init(name: "Coming Soon", image: "ComingSoon", color: Color(hex: 0xFFFFFF), unlocked: "no", message: "More features and exciting mini-games are on the way – stay tuned!")
     ]
     
+    // ✅ NEW: app storage for timestamp + ID queue
+    @AppStorage("homeLastRefreshTimestamp") private var homeLastRefreshTimestamp: String = ""   // "yyyyMMddHHmmss"
+    @AppStorage("storedRankoIDsJSON") private var storedRankoIDsJSON: String = "[]"            // JSON array of strings
+
+    // ✅ NEW: in-memory feed state
+    @State private var feedLists: [RankoList] = []
+    @State private var isFetchingBatch = false
+    @State private var feedSessionID = UUID()
+    
+    private let isSimulator: Bool = {
+        var isSim = false
+        #if targetEnvironment(simulator)
+        isSim = true
+        #endif
+        return isSim
+    }()
+    
+    static var popularCategories: [String] {
+        return ["Songs", "Science", "Basketball", "Countries", "Movies", "Food", "Mammals"]
+    }
+    
+    // ✅ NEW: storage helpers
+    private var melbourneTZ: TimeZone { TimeZone(identifier: "Australia/Melbourne") ?? .current }
+
+    private func nowString() -> String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = melbourneTZ
+        fmt.dateFormat = "yyyyMMddHHmmss"
+        return fmt.string(from: Date())
+    }
+
+    private func parseTS(_ ts: String) -> Date? {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = melbourneTZ
+        fmt.dateFormat = "yyyyMMddHHmmss"
+        return fmt.date(from: ts)
+    }
+
+    private var storedIDs: [String] {
+        get {
+            (try? JSONDecoder().decode([String].self,
+                                       from: Data(storedRankoIDsJSON.utf8))) ?? []
+        }
+        nonmutating set { // ← key change
+            if let data = try? JSONEncoder().encode(newValue),
+               let json = String(data: data, encoding: .utf8) {
+                storedRankoIDsJSON = json
+            }
+        }
+    }
+
+    // ✅ NEW: fetch (re)fill queue from Algolia and update timestamp
+    private func refillIDsFromAlgoliaAndResetTimestamp(completion: (() -> Void)? = nil) {
+        AlgoliaRankoView.shared.fetchTopPublicRankoIDs(limit: 100) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let ids):
+                    self.storedIDs = ids
+                    self.homeLastRefreshTimestamp = self.nowString()
+                case .failure(let error):
+                    print("❌ Algolia fetch failed:", error)
+                    self.storedIDs = [] // keep consistent
+                }
+                completion?()
+            }
+        }
+    }
+
+    // ✅ NEW: pop next N ids, save remainder
+    private func popNextIDs(_ count: Int) -> [String] {
+        var ids = storedIDs
+        guard !ids.isEmpty else { return [] }
+        let n = min(count, ids.count)
+        let batch = Array(ids.prefix(n))
+        ids.removeFirst(n)
+        storedIDs = ids
+        return batch
+    }
+
+    // ✅ NEW: fetch a single Ranko list from Firebase by objectID
+    private func fetchRankoList(_ objectID: String, completion: @escaping (RankoList?) -> Void) {
+        let ref = Database.database().reference().child("RankoData").child(objectID)
+        ref.observeSingleEvent(of: .value) { snap in
+            guard let dict = snap.value as? [String: Any],
+                  let name = dict["RankoName"] as? String,
+                  let description = dict["RankoDescription"] as? String,
+                  let category = dict["RankoCategory"] as? String,
+                  let type = dict["RankoType"] as? String,
+                  let isPrivate = dict["RankoPrivacy"] as? Bool,
+                  let userID = dict["RankoUserID"] as? String,
+                  let dateTimeStr = dict["RankoDateTime"] as? String,
+                  let itemsDict = dict["RankoItems"] as? [String: [String: Any]] else {
+                completion(nil)
+                return
+            }
+
+            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
+                guard let itemName = item["ItemName"] as? String,
+                      let itemDesc = item["ItemDescription"] as? String,
+                      let itemImage = item["ItemImage"] as? String else { return nil }
+                let rank = item["ItemRank"] as? Int ?? 0
+                let votes = item["ItemVotes"] as? Int ?? 0
+                let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: category, ItemImage: itemImage)
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
+            }
+
+            let list = RankoList(
+                id: objectID,
+                listName: name,
+                listDescription: description,
+                type: type,
+                category: category,
+                isPrivate: isPrivate ? "Private" : "Public",
+                userCreator: userID,
+                dateTime: dateTimeStr,
+                items: items
+            )
+            completion(list)
+        }
+    }
+
+    // ✅ NEW: load next batch of 6 (refill queue if needed)
+    private func loadNextBatch() {
+        guard !isFetchingBatch else { return }
+        isFetchingBatch = true
+
+        func loadFromQueue() {
+            var ids = popNextIDs(6)
+
+            // If queue is empty AFTER popping, we still proceed with what we got;
+            // if we got none, refill then try again.
+            if ids.isEmpty {
+                refillIDsFromAlgoliaAndResetTimestamp {
+                    ids = self.popNextIDs(6)
+                    loadIDs(ids)
+                }
+            } else {
+                loadIDs(ids)
+            }
+        }
+
+        func loadIDs(_ ids: [String]) {
+            if ids.isEmpty {
+                self.isFetchingBatch = false
+                return
+            }
+            let group = DispatchGroup()
+            var newLists: [RankoList] = []
+
+            ids.forEach { id in
+                group.enter()
+                fetchRankoList(id) { list in
+                    if let list = list, list.isPrivate == "Public" { newLists.append(list) }
+                    group.leave()
+                }
+            }
+
+            group.notify(queue: .main) {
+                // simple order: newest first by RankoDateTime
+                self.feedLists.append(contentsOf: newLists.sorted { $0.dateTime > $1.dateTime })
+                self.isFetchingBatch = false
+                self.isLoadingLists = false
+            }
+        }
+
+        loadFromQueue()
+    }
+
+    // ✅ NEW: check 3-hour window and prep initial 6
+    private func ensureQueueAndInitialBatch() {
+        // update the timestamp (if needed) every time HomeView opens
+        let needsRefresh: Bool = {
+            guard let last = parseTS(homeLastRefreshTimestamp) else { return true }
+            let delta = Date().timeIntervalSince(last)
+            return delta >= (3 * 3600) // 3 hours
+        }()
+
+        if needsRefresh || storedIDs.isEmpty {
+            refillIDsFromAlgoliaAndResetTimestamp {
+                self.feedLists.removeAll()
+                self.loadNextBatch()
+            }
+        } else {
+            // under 3h → just pull next 6 from the queue
+            self.feedLists.removeAll()
+            self.loadNextBatch()
+        }
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -127,13 +318,13 @@ struct ExploreView: View {
                             .padding(.bottom, -10)
                             .padding(.top, 10)
                             .padding(.leading, 25)
-
+                            
                             // safe setup without 'guard' in ViewBuilder
                             let original = miniGames
                             let realCount = original.count
                             let duplicateMiniGames = miniGames + miniGames + miniGames + miniGames + miniGames
                             let duplicateCount = duplicateMiniGames.count
-
+                            
                             if realCount == 0 {
                                 // fallback ui
                                 Text("no mini games yet")
@@ -143,14 +334,14 @@ struct ExploreView: View {
                             } else {
                                 // looped data = [last] + original + [first]
                                 let looped = [duplicateMiniGames.last!] + duplicateMiniGames + [duplicateMiniGames.first!]
-
+                                
                                 VStack(spacing: 16) {
                                     // CAROUSEL
                                     // --- PEEKING CAROUSEL ---
                                     GeometryReader { proxy in
                                         let spacing: CGFloat = 1
                                         let offsetSpace = (proxy.size.width - 230) / 2
-
+                                        
                                         ScrollView(.horizontal, showsIndicators: false) {
                                             LazyHStack(spacing: spacing) {
                                                 ForEach(looped.indices, id: \.self) { i in
@@ -160,9 +351,9 @@ struct ExploreView: View {
                                                         let distance = abs(frame.midX - mid)
                                                         let scale = max(0.9, 1.0 - (distance / 800))
                                                         let opacity = max(0.5, 1.0 - (distance / 600))
-
+                                                        
                                                         let game = looped[i]
-
+                                                        
                                                         VStack(spacing: 15) {
                                                             Image(game.image)
                                                                 .resizable()
@@ -170,7 +361,7 @@ struct ExploreView: View {
                                                                 .frame(width: 230, height: 230)
                                                                 .clipShape(RoundedRectangle(cornerRadius: 20))
                                                                 .matchedTransitionSource(id: game.name, in: transition)
-
+                                                            
                                                             Button {
                                                                 if game.unlocked != "yes" {
                                                                     showComingSoonToast(game.message)
@@ -222,7 +413,7 @@ struct ExploreView: View {
                                         if i == 0 { withAnimation(.none) { activeIndex = duplicateCount } }
                                         else if i == duplicateCount + 1 { withAnimation(.none) { activeIndex = 1 } }
                                     }
-
+                                    
                                     // INDICATOR DOTS
                                     HStack(spacing: 8) {
                                         let current = ((activeIndex ?? 1) - 1 + realCount) % realCount
@@ -251,26 +442,33 @@ struct ExploreView: View {
                             }
                             .padding(.leading, 25)
                             .padding(.bottom, 0)
-                            
-                            
+
                             ScrollView(.horizontal, showsIndicators: false) {
-                                if isLoadingLists {
-                                    // Show 4 skeleton cards
-                                    VStack(spacing: 16) {
-                                        ForEach(0..<4, id: \.self) { _ in
+                                if isLoadingLists || (feedLists.isEmpty && isFetchingBatch) {
+                                    // 🔁 SKELETONS (HORIZONTAL)
+                                    LazyHStack(spacing: 14) {
+                                        ForEach(0..<6, id: \.self) { _ in
                                             ExploreListSkeletonViewRow()
+                                                .frame(width: 260, height: 220)
                                         }
                                     }
-                                    .padding(.top, 10)
-                                    .padding(.bottom, 10)
-                                    .padding(.leading)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 10)
+                                    .id(feedSessionID) // <- drop subtree on refresh
                                 } else {
-                                    ExploreListsDisplay(
-                                        presentFakeRankos: false,
-                                        showToast: $showToast,
-                                        toastMessage: $toastMessage,
-                                        showToastHelper: showComingSoonToast
-                                    )
+                                    // ✅ FEED (HORIZONTAL)
+                                    LazyHStack(spacing: 14) {
+                                        ForEach(feedLists, id: \.id) { list in
+                                            DefaultListExploreView(listData: list) { msg in showComingSoonToast(msg) }
+                                                .onTapGesture {
+                                                    // open spectate/vote if you want
+                                                }
+                                        }
+                                    }
+                                    .scrollTargetLayout()
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 10)
+                                    .id(feedSessionID) // <- drop subtree on refresh
                                 }
                             }
                             .scrollTargetBehavior(.viewAligned)
@@ -304,25 +502,30 @@ struct ExploreView: View {
                 .navigationTransition(
                     .zoom(sourceID: "Blind Sequence", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
         .onAppear {
             user_data.userID = Auth.auth().currentUser?.uid ?? "0"
             listViewID = UUID()
-
+            
             if isSimulator {
+                // show mocked feed if you want
                 isLoadingLists = false
                 print("ℹ️ Simulator detected — skipping Firebase calls.")
             } else {
                 isLoadingLists = true
                 
+                // ✅ ensure queue + initial batch of 6
+                ensureQueueAndInitialBatch()
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     isLoadingLists = false
                 }
-
+                
                 Task {
-                    await updateGlobalSubscriptionStatus(groupID: "4205BB53", productIDs: ["pro_weekly", "pro_monthly", "pro_yearly"])
+                    await updateGlobalSubscriptionStatus(groupID: "4205BB53", productIDs: ["pro_weekly","pro_monthly","pro_yearly"])
                 }
-
+                
                 Analytics.logEvent(AnalyticsEventScreenView, parameters: [
                     AnalyticsParameterScreenName: "Home",
                     AnalyticsParameterScreenClass: "HomeView"
@@ -330,14 +533,18 @@ struct ExploreView: View {
             }
         }
         .refreshable {
-            listViewID = UUID()
-            
-            if !isSimulator {
-                isLoadingLists = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    isLoadingLists = false
-                }
-            }
+            // 1) blank UI immediately
+            feedSessionID = UUID()   // drop the subtree
+            feedLists.removeAll()
+            isFetchingBatch = false
+            isLoadingLists = true
+
+            // 2) (optional) force a brand-new 100 from Algolia by clearing the queue:
+            // storedIDs = []
+            // homeLastRefreshTimestamp = ""
+
+            // 3) rebuild from scratch (this will load the first 6)
+            ensureQueueAndInitialBatch()
         }
     }
     
@@ -709,10 +916,10 @@ struct DefaultListExploreView: View {
             fetchComments()
         }
         .sheet(isPresented: $spectateProfile) {
-            ProfileSpectateView(userID: (listData.userCreator))
+            //ProfileSpectateView(userID: (listData.userCreator))
         }
         .sheet(isPresented: $openShareView) {
-            ProfileSpectateView(userID: (listData.userCreator))
+            //ProfileSpectateView(userID: (listData.userCreator))
         }
     }
     
@@ -965,8 +1172,8 @@ struct DefaultListExploreView: View {
         
         index.partialUpdateObjects(updates: updates) { result in
             switch result {
-            case .success(let response):
-                print("✅ Algolia RankoLikes updated:", response)
+            case .success(_):
+                break
             case .failure(let error):
                 print("❌ Algolia update failed:", error)
             }
@@ -998,8 +1205,8 @@ struct DefaultListExploreView: View {
         
         index.partialUpdateObjects(updates: updates) { result in
             switch result {
-            case .success(let response):
-                print("✅ Algolia RankoComments updated:", response)
+            case .success(_):
+                break
             case .failure(let error):
                 print("❌ Algolia update failed:", error)
             }

@@ -566,6 +566,15 @@ struct ProfileView: View {
             if list.type == "default" {
                 DefaultListPersonal(
                   listID: list.id,
+                  onSave: { _ in
+                      listViewID     = UUID()
+                      isLoadingLists = true
+                      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                          isLoadingLists = false
+                          retryFeaturedLoading()
+                          loadFollowStats()
+                      }
+                  },
                   onDelete: {
                       listViewID     = UUID()
                       isLoadingLists = true
@@ -730,7 +739,6 @@ struct ProfileView: View {
                 case .success(let response):
                     let totalResults = response.nbHits
                     user_data.userStatsRankos = totalResults!
-                    print("✅ Total Algolia Results: \(String(describing: totalResults))")
                     let db = Database.database().reference()
                     let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserRankoCount")
                     dbRef.setValue(totalResults!)
@@ -1696,6 +1704,15 @@ struct ProfileView1: View {
                     if list.type == "default" {
                         DefaultListPersonal(
                           listID: list.id,
+                          onSave: {_ in 
+                              listViewID     = UUID()
+                              isLoadingLists = true
+                              DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                  isLoadingLists = false
+                                  retryFeaturedLoading()
+                                  loadFollowStats()
+                              }
+                          },
                           onDelete: {
                               listViewID     = UUID()
                               isLoadingLists = true
@@ -1801,7 +1818,6 @@ struct ProfileView1: View {
                 case .success(let response):
                     let totalResults = response.nbHits
                     user_data.userStatsRankos = totalResults!
-                    print("✅ Total Algolia Results: \(String(describing: totalResults))")
                     let db = Database.database().reference()
                     let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserRankoCount")
                     dbRef.setValue(totalResults!)
@@ -2192,8 +2208,8 @@ struct ProfileView1: View {
 }
 
 // MARK: - AlgoliaRankoView
-class AlgoliaRankoView {
-    static let shared = AlgoliaRankoView()
+class AlgoliaRankoView2 {
+    static let shared = AlgoliaRankoView2()
     @StateObject private var user_data = UserInformation.shared
 
     private let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
@@ -2209,7 +2225,7 @@ class AlgoliaRankoView {
         let userID = user_data.userID
         var query = Query("")
         query.hitsPerPage = limit
-        query.filters = "RankoUserID:\(userID) AND RankoStatus:active" // Only public lists
+        query.filters = "RankoPrivacy:false AND RankoStatus:active" // Only public lists
         
         index.search(query: query) { result in
             switch result {
@@ -2394,7 +2410,7 @@ struct SearchRankosView: View {
                 }
                 .fullScreenCover(item: $selectedList) { list in
                     if list.type == "default" {
-                        DefaultListPersonal(listID: list.id, onDelete: { dismiss() })
+                        DefaultListPersonal(listID: list.id, onSave: {_ in dismiss() }, onDelete: { dismiss() })
                     } else {
                         GroupListPersonal(listID: list.id, onDelete: { dismiss() })
                     }
@@ -3934,17 +3950,17 @@ struct ProfileSpectateView: View {
                         GroupListSpectate(listID: list.id, creatorID: list.userCreator)
                     }
                 }
-                .fullScreenCover(isPresented: $showClonedEditor, onDismiss: { pendingClone = nil }) {
-                    if let clone = pendingClone {
-                        DefaultListView(
-                            rankoName: clone.listName,
-                            description: clone.listDescription,
-                            isPrivate: clone.isPrivate == "Private",
-                            category: categoryChip(named: clone.category),
-                            selectedRankoItems: clone.items
-                        ) { _ in /* no-op */ }
-                    }
-                }
+//                .fullScreenCover(isPresented: $showClonedEditor, onDismiss: { pendingClone = nil }) {
+//                    if let clone = pendingClone {
+//                        DefaultListView(
+//                            rankoName: clone.listName,
+//                            description: clone.listDescription,
+//                            isPrivate: clone.isPrivate == "Private",
+//                            category: categoryChip(named: clone.category),
+//                            selectedRankoItems: clone.items
+//                        ) { _ in /* no-op */ }
+//                    }
+//                }
                 .sheet(isPresented: $showUserFollowers) {
                     SearchFollowersView()
                 }
@@ -3983,11 +3999,11 @@ struct ProfileSpectateView: View {
         }
     }
     
-    private func categoryChip(named name: String) -> CategoryChip? {
-        // Uses your existing global/category source if available
-        let all = categoryChipsByCategory.values.flatMap { $0 }
-        return all.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
-    }
+//    private func categoryChip(named name: String) -> SampleCategoryChip? {
+//        // Uses your existing global/category source if available
+//        let all = categoryChipsByCategory.values.flatMap { $0 }
+//        return all.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+//    }
     
     private func checkFollowStatus() {
             isCheckingFollowStatus = true
@@ -4069,7 +4085,6 @@ struct ProfileSpectateView: View {
                 case .success(let response):
                     let totalResults = response.nbHits
                     rankoCount = totalResults!
-                    print("✅ Total Algolia Results: \(String(describing: totalResults))")
                     let db = Database.database().reference()
                     let dbRef = db.child("UserData").child("UserStats").child(userID).child("UserRankoCount")
                     dbRef.setValue(totalResults!)

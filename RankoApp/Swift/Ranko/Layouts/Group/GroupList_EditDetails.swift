@@ -14,13 +14,13 @@ struct GroupListEditDetails: View {
     private let oldRankoName: String
     private let oldDescription: String
     private let oldPrivate: Bool
-    private let oldCategory: CategoryChip?
+    private let oldCategory: SampleCategoryChip?
     
     // MARK: – Editable state
     @State private var rankoName: String
     @State private var description: String
     @State private var isPrivate: Bool
-    @State private var selectedCategoryChip: CategoryChip?
+    @State private var selectedCategoryChip: SampleCategoryChip?
     @State private var showCategoryPicker: Bool = false
     
     // MARK: – Validation & shake effects
@@ -31,15 +31,15 @@ struct GroupListEditDetails: View {
     }
     
     // MARK: – onSave closure
-    private let onSave: (String, String, Bool, CategoryChip?) -> Void
+    private let onSave: (String, String, Bool, SampleCategoryChip?) -> Void
     
     // Custom initializer to seed @State and capture originals + onSave
     init(
         rankoName: String,
         description: String = "",
         isPrivate: Bool,
-        category: CategoryChip?,
-        onSave: @escaping (String, String, Bool, CategoryChip?) -> Void
+        category: SampleCategoryChip?,
+        onSave: @escaping (String, String, Bool, SampleCategoryChip?) -> Void
     ) {
         self.oldRankoName   = rankoName
         self.oldDescription = description
@@ -195,13 +195,13 @@ struct GroupListEditDetails: View {
             Spacer()
         }
         .padding(16)
-        .sheet(isPresented: $showCategoryPicker) {
-            CategoryPickerView(
-                categoryChipsByCategory: categoryChipsByCategory,
-                selectedCategoryChip: $selectedCategoryChip,
-                isPresented: $showCategoryPicker
-            )
-        }
+//        .sheet(isPresented: $showCategoryPicker) {
+//            CategoryPickerView(
+//                categoryChipsByCategory: categoryChipsByCategory,
+//                selectedCategoryChip: $selectedCategoryChip,
+//                isPresented: $showCategoryPicker
+//            )
+//        }
     }
     
     private func revertAndDismiss() {

@@ -120,7 +120,7 @@ struct RankoList: Identifiable, Codable {
     var items: [RankoItem]
 }
 
-struct RankoRecord: Codable, Identifiable, Equatable {
+struct RankoRecord: Codable, Identifiable, Equatable, Hashable {
     let objectID: String
     let ItemName: String
     let ItemDescription: String
@@ -130,7 +130,7 @@ struct RankoRecord: Codable, Identifiable, Equatable {
     var id: String { objectID }
 }
 
-struct RankoItem: Identifiable, Codable, Equatable {
+struct RankoItem: Identifiable, Codable, Equatable, Hashable {
     let id: String            // ← will hold our random 12-char code
     var rank: Int             // ← selection order
     var votes: Int

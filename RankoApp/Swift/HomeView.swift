@@ -41,6 +41,37 @@ let isSimulator: Bool = {
     return isSim
 }()
 
+final class AlgoliaRankoView {
+    static let shared = AlgoliaRankoView()
+
+    private let client = SearchClient(
+        appID: ApplicationID(rawValue: Secrets.algoliaAppID),
+        apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
+    )
+    private let index: Index
+
+    private init() {
+        self.index = client.index(withName: "RankoLists")
+    }
+
+    /// Top public Ranko objectIDs from Algolia (respects default ranking)
+    func fetchTopPublicRankoIDs(limit: Int = 100, completion: @escaping (Result<[String], Error>) -> Void) {
+        var query = Query("")
+        query.hitsPerPage = limit
+        query.filters = "RankoPrivacy:false AND RankoStatus:active" // public + active
+
+        index.search(query: query) { result in
+            switch result {
+            case .success(let response):
+                let ids: [String] = response.hits.compactMap { $0.objectID.rawValue }
+                completion(.success(ids))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+}
+
 // MARK: - HomeView
 
 struct HomeView: View {
@@ -51,6 +82,7 @@ struct HomeView: View {
     @State private var showPicker: Bool = false
     @State private var profileImage: UIImage?
     @State private var listViewID = UUID()
+    @State private var feedSessionID = UUID()
     @State private var isLoadingLists = true
     @State private var trayViewOpen = false
     @State private var showCategorySheet = false
@@ -59,6 +91,14 @@ struct HomeView: View {
     @State private var toastMessage = ""
     @State private var toastID = UUID()
     @State private var toastDismissWorkItem: DispatchWorkItem?
+    
+    // ✅ NEW: app storage for timestamp + ID queue
+    @AppStorage("homeLastRefreshTimestamp") private var homeLastRefreshTimestamp: String = ""   // "yyyyMMddHHmmss"
+    @AppStorage("storedRankoIDsJSON") private var storedRankoIDsJSON: String = "[]"            // JSON array of strings
+
+    // ✅ NEW: in-memory feed state
+    @State private var feedLists: [RankoList] = []
+    @State private var isFetchingBatch = false
     
     private let isSimulator: Bool = {
         var isSim = false
@@ -70,6 +110,176 @@ struct HomeView: View {
     
     static var popularCategories: [String] {
         return ["Songs", "Science", "Basketball", "Countries", "Movies", "Food", "Mammals"]
+    }
+    
+    // ✅ NEW: storage helpers
+    private var melbourneTZ: TimeZone { TimeZone(identifier: "Australia/Melbourne") ?? .current }
+
+    private func nowString() -> String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = melbourneTZ
+        fmt.dateFormat = "yyyyMMddHHmmss"
+        return fmt.string(from: Date())
+    }
+
+    private func parseTS(_ ts: String) -> Date? {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = melbourneTZ
+        fmt.dateFormat = "yyyyMMddHHmmss"
+        return fmt.date(from: ts)
+    }
+
+    private var storedIDs: [String] {
+        get {
+            (try? JSONDecoder().decode([String].self,
+                                       from: Data(storedRankoIDsJSON.utf8))) ?? []
+        }
+        nonmutating set { // ← key change
+            if let data = try? JSONEncoder().encode(newValue),
+               let json = String(data: data, encoding: .utf8) {
+                storedRankoIDsJSON = json
+            }
+        }
+    }
+
+    // ✅ NEW: fetch (re)fill queue from Algolia and update timestamp
+    private func refillIDsFromAlgoliaAndResetTimestamp(completion: (() -> Void)? = nil) {
+        AlgoliaRankoView.shared.fetchTopPublicRankoIDs(limit: 100) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let ids):
+                    self.storedIDs = ids
+                    self.homeLastRefreshTimestamp = self.nowString()
+                case .failure(let error):
+                    print("❌ Algolia fetch failed:", error)
+                    self.storedIDs = [] // keep consistent
+                }
+                completion?()
+            }
+        }
+    }
+
+    // ✅ NEW: pop next N ids, save remainder
+    private func popNextIDs(_ count: Int) -> [String] {
+        var ids = storedIDs
+        guard !ids.isEmpty else { return [] }
+        let n = min(count, ids.count)
+        let batch = Array(ids.prefix(n))
+        ids.removeFirst(n)
+        storedIDs = ids
+        return batch
+    }
+
+    // ✅ NEW: fetch a single Ranko list from Firebase by objectID
+    private func fetchRankoList(_ objectID: String, completion: @escaping (RankoList?) -> Void) {
+        let ref = Database.database().reference().child("RankoData").child(objectID)
+        ref.observeSingleEvent(of: .value) { snap in
+            guard let dict = snap.value as? [String: Any],
+                  let name = dict["RankoName"] as? String,
+                  let description = dict["RankoDescription"] as? String,
+                  let category = dict["RankoCategory"] as? String,
+                  let type = dict["RankoType"] as? String,
+                  let isPrivate = dict["RankoPrivacy"] as? Bool,
+                  let userID = dict["RankoUserID"] as? String,
+                  let dateTimeStr = dict["RankoDateTime"] as? String,
+                  let itemsDict = dict["RankoItems"] as? [String: [String: Any]] else {
+                completion(nil)
+                return
+            }
+
+            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
+                guard let itemName = item["ItemName"] as? String,
+                      let itemDesc = item["ItemDescription"] as? String,
+                      let itemImage = item["ItemImage"] as? String else { return nil }
+                let rank = item["ItemRank"] as? Int ?? 0
+                let votes = item["ItemVotes"] as? Int ?? 0
+                let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: category, ItemImage: itemImage)
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
+            }
+
+            let list = RankoList(
+                id: objectID,
+                listName: name,
+                listDescription: description,
+                type: type,
+                category: category,
+                isPrivate: isPrivate ? "Private" : "Public",
+                userCreator: userID,
+                dateTime: dateTimeStr,
+                items: items
+            )
+            completion(list)
+        }
+    }
+
+    // ✅ NEW: load next batch of 6 (refill queue if needed)
+    private func loadNextBatch() {
+        guard !isFetchingBatch else { return }
+        isFetchingBatch = true
+
+        func loadFromQueue() {
+            var ids = popNextIDs(6)
+
+            // If queue is empty AFTER popping, we still proceed with what we got;
+            // if we got none, refill then try again.
+            if ids.isEmpty {
+                refillIDsFromAlgoliaAndResetTimestamp {
+                    ids = self.popNextIDs(6)
+                    loadIDs(ids)
+                }
+            } else {
+                loadIDs(ids)
+            }
+        }
+
+        func loadIDs(_ ids: [String]) {
+            if ids.isEmpty {
+                self.isFetchingBatch = false
+                return
+            }
+            let group = DispatchGroup()
+            var newLists: [RankoList] = []
+
+            ids.forEach { id in
+                group.enter()
+                fetchRankoList(id) { list in
+                    if let list = list, list.isPrivate == "Public" { newLists.append(list) }
+                    group.leave()
+                }
+            }
+
+            group.notify(queue: .main) {
+                // simple order: newest first by RankoDateTime
+                self.feedLists.append(contentsOf: newLists.sorted { $0.dateTime > $1.dateTime })
+                self.isFetchingBatch = false
+                self.isLoadingLists = false
+            }
+        }
+
+        loadFromQueue()
+    }
+
+    // ✅ NEW: check 3-hour window and prep initial 6
+    private func ensureQueueAndInitialBatch() {
+        // update the timestamp (if needed) every time HomeView opens
+        let needsRefresh: Bool = {
+            guard let last = parseTS(homeLastRefreshTimestamp) else { return true }
+            let delta = Date().timeIntervalSince(last)
+            return delta >= (3 * 3600) // 3 hours
+        }()
+
+        if needsRefresh || storedIDs.isEmpty {
+            refillIDsFromAlgoliaAndResetTimestamp {
+                self.feedLists.removeAll()
+                self.loadNextBatch()
+            }
+        } else {
+            // under 3h → just pull next 6 from the queue
+            self.feedLists.removeAll()
+            self.loadNextBatch()
+        }
     }
     
     var body: some View {
@@ -115,23 +325,47 @@ struct HomeView: View {
                             .padding(.horizontal, 20)
                         }
                         
-                        if isLoadingLists {
-                            // Show 4 skeleton cards
+                        // ✅ NEW: skeleton vs feed
+                        if isLoadingLists || (feedLists.isEmpty && isFetchingBatch) {
                             LazyVStack(spacing: 16) {
-                                ForEach(0..<4, id: \.self) { _ in
-                                    HomeListSkeletonViewRow()
-                                }
+                                ForEach(0..<4, id: \.self) { _ in HomeListSkeletonViewRow() }
                             }
                             .padding(.top, 10)
                             .padding(.bottom, 60)
                             .padding(.leading)
                         } else {
-                            HomeListsDisplay(
-                                presentFakeRankos: false,
-                                showToast: $showToast,
-                                toastMessage: $toastMessage,
-                                showToastHelper: showComingSoonToast
-                            )
+                            // ✅ FEED
+                            LazyVStack(alignment: .leading, spacing: 16) {
+                                ForEach(feedLists, id: \.id) { list in
+                                    if list.type == "group" {
+                                        GroupListHomeView(listData: list) { msg in showComingSoonToast(msg) }
+                                            .onTapGesture { /* open spectate if you want */ }
+                                    } else {
+                                        DefaultListHomeView(listData: list) { msg in showComingSoonToast(msg) }
+                                            .onTapGesture { /* open vote if you want */ }
+                                    }
+                                }
+                                
+                                // ✅ Load more
+                                Button {
+                                    loadNextBatch()
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        if isFetchingBatch { ProgressView() }
+                                        Text(isFetchingBatch ? "Loading…" : "Load More")
+                                            .font(.custom("Nunito-Black", size: 16))
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .disabled(isFetchingBatch)
+                                .buttonStyle(.glassProminent)
+                                .tint(Color(hex: 0xFF9864).gradient)
+                                .padding(.trailing, 20)
+                            }
+                            .id(feedSessionID)
+                            .padding(.top, 10)
+                            .padding(.bottom, 80)
+                            .padding(.leading)
                         }
                     }
                 }
@@ -164,23 +398,26 @@ struct HomeView: View {
         .onAppear {
             user_data.userID = Auth.auth().currentUser?.uid ?? "0"
             listViewID = UUID()
-
+            
             if isSimulator {
+                // show mocked feed if you want
                 isLoadingLists = false
                 print("ℹ️ Simulator detected — skipping Firebase calls.")
             } else {
                 isLoadingLists = true
-                
                 syncUserDataFromFirebase()
+                
+                // ✅ ensure queue + initial batch of 6
+                ensureQueueAndInitialBatch()
                 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     isLoadingLists = false
                 }
-
+                
                 Task {
-                    await updateGlobalSubscriptionStatus(groupID: "4205BB53", productIDs: ["pro_weekly", "pro_monthly", "pro_yearly"])
+                    await updateGlobalSubscriptionStatus(groupID: "4205BB53", productIDs: ["pro_weekly","pro_monthly","pro_yearly"])
                 }
-
+                
                 Analytics.logEvent(AnalyticsEventScreenView, parameters: [
                     AnalyticsParameterScreenName: "Home",
                     AnalyticsParameterScreenClass: "HomeView"
@@ -188,13 +425,17 @@ struct HomeView: View {
             }
         }
         .refreshable {
-            listViewID = UUID()
+            // 1) blank UI immediately
+            feedSessionID = UUID()   // drop the subtree
+            feedLists.removeAll()
+            isFetchingBatch = false
+            isLoadingLists = true
+            
+            ensureQueueAndInitialBatch()
             
             if !isSimulator {
-                isLoadingLists = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    isLoadingLists = false
-                }
+                // pull another 6 on pull-to-refresh
+                loadNextBatch()
             }
         }
         .sheet(isPresented: $trayViewOpen) {
@@ -205,6 +446,7 @@ struct HomeView: View {
                 .navigationTransition(
                     .zoom(sourceID: "categoryButton", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
     }
     
@@ -528,10 +770,10 @@ struct DefaultListHomeView: View {
             fetchComments()
         }
         .sheet(isPresented: $spectateProfile) {
-            ProfileSpectateView(userID: (listData.userCreator))
+            //ProfileSpectateView(userID: (listData.userCreator))
         }
         .sheet(isPresented: $openShareView) {
-            ProfileSpectateView(userID: (listData.userCreator))
+            //ProfileSpectateView(userID: (listData.userCreator))
         }
     }
     
@@ -594,7 +836,7 @@ struct DefaultListHomeView: View {
     }
     
     private func leftColumn(minWidth: CGFloat) -> some View {
-        LazyVStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(firstBlock) { item in
                 itemRow(item)
             }
@@ -604,7 +846,7 @@ struct DefaultListHomeView: View {
     }
     
     private func rightColumn() -> some View {
-        LazyVStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(secondBlock) { item in
                 itemRow(item)
             }
@@ -789,7 +1031,7 @@ struct DefaultListHomeView: View {
         index.partialUpdateObjects(updates: updates) { result in
             switch result {
             case .success(let response):
-                print("✅ Algolia RankoLikes updated:", response)
+                print("✅ Algolia RankoLikes updated")
             case .failure(let error):
                 print("❌ Algolia update failed:", error)
             }
@@ -822,7 +1064,7 @@ struct DefaultListHomeView: View {
         index.partialUpdateObjects(updates: updates) { result in
             switch result {
             case .success(let response):
-                print("✅ Algolia RankoComments updated:", response)
+                print("✅ Algolia RankoComments updated")
             case .failure(let error):
                 print("❌ Algolia update failed:", error)
             }

@@ -22,7 +22,10 @@ struct GroupListPersonal: View {
     @State private var rankoName: String
     @State private var description: String
     @State private var isPrivate: Bool
-    @State private var category: CategoryChip?
+    @State private var category: SampleCategoryChip?
+    @State private var categoryID: String = ""
+    @State private var categoryName: String = ""
+    @State private var categoryIcon: String? = nil
     
     // Sheet states
     @State private var showTabBar = true
@@ -62,11 +65,10 @@ struct GroupListPersonal: View {
         rankoName: String = "Not Found",
         description: String = "",
         isPrivate: Bool = false,
-        category: CategoryChip? = CategoryChip(
+        category: SampleCategoryChip? = SampleCategoryChip(
+            id: "",
             name: "Unknown",
-            icon: "questionmark.circle.fill",
-            category: "Unknown",
-            synonym: ""
+            icon: "questionmark.circle.fill"
         ),
         groupedItems: [RankoItem] = [],
         onSave: ((RankoItem) -> Void)? = nil,
@@ -595,72 +597,142 @@ struct GroupListPersonal: View {
     private func loadListFromFirebase() {
         let db = Database.database().reference()
         let listRef = db.child("RankoData").child(listID)
-        
-        listRef.observeSingleEvent(of: .value,
-                                   with: { snapshot in
+
+        listRef.observeSingleEvent(of: .value, with: { snapshot in
             guard let data = snapshot.value as? [String: Any] else {
                 print("⚠️ No data at RankoData/\(listID)")
                 return
             }
-            
+
+            // map top-level
+            let rankoName   = data["RankoName"]        as? String ?? ""
+            let description = data["RankoDescription"] as? String ?? ""
+            let isPrivate   = data["RankoPrivacy"]     as? Bool   ?? false
+
+            // push to UI on main
             DispatchQueue.main.async {
-                // — map your top-level fields…
-                self.rankoName   = data["RankoName"]        as? String ?? ""
-                self.description = data["RankoDescription"] as? String ?? ""
-                self.isPrivate   = data["RankoPrivacy"]     as? Bool   ?? false
-                
-                if let catName = data["RankoCategory"] as? String {
-                    let allChips = categoryChipsByCategory.values.flatMap { $0 }
-                    self.category = allChips.first {
-                        $0.name.caseInsensitiveCompare(catName) == .orderedSame
+                self.rankoName   = rankoName
+                self.description = description
+                self.isPrivate   = isPrivate
+            }
+
+            // --- CATEGORY LOOKUP ---
+            // Prefer an ID if present; otherwise fall back to the old name field.
+            let catID   = (data["RankoCategoryID"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let catName = (data["RankoCategory"]   as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let id = catID, !id.isEmpty {
+                fetchCategoryByID(id) { cat in
+                    DispatchQueue.main.async {
+                        if let cat {
+                            // adapt to your model:
+                            // if you still have `self.category` (SampleCategoryChip?), construct it here.
+                            // Else store resolved bits:
+                            self.categoryID   = cat.id
+                            self.categoryName = cat.name
+                            self.categoryIcon = cat.icon
+                        } else {
+                            // fallback if id missing in DB
+                            self.categoryID   = id
+                            self.categoryName = catName ?? id
+                            self.categoryIcon = nil
+                        }
                     }
                 }
-                
-                // — map your items…
-                if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
-                    var loaded: [RankoItem] = []
-                    for (_, itemData) in itemsDict {
-                        guard
-                            let id    = itemData["ItemID"]          as? String,
-                            let name  = itemData["ItemName"]        as? String,
-                            let desc  = itemData["ItemDescription"] as? String,
-                            let image = itemData["ItemImage"]       as? String,
-                            let rank  = itemData["ItemRank"]        as? Int,
-                            let votes = itemData["ItemVotes"]       as? Int
-                        else { continue }
-                        
-                        let record = RankoRecord(
-                            objectID: id,
-                            ItemName: name,
-                            ItemDescription: desc,
-                            ItemCategory: "",
-                            ItemImage: image
-                        )
-                        let item = RankoItem(
-                            id: id,
-                            rank: rank,
-                            votes: votes,
-                            record: record
-                        )
-                        loaded.append(item)
-                    }
-                    
+            } else if let name = catName, !name.isEmpty {
+                fetchCategoryByName(name) { cat in
                     DispatchQueue.main.async {
-                        // If you also want them in the “ungrouped pool”:
-                        self.unGroupedItems = loaded
-                        
-                        // Group by the thousands-digit of `rank`:
-                        let groupedDict = Dictionary(grouping: loaded) { $0.rank / 1000 }
-                        self.groupedItems = groupedDict
-                            .sorted(by: { $0.key < $1.key })
-                            .map { $0.value }
+                        if let cat {
+                            self.categoryID   = cat.id
+                            self.categoryName = cat.name
+                            self.categoryIcon = cat.icon
+                        } else {
+                            // still show something
+                            self.categoryID   = ""
+                            self.categoryName = name
+                            self.categoryIcon = nil
+                        }
                     }
+                }
+            } else {
+                print("⚠️ No category field present on RankoData/\(listID)")
+            }
+
+            // --- ITEMS ---
+            if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
+                var loaded: [RankoItem] = []
+
+                for (_, itemData) in itemsDict {
+                    guard
+                        let id    = itemData["ItemID"]          as? String,
+                        let name  = itemData["ItemName"]        as? String,
+                        let desc  = itemData["ItemDescription"] as? String,
+                        let image = itemData["ItemImage"]       as? String,
+                        let rank  = itemData["ItemRank"]        as? Int,
+                        let votes = itemData["ItemVotes"]       as? Int
+                    else { continue }
+
+                    let record = RankoRecord(
+                        objectID: id,
+                        ItemName: name,
+                        ItemDescription: desc,
+                        ItemCategory: "",   // populate if you store per-item cats
+                        ItemImage: image
+                    )
+
+                    loaded.append(RankoItem(id: id, rank: rank, votes: votes, record: record))
+                }
+
+                DispatchQueue.main.async {
+                    self.unGroupedItems = loaded.sorted { $0.rank < $1.rank }
                 }
             }
-        },
-                                   withCancel: { error in
+
+        }, withCancel: { error in
             print("❌ Firebase load error:", error.localizedDescription)
         })
+    }
+    
+    private func fetchCategoryByID(_ id: String, completion: @escaping (SampleCategoryChip?) -> Void) {
+        let ref = Database.database().reference()
+            .child("AppData").child("CategoryData").child(id) // <- correct path
+
+        ref.observeSingleEvent(of: .value) { snap in
+            guard let dict = snap.value as? [String: Any] else {
+                completion(nil); return
+            }
+            let cd = SampleCategoryChip(
+                id: id,
+                name: dict["name"] as? String ?? id,
+                icon: (dict["icon"] as? String)!
+            )
+            completion(cd)
+        }
+    }
+
+    private func fetchCategoryByName(_ name: String, completion: @escaping (SampleCategoryChip?) -> Void) {
+        // scan CategoryData once; if your DB is large, consider caching
+        let ref = Database.database().reference()
+            .child("AppData").child("CategoryData")
+
+        ref.observeSingleEvent(of: .value) { snap in
+            guard let all = snap.value as? [String: [String: Any]] else {
+                completion(nil); return
+            }
+            // case-insensitive match on "name"
+            if let (id, dict) = all.first(where: { (_, v) in
+                (v["name"] as? String)?.caseInsensitiveCompare(name) == .orderedSame
+            }) {
+                let cd = SampleCategoryChip(
+                    id: id,
+                    name: (dict["name"] as? String) ?? name,
+                    icon: (dict["icon"] as? String)!
+                )
+                completion(cd)
+            } else {
+                completion(nil)
+            }
+        }
     }
     
     private func deleteRanko(completion: @escaping (Bool) -> Void
@@ -1345,7 +1417,7 @@ struct GroupListPersonalView_Previews: PreviewProvider {
             rankoName: "Top 10 Destinations",
             description: "Bucket-list travel spots around the world",
             isPrivate: false,
-            category: CategoryChip(name: "Countries", icon: "globe.europe.africa.fill", category: "Geography", synonym: ""),
+            category: SampleCategoryChip(id: "", name: "Countries", icon: "globe.europe.africa.fill"),
             groupedItems: sampleItems
         )
         .previewLayout(.sizeThatFits)

@@ -95,7 +95,6 @@ struct DefaultListItemRow: View {
                 .fill(Color(hex: 0xFFFFFF))
                 .shadow(color: Color(hex: 0x000000).opacity(0.25), radius: 7)
         )
-        .padding(.horizontal)
     }
 }
 

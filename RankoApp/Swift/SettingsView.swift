@@ -26,7 +26,7 @@ struct SettingsView: View {
     @Namespace private var transition
     
     @StateObject private var auth = MusicAuthManager()
-    @StateObject var spotify = Spotify()
+//    @StateObject var spotify = Spotify()
     @StateObject private var player = PlayerManager()
     @StateObject private var user_data = UserInformation.shared
     
@@ -175,8 +175,8 @@ struct SettingsView: View {
         }
         .fullScreenCover(isPresented: $notificationsView) {
             //NotificationsView()
-            SpotifyRootView()
-                .environmentObject(spotify)
+            NotificationsView()
+//                .environmentObject(spotify)
                 .navigationTransition(
                     .zoom(sourceID: "Notifications", in: transition)
                 )
