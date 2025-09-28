@@ -533,7 +533,7 @@ struct ProfileView: View {
                 )
         }
         .sheet(isPresented: $appIconCustomiserView) {
-            CustomiseAppIconView()
+            AppPersonalisationView()
                 .navigationTransition(
                     .zoom(sourceID: "customiseApp", in: transition)
                 )
@@ -1044,7 +1044,6 @@ struct ProfileView: View {
         guard
             let listName      = dict["RankoName"]        as? String,
             let description   = dict["RankoDescription"] as? String,
-            let category      = dict["RankoCategory"]    as? String,
             let type          = dict["RankoType"]        as? String,
             let privacy       = dict["RankoPrivacy"]     as? Bool,
             let dateTime      = dict["RankoDateTime"]    as? String,
@@ -1086,7 +1085,9 @@ struct ProfileView: View {
             listName:         listName,
             listDescription:  description,
             type:             type,
-            category:         category,
+            categoryName: "Albums",
+            categoryIcon: "circle.circle",
+            categoryColour: 0xFFFFFF,
             isPrivate:        isPrivateString,
             userCreator:      userCreator,
             dateTime:         dateTime,
@@ -1623,7 +1624,7 @@ struct ProfileView1: View {
                         )
                 }
                 .sheet(isPresented: $appIconCustomiserView) {
-                    CustomiseAppIconView()
+                    AppPersonalisationView()
                         .navigationTransition(
                             .zoom(sourceID: "customiseApp", in: transition)
                         )
@@ -2103,7 +2104,6 @@ struct ProfileView1: View {
         guard
             let listName      = dict["RankoName"]        as? String,
             let description   = dict["RankoDescription"] as? String,
-            let category      = dict["RankoCategory"]    as? String,
             let type          = dict["RankoType"]        as? String,
             let privacy       = dict["RankoPrivacy"]     as? Bool,
             let dateTime      = dict["RankoDateTime"]    as? String,
@@ -2145,7 +2145,9 @@ struct ProfileView1: View {
             listName:         listName,
             listDescription:  description,
             type:             type,
-            category:         category,
+            categoryName: "Albums",
+            categoryIcon: "circle.circle",
+            categoryColour: 0xFFFFFF,
             isPrivate:        isPrivateString,
             userCreator:      userCreator,
             dateTime:         dateTime,
@@ -2222,7 +2224,6 @@ class AlgoliaRankoView2 {
 
     /// Fetches only the objectIDs of public Ranko lists from Algolia
     func fetchRankoLists(limit: Int = 20, completion: @escaping (Result<[String], Error>) -> Void) {
-        let userID = user_data.userID
         var query = Query("")
         query.hitsPerPage = limit
         query.filters = "RankoPrivacy:false AND RankoStatus:active" // Only public lists
@@ -2252,94 +2253,209 @@ struct SearchRankosView: View {
     @StateObject private var user_data = UserInformation.shared
     @FocusState private var searchFocused: Bool
     
-    @State private var lists: [RankoList] = []
+    @State private var allLists: [RankoList] = []
     @State private var selectedFacet: String? = nil
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
     @State private var rankoQuery: String = ""
     @State private var searchField: String = ""
     @State private var selectedList: RankoList?
+    @State private var currentPage: Int = 1
+    @State private var showCategoryOverlay: Bool = false
     
-    // Dynamic filtering + facets that react to the remaining lists
+    private let itemsPerPage = 10
+    
+    // All filtering logic
     private var filteredLists: [RankoList] {
-        lists.filter { list in
-            (selectedFacet == nil || list.category == selectedFacet) &&
+        allLists.filter { list in
+            (selectedFacet == nil || list.categoryName == selectedFacet) &&
             (rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased()))
         }
     }
-
-    private var dynamicFacets: [FacetCategory] {
-        // facet counts based on what's left after the search query (but before facet selection)
-        let base = lists.filter { list in
+    
+    // Paginated results - only show current page
+    private var paginatedLists: [RankoList] {
+        let startIndex = (currentPage - 1) * itemsPerPage
+        let endIndex = min(startIndex + itemsPerPage, filteredLists.count)
+        
+        guard startIndex < filteredLists.count else { return [] }
+        return Array(filteredLists[startIndex..<endIndex])
+    }
+    
+    private var totalPages: Int {
+        max(1, Int(ceil(Double(filteredLists.count) / Double(itemsPerPage))))
+    }
+    
+    // Dynamic categories for overlay
+    private var availableCategories: [String] {
+        let baseResults = allLists.filter { list in
             rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased())
         }
         
-        let grouped = Dictionary(grouping: base, by: { $0.category })
-        return grouped
-            .map { FacetCategory(facetName: $0.key, facetCount: $0.value.count) }
-            .sorted { $0.facetCount > $1.facetCount }
+        let categories = Set(baseResults.map { $0.categoryName })
+        return Array(categories).sorted()
     }
     
-    // Fallback color helper so we never force-unwrap
+    private func categoryCount(for category: String) -> Int {
+        let baseResults = allLists.filter { list in
+            rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased())
+        }
+        return baseResults.filter { $0.categoryName == category }.count
+    }
+    
+    // Fallback color helper
     private func chipColor(for name: String) -> Color {
         categoryChipIconColors[name] ?? Color.gray
     }
 
-
     var body: some View {
         TabView {
             NavigationStack {
-                // MAIN CONTENT
-                ScrollView {
-                    // loading / error
-                    if isLoading {
-                        VStack(spacing: 10) {
-                            ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
-                            Text("Loading Rankos...")
-                                .font(.custom("Nunito-Black", size: 16))
-                                .foregroundColor(Color(hex: 0xA2A2A1))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 50)
-                    }
-                    if let error = errorMessage {
-                        Text(error).foregroundColor(.red).padding()
-                    }
-                    // filtered results
-                    VStack(spacing: 8) {
-                        ForEach(filteredLists) { list in
-                            Button {
-                                selectedList = list
-                            } label: {
-                                if list.type == "default" {
-                                    DefaultListIndividualGallery(listData: list, type: "", onUnpin: {})
-                                } else {
-                                    GroupListIndividualGallery(listData: list, type: "", onUnpin: {})
+                ZStack {
+                    // MAIN CONTENT
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            // Loading / Error states
+                            if isLoading {
+                                VStack(spacing: 10) {
+                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
+                                    Text("Loading Rankos...")
+                                        .font(.custom("Nunito-Black", size: 16))
+                                        .foregroundColor(Color(hex: 0xA2A2A1))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 50)
+                            } else {
+                                // Results info
+                                HStack {
+                                    Text("\(filteredLists.count) results")
+                                        .font(.custom("Nunito-Black", size: 14))
+                                        .foregroundColor(Color(hex: 0x514343))
+                                    
+                                    if selectedFacet != nil {
+                                        Button("Clear filter") {
+                                            withAnimation(.easeInOut(duration: 0.25)) {
+                                                selectedFacet = nil
+                                                currentPage = 1
+                                            }
+                                        }
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(.blue)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: {
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            showCategoryOverlay.toggle()
+                                        }
+                                    }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                            Text("Filter")
+                                        }
+                                        .font(.custom("Nunito-Black", size: 12))
+                                        .foregroundColor(Color(hex: 0x514343))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color(hex: 0xF5F5F5))
+                                        )
+                                    }
+                                }
+                                .padding(.horizontal, 15)
+                                .padding(.vertical, 8)
+                                
+                                if let error = errorMessage {
+                                    Text(error).foregroundColor(.red).padding()
+                                }
+                                
+                                // Paginated results
+                                LazyVStack(spacing: 8) {
+                                    ForEach(paginatedLists) { list in
+                                        Button {
+                                            selectedList = list
+                                        } label: {
+                                            RankoMiniView(listData: list, type: "", onUnpin: {})
+                                        }
+                                        .foregroundColor(Color(hex: 0xFF9864))
+                                        .tint(Color(hex: 0xFFFFFF))
+                                        .buttonStyle(.glassProminent)
+                                        .shadow(color: Color(hex:0x000000).opacity(0.1), radius: 8, x: 0, y: -2)
+                                    }
+                                }
+                                .padding(.horizontal, 15)
+                                
+                                // Pagination controls
+                                if totalPages > 1 {
+                                    HStack(spacing: 20) {
+                                        Button("Previous") {
+                                            if currentPage > 1 {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    currentPage -= 1
+                                                }
+                                            }
+                                        }
+                                        .disabled(currentPage <= 1)
+                                        .foregroundColor(currentPage <= 1 ? .gray : .blue)
+                                        
+                                        Text("Page \(currentPage) of \(totalPages)")
+                                            .font(.custom("Nunito-Black", size: 14))
+                                            .foregroundColor(Color(hex: 0x514343))
+                                        
+                                        Button("Next") {
+                                            if currentPage < totalPages {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    currentPage += 1
+                                                }
+                                            }
+                                        }
+                                        .disabled(currentPage >= totalPages)
+                                        .foregroundColor(currentPage >= totalPages ? .gray : .blue)
+                                    }
+                                    .padding(.vertical, 20)
                                 }
                             }
-                            .foregroundColor(Color(hex: 0xFF9864))
-                            .tint(Color(hex: 0xFFFFFF))
-                            .buttonStyle(.glassProminent)
-                            .shadow(color: Color(hex:0x000000).opacity(0.1), radius: 8, x: 0, y: -2)
                         }
                     }
-                    .padding(.vertical, 20)
-                    .padding(.horizontal, 15)
+                    
+                    // CATEGORY OVERLAY
+                    if showCategoryOverlay {
+                        CategoryOverlayView(
+                            categories: availableCategories,
+                            selectedCategory: selectedFacet,
+                            categoryCount: categoryCount,
+                            chipColor: chipColor,
+                            onCategorySelected: { category in
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    selectedFacet = selectedFacet == category ? nil : category
+                                    currentPage = 1 // Reset to first page when filtering
+                                    showCategoryOverlay = false
+                                }
+                            },
+                            onDismiss: {
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    showCategoryOverlay = false
+                                }
+                            }
+                        )
+                    }
                 }
                 // SEARCH IN NAV BAR
                 .searchable(text: $searchField, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Rankos")
                 .searchFocused($searchFocused)
                 .scrollDismissesKeyboard(.immediately)
                 .onAppear {
-                    // give NavigationStack a tick to mount before focusing
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                         searchFocused = true
                     }
                 }
                 .onChange(of: searchField) { _, newVal in
-                    withAnimation(.easeInOut(duration: 0.3)) { rankoQuery = newVal }
+                    rankoQuery = newVal
+                    currentPage = 1 // Reset to first page when searching
                 }
-                // NAV BAR CONFIG (attach INSIDE the NavigationStack!)
+                // NAV BAR CONFIG
                 .navigationTitle("Search Rankos")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarRole(.navigationStack)
@@ -2360,54 +2476,6 @@ struct SearchRankosView: View {
                             .accessibilityAddTraits(.isHeader)
                     }
                 }
-                
-                // CHIPS UNDER TOOLBAR
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    if !dynamicFacets.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(dynamicFacets) { facet in
-                                    let isSelected = selectedFacet == facet.facetName
-                                    if selectedFacet == nil || isSelected {
-                                        Button {
-                                            withAnimation(.easeInOut(duration: 0.25)) {
-                                                selectedFacet = isSelected ? nil : facet.facetName
-                                            }
-                                        } label: {
-                                            HStack(spacing: 6) {
-                                                Image(systemName: FilterChip.icon(named: facet.facetName, in: defaultFilterChips) ?? "circle.fill")
-                                                Text(facet.facetName).bold()
-                                                Text("\(facet.facetCount)")
-                                                    .font(.caption2.weight(.black))
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(.ultraThinMaterial, in: Capsule())
-                                                if isSelected { Image(systemName: "xmark.circle.fill") }
-                                            }
-                                            .font(.caption)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 8)
-                                            .foregroundStyle(isSelected ? .white : chipColor(for: facet.facetName))
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                    .fill(isSelected ? chipColor(for: facet.facetName)
-                                                          : chipColor(for: facet.facetName).opacity(0.18))
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                        .transition(.scale.combined(with: .opacity))
-                                    }
-                                }
-                                .scrollTargetLayout()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                        }
-                        .scrollTargetBehavior(.viewAligned)
-                        .background(Color(.systemBackground))
-                        .overlay(Divider(), alignment: .bottom)
-                    }
-                }
                 .fullScreenCover(item: $selectedList) { list in
                     if list.type == "default" {
                         DefaultListPersonal(listID: list.id, onSave: {_ in dismiss() }, onDelete: { dismiss() })
@@ -2417,8 +2485,7 @@ struct SearchRankosView: View {
                 }
                 .onAppear {
                     if !isSimulator {
-                        fetchFacetData()
-                        loadAllData()
+                        loadOptimizedData()
                     }
                 }
             }
@@ -2426,49 +2493,190 @@ struct SearchRankosView: View {
         }
         .interactiveDismissDisabled(true)
     }
-
-    private func fetchFacetData() {
-        let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-                                  apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
-        let index = client.index(withName: "RankoLists")
-
-        var facetQuery = Query("")
-        facetQuery.facets = ["RankoCategory"]
-        facetQuery.hitsPerPage = 0
-        facetQuery.maxFacetHits = 50
-        facetQuery.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
-
-        index.search(query: facetQuery) { result in
-            switch result {
-            case .success(let response):
-                if let facets = response.facets {
-                    for (facetName, facetCounts) in facets {
-                        DispatchQueue.main.async {
-                            user_data.userRankoCategories = "— \(facetName): \(facetCounts)"
+    
+    struct CategoryOverlayView: View {
+        let categories: [String]
+        let selectedCategory: String?
+        let categoryCount: (String) -> Int
+        let chipColor: (String) -> Color
+        let onCategorySelected: (String) -> Void
+        let onDismiss: () -> Void
+        
+        var body: some View {
+            ZStack {
+                // Background overlay
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        onDismiss()
+                    }
+                
+                // Category selection panel
+                VStack(spacing: 0) {
+                    Spacer()
+                    
+                    VStack(spacing: 16) {
+                        // Header
+                        HStack {
+                            Text("Filter by Category")
+                                .font(.custom("Nunito-Black", size: 18))
+                                .foregroundColor(Color(hex: 0x514343))
+                            Spacer()
+                            Button(action: onDismiss) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.gray)
+                            }
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                        
+                        // Categories grid
+                        ScrollView {
+                            LazyVGrid(columns: [
+                                GridItem(.flexible()),
+                                GridItem(.flexible())
+                            ], spacing: 12) {
+                                ForEach(categories, id: \.self) { category in
+                                    let isSelected = selectedCategory == category
+                                    let count = categoryCount(category)
+                                    
+                                    Button {
+                                        onCategorySelected(category)
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: FilterChip.icon(named: category, in: defaultFilterChips) ?? "circle.fill")
+                                                .font(.system(size: 14))
+                                            
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(category)
+                                                    .font(.custom("Nunito-Black", size: 13))
+                                                Text("\(count)")
+                                                    .font(.custom("Nunito-Black", size: 10))
+                                                    .opacity(0.7)
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            if isSelected {
+                                                Image(systemName: "checkmark.circle.fill")
+                                                    .font(.system(size: 16))
+                                                    .foregroundColor(.white)
+                                            }
+                                        }
+                                        .foregroundStyle(isSelected ? .white : chipColor(category))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 12)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .fill(isSelected ? chipColor(category) : chipColor(category).opacity(0.15))
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                        }
+                        .frame(maxHeight: 400)
+                        
+                        Spacer(minLength: 20)
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(.systemBackground))
+                            .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: -5)
+                    )
+                }
+            }
+        }
+    }
+    
+    struct RankoMiniView: View {
+        let listData: RankoList
+        let type: String
+        let onUnpin: (() -> Void)?
+
+        var body: some View {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(listData.listName)
+                        .font(.custom("Nunito-Black", size: 16))
+                        .foregroundColor(Color(hex: 0x514343))
+                        .multilineTextAlignment(.leading)
+                    HStack(spacing: 6) {
+                        FeaturedCategoryBadge(text: listData.categoryName)
+                        Text("• \(timeAgo(from: String(listData.dateTime)))")
+                            .font(.custom("Nunito-Black", size: 9))
+                            .foregroundColor(Color(hex: 0x514343))
                     }
                 }
-            case .failure(let error):
-                print("❌ Facet fetch failed: \(error)")
+                Spacer()
+                if type == "featured" {
+                    Button {
+                        onUnpin?()
+                    } label: {
+                        Image(systemName: "pin.fill")
+                            .font(.custom("Nunito-Black", size: 12))
+                            .foregroundColor(Color(hex: 0x514343))
+                            .padding(.trailing, 6)
+                    }
+                }
+            }
+            .padding(.vertical, 5)
+            .padding(.leading, 10)
+            .padding(.trailing, 4)
+            .background(.clear)
+            .padding(.vertical, 1)
+        }
+
+        private func timeAgo(from dt: String) -> String {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "Australia/Sydney")
+            formatter.dateFormat = "yyyyMMddHHmmss"
+
+            guard let date = formatter.date(from: dt) else {
+                return ""
+            }
+
+            let now = Date()
+            let secondsAgo = Int(now.timeIntervalSince(date))
+
+            switch secondsAgo {
+            case 0..<60:
+                return "\(secondsAgo)s ago"
+            case 60..<3600:
+                return "\(secondsAgo / 60)m ago"
+            case 3600..<86400:
+                return "\(secondsAgo / 3600)h ago"
+            case 86400..<604800:
+                return "\(secondsAgo / 86400)d ago"
+            case 604800..<31536000:
+                return "\(secondsAgo / 604800)w ago"
+            default:
+                return "\(secondsAgo / 31536000)y ago"
             }
         }
     }
 
-    private func loadAllData() {
+    // Memory-optimized data loading
+    private func loadOptimizedData() {
         isLoading = true
         errorMessage = nil
 
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
                                   apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
         let index = client.index(withName: "RankoLists")
-        var query = Query("").set(\.hitsPerPage, to: 20)
+        
+        // Get ALL results for accurate pagination
+        var query = Query("").set(\.hitsPerPage, to: 1000) // Get all results
         query.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
 
         index.search(query: query) { result in
             switch result {
             case .success(let response):
                 let objectIDs = response.hits.map { $0.objectID.rawValue }
-                fetchFromFirebase(using: objectIDs)
+                fetchMinimalDataFromFirebase(using: objectIDs)
             case .failure(let error):
                 DispatchQueue.main.async {
                     self.errorMessage = "❌ Failed to fetch from Algolia: \(error.localizedDescription)"
@@ -2478,68 +2686,66 @@ struct SearchRankosView: View {
         }
     }
     
-    private func fetchFromFirebase(using objectIDs: [String]) {
+    // Optimized Firebase fetching - only basic data
+    private func fetchMinimalDataFromFirebase(using objectIDs: [String]) {
         let rankoDataRef = Database.database().reference().child("RankoData")
-        rankoDataRef.observeSingleEvent(of: .value) { snapshot, _ in
-            guard let value = snapshot.value as? [String: Any] else {
-                self.errorMessage = "❌ No data found in Firebase."
-                self.isLoading = false
-                return
-            }
-
-            var fetchedLists: [RankoList] = []
-
+        let dispatchGroup = DispatchGroup()
+        var fetchedLists: [RankoList] = []
+        let queue = DispatchQueue.global(qos: .userInitiated)
+        
+        // Batch requests for better performance
+        queue.async {
             for objectID in objectIDs {
-                guard let listData = value[objectID] as? [String: Any],
-                      let name = listData["RankoName"] as? String,
-                      let description = listData["RankoDescription"] as? String,
-                      let category = listData["RankoCategory"] as? String,
-                      let type = listData["RankoType"] as? String,
-                      let isPrivate = listData["RankoPrivacy"] as? Bool,
-                      let userID = listData["RankoUserID"] as? String,
-                      let dateTimeStr = listData["RankoDateTime"] as? String,
-                      let itemsDict = listData["RankoItems"] as? [String: [String: Any]] else {
-                    continue
-                }
+                dispatchGroup.enter()
+                
+                // Only fetch essential fields for memory optimization
+                rankoDataRef.child(objectID).child("RankoName").observeSingleEvent(of: .value) { nameSnapshot, _ in
+                    rankoDataRef.child(objectID).child("RankoDescription").observeSingleEvent(of: .value) { descSnapshot, _ in
+                        rankoDataRef.child(objectID).child("RankoCategory").observeSingleEvent(of: .value) { catSnapshot, _ in
+                            rankoDataRef.child(objectID).child("RankoType").observeSingleEvent(of: .value) { typeSnapshot, _ in
+                                rankoDataRef.child(objectID).child("RankoPrivacy").observeSingleEvent(of: .value) { privacySnapshot, _ in
+                                    rankoDataRef.child(objectID).child("RankoUserID").observeSingleEvent(of: .value) { userSnapshot, _ in
+                                        rankoDataRef.child(objectID).child("RankoDateTime").observeSingleEvent(of: .value) { dateSnapshot, _ in
+                                            defer { dispatchGroup.leave() }
+                                            
+                                            guard let name = nameSnapshot.value as? String,
+                                                  let description = descSnapshot.value as? String,
+                                                  let type = typeSnapshot.value as? String,
+                                                  let isPrivate = privacySnapshot.value as? Bool,
+                                                  let userID = userSnapshot.value as? String,
+                                                  let dateTimeStr = dateSnapshot.value as? String else {
+                                                return
+                                            }
 
-                let items: [RankoItem] = itemsDict.compactMap { itemID, item in
-                    guard let itemName = item["ItemName"] as? String,
-                          let itemDesc = item["ItemDescription"] as? String,
-                          let itemImage = item["ItemImage"] as? String else {
-                        return nil
+                                            let rankoList = RankoList(
+                                                id: objectID,
+                                                listName: name,
+                                                listDescription: description,
+                                                type: type,
+                                                categoryName: "Albums",
+                                                categoryIcon: "circle.circle",
+                                                categoryColour: 0xFFFFFF,
+                                                isPrivate: isPrivate ? "Private" : "Public",
+                                                userCreator: userID,
+                                                dateTime: dateTimeStr,
+                                                items: [] // Empty for memory optimization
+                                            )
+
+                                            fetchedLists.append(rankoList)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-
-                    let rank = item["ItemRank"] as? Int ?? 0
-                    let votes = item["ItemVotes"] as? Int ?? 0
-
-                    let record = RankoRecord(
-                        objectID: itemID,
-                        ItemName: itemName,
-                        ItemDescription: itemDesc,
-                        ItemCategory: category,
-                        ItemImage: itemImage
-                    )
-
-                    return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
                 }
-
-                let rankoList = RankoList(
-                    id: objectID,
-                    listName: name,
-                    listDescription: description,
-                    type: type,
-                    category: category,
-                    isPrivate: isPrivate ? "Private" : "Public",
-                    userCreator: userID,
-                    dateTime: dateTimeStr,
-                    items: items
-                )
-
-                fetchedLists.append(rankoList)
             }
-
-            DispatchQueue.main.async {
-                self.lists = fetchedLists
+            
+            dispatchGroup.notify(queue: .main) {
+                // Sort by date (newest first)
+                self.allLists = fetchedLists.sorted {
+                    Int($0.dateTime) ?? 0 > Int($1.dateTime) ?? 0
+                }
                 self.isLoading = false
             }
         }
@@ -2564,7 +2770,7 @@ struct SelectFeaturedRankosView: View {
     // Dynamic filtering + facets that react to the remaining lists
     private var filteredLists: [RankoList] {
         lists.filter { list in
-            (selectedFacet == nil || list.category == selectedFacet) &&
+            (selectedFacet == nil || list.categoryName == selectedFacet) &&
             (rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased()))
         }
     }
@@ -2575,7 +2781,7 @@ struct SelectFeaturedRankosView: View {
             rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased())
         }
         
-        let grouped = Dictionary(grouping: base, by: { $0.category })
+        let grouped = Dictionary(grouping: base, by: { $0.categoryName })
         return grouped
             .map { FacetCategory(facetName: $0.key, facetCount: $0.value.count) }
             .sorted { $0.facetCount > $1.facetCount }
@@ -2833,7 +3039,9 @@ struct SelectFeaturedRankosView: View {
                     listName: name,
                     listDescription: description,
                     type: type,
-                    category: category,
+                    categoryName: "Albums",
+                    categoryIcon: "circle.circle",
+                    categoryColour: 0xFFFFFF,
                     isPrivate: isPrivate ? "Private" : "Public",
                     userCreator: userID,
                     dateTime: dateTimeStr,
@@ -4287,10 +4495,7 @@ struct ProfileSpectateView: View {
 
     // ✅ Modified fetchFeaturedList to support completion
     private func fetchFeaturedList(slot: Int, listID: String, completion: @escaping (RankoList?) -> Void) {
-        let listRef = Database.database()
-            .reference()
-            .child("RankoData")
-            .child(listID)
+        let listRef = Database.database().reference().child("RankoData").child(listID)
 
         listRef.observeSingleEvent(of: .value) { snap in
             guard let dict = snap.value as? [String: Any],
@@ -4306,7 +4511,6 @@ struct ProfileSpectateView: View {
         guard
             let listName      = dict["RankoName"]        as? String,
             let description   = dict["RankoDescription"] as? String,
-            let category      = dict["RankoCategory"]    as? String,
             let type          = dict["RankoType"]        as? String,
             let privacy       = dict["RankoPrivacy"]     as? Bool,
             let dateTime      = dict["RankoDateTime"]    as? String,
@@ -4348,7 +4552,9 @@ struct ProfileSpectateView: View {
             listName:         listName,
             listDescription:  description,
             type:             type,
-            category:         category,
+            categoryName: "Albums",
+            categoryIcon: "circle.circle",
+            categoryColour: 0xFFFFFF,
             isPrivate:        isPrivateString,
             userCreator:      userCreator,
             dateTime:         dateTime,
@@ -4535,15 +4741,135 @@ final class CacheManager {
     }
 }
 
+// MARK: - Enhanced Models
+
+struct AppTheme: Identifiable {
+    let id = UUID()
+    let name: String
+    let primaryColor: Color
+    let secondaryColor: Color
+    let accentColor: Color
+    let backgroundColor: Color
+    let textColor: Color
+    let icon: String
+    let isLocked: Bool
+    let mission: Mission?
+    
+    static let `default` = AppTheme(
+        name: "Classic",
+        primaryColor: .blue,
+        secondaryColor: .gray,
+        accentColor: .orange,
+        backgroundColor: Color(.systemBackground),
+        textColor: Color(.label),
+        icon: "paintbrush.fill",
+        isLocked: false,
+        mission: nil
+    )
+}
+
+struct AppFont: Identifiable {
+    let id = UUID()
+    let name: String
+    let fontName: String
+    let previewText: String
+    let isLocked: Bool
+    let mission: Mission?
+    
+    func font(size: CGFloat) -> Font {
+        if fontName == "System" {
+            return .system(size: size, weight: .medium, design: .default)
+        }
+        return .custom(fontName, size: size)
+    }
+}
+
+enum GameType: String, CaseIterable {
+    case blindSequence = "Blind Sequence"
+    case memoryChallenge = "Memory Challenge"
+    case speedTap = "Speed Tap"
+    case colorMatch = "Color Match"
+    case patternTrace = "Pattern Trace"
+}
+
+enum RewardType: String, CaseIterable {
+    case appIcon = "App Icons"
+    case theme = "Themes"
+    case font = "Fonts"
+    case badge = "Badges"
+    case effect = "Effects"
+}
+
+struct Mission: Identifiable {
+    let id = UUID()
+    let description: String
+    let goal: Int
+    let type: MissionType
+    let game: GameType
+    let rewardType: RewardType
+    let difficulty: Difficulty
+    
+    enum Difficulty: String, CaseIterable {
+        case easy = "Easy"
+        case medium = "Medium"
+        case hard = "Hard"
+        case expert = "Expert"
+        case legendary = "Legendary"
+        
+        var color: Color {
+            switch self {
+            case .easy: return .green
+            case .medium: return .yellow
+            case .hard: return .orange
+            case .expert: return .red
+            case .legendary: return .purple
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .easy: return "leaf.fill"
+            case .medium: return "flame.fill"
+            case .hard: return "bolt.fill"
+            case .expert: return "crown.fill"
+            case .legendary: return "star.fill"
+            }
+        }
+    }
+}
+
+enum MissionType: String, CaseIterable {
+    case gamesPlayed = "Games Played"
+    case highScore = "High Score"
+    case consecutiveWins = "Win Streak"
+    case perfectRounds = "Perfect Rounds"
+    case timeChallenge = "Time Challenge"
+    case subscribed = "Premium"
+    case dailyStreak = "Daily Streak"
+}
+
+struct AppIcon: Identifiable {
+    let id = UUID()
+    let iconName: String?
+    let previewImage: String
+    var isLocked: Bool
+    let mission: Mission?
+    let category: String
+}
+
+// MARK: - Enhanced Toast Component
+
 struct MissionToast: View {
     @Binding var isShown: Bool
     var title: String? = "Mission"
     var message: String = "message"
     var icon: Image = Image(systemName: "exclamationmark.circle")
     var alignment: Alignment = .top
+    var theme: AppTheme = .default
     
     var goal: Int? = nil
     var progress: Int? = nil
+    var difficulty: Mission.Difficulty? = nil
 
     var body: some View {
         VStack {
@@ -4560,30 +4886,53 @@ struct MissionToast: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 icon
-                    .foregroundColor(.orange)
-                    .font(.title2)
+                    .foregroundColor(theme.accentColor)
+                    .font(.custom("Nunito-Black", size: 18))
+                
+                if let difficulty = difficulty {
+                    Image(systemName: difficulty.icon)
+                        .foregroundColor(difficulty.color)
+                        .font(.caption)
+                }
+                
                 VStack(alignment: .leading, spacing: 4) {
                     if let title {
                         Text(title)
-                            .font(.headline)
+                            .font(.custom("Nunito-Black", size: 16))
+                            .foregroundColor(theme.textColor)
                     }
                     Text(message)
-                        .font(.subheadline)
+                        .font(.custom("Nunito-Black", size: 14))
+                        .foregroundColor(theme.textColor.opacity(0.8))
                 }
             }
 
             if let goal, let progress {
-                ProgressView(value: Float(progress), total: Float(goal))
-                    .accentColor(.orange)
-                Text("\(progress)/\(goal)")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(value: Float(progress), total: Float(goal))
+                        .accentColor(theme.accentColor)
+                    HStack {
+                        Text("\(progress)/\(goal)")
+                            .font(.custom("Nunito-Black", size: 12))
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Text("\(Int((Float(progress) / Float(goal)) * 100))%")
+                            .font(.custom("Nunito-Black", size: 12))
+                            .foregroundColor(theme.accentColor)
+                    }
+                }
             }
         }
         .padding()
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(radius: 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.backgroundColor)
+                .shadow(color: theme.accentColor.opacity(0.3), radius: 15, x: 0, y: 5)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(theme.accentColor.opacity(0.3), lineWidth: 1)
+        )
         .padding()
     }
 
@@ -4596,161 +4945,503 @@ struct MissionToast: View {
     }
 }
 
-struct Mission {
-    let description: String
-    let goal: Int
-    let type: MissionType
-}
+// MARK: - Main View
 
-enum MissionType {
-    case gamesPlayed
-    case highScore
-    case subscribed
-}
-
-struct AppIcon: Identifiable {
-    let id = UUID()
-    let iconName: String?
-    let previewImage: String
-    var isLocked: Bool
-    let mission: Mission?
-}
-
-struct CustomiseAppIconView: View {
-    @AppStorage("totalBlindSequenceGamesPlayed") private var totalGamesPlayed = 0
-    @AppStorage("BlindSequenceHighScore") private var highScore = 0
-    @AppStorage("isProUser") var subscribed: Int = 0
-
-    @AppStorage("unlocked_Medal_AppIcon") private var unlockedMedal: Bool = false
-    @AppStorage("unlocked_Trophy_AppIcon") private var unlockedTrophy: Bool = false
-    @AppStorage("unlocked_Crown_AppIcon") private var unlockedCrown: Bool = false
-    @AppStorage("unlocked_Star_AppIcon") private var unlockedStar: Bool = false
-
-    @State private var unlockingIconIndex: Int? = nil
+struct AppPersonalisationView: View {
+    @Environment(\.dismiss) var dismiss
+    // Game Stats
+    @AppStorage("totalBlindSequenceGamesPlayed") private var blindSequenceGames = 12
+    @AppStorage("BlindSequenceHighScore") private var blindSequenceScore = 25
+    @AppStorage("memoryGamesPlayed") private var memoryGames = 15
+    @AppStorage("memoryHighScore") private var memoryScore = 28
+    @AppStorage("speedTapGames") private var speedTapGames = 8
+    @AppStorage("speedTapScore") private var speedTapScore = 42
+    @AppStorage("colorMatchGames") private var colorMatchGames = 23
+    @AppStorage("colorMatchScore") private var colorMatchScore = 35
+    @AppStorage("patternTraceGames") private var patternTraceGames = 12
+    @AppStorage("patternTraceScore") private var patternTraceScore = 18
+    
+    @AppStorage("dailyStreak") private var dailyStreak = 7
+    @AppStorage("consecutiveWins") private var consecutiveWins = 5
+    @AppStorage("perfectRounds") private var perfectRounds = 12
+    @AppStorage("isProUser") var subscribed: Int = 1
+    
+    // Unlock States
+    @AppStorage("selectedTheme") private var selectedThemeName = "Classic"
+    @AppStorage("selectedFont") private var selectedFontName = "System"
+    @AppStorage("selectedIcon") private var selectedIconName: String?
+    
+    // State Variables
+    @State private var currentTheme: AppTheme = .default
+    @State private var currentFont: AppFont = AppFont(name: "System", fontName: "System", previewText: "Abc", isLocked: false, mission: nil)
+    
+    @State private var unlockingItemIndex: Int? = nil
     @State private var isUnlocking: Bool = false
-    @State private var selectedIcon: String? = UIApplication.shared.alternateIconName
-    @State private var appIcons: [AppIcon] = []
+    @State private var selectedIcon: String?
+    
+    @State private var groupByType: GroupingType = .rewardType
+    @State private var showFilterSheet = false
+    @State private var selectedGame: GameType? = nil
+    @State private var selectedRewardType: RewardType? = nil
+    @State private var selectedDifficulty: Mission.Difficulty? = nil
     
     @State private var toastMessage: String = ""
     @State private var toastProgress: Int? = nil
     @State private var toastGoal: Int? = nil
     @State private var showToast: Bool = false
+    @State private var toastDifficulty: Mission.Difficulty? = nil
     @State private var toastDismissWorkItem: DispatchWorkItem?
     @State private var toastID = UUID()
-
-    let columns: [GridItem] = Array(repeating: .init(.flexible(), spacing: 4), count: 5)
-
-    private func initializeAppIcons() {
-        appIcons = [
-            AppIcon(iconName: "Default_AppIcon", previewImage: "Default_AppIcon_Preview", isLocked: false, mission: nil),
-            AppIcon(iconName: "Medal_AppIcon", previewImage: "Medal_AppIcon_Preview", isLocked: !unlockedMedal, mission: Mission(description: "Achieve 20 Points on Blind Sequence", goal: 20, type: .highScore)),
-            AppIcon(iconName: "Trophy_AppIcon", previewImage: "Trophy_AppIcon_Preview", isLocked: !unlockedTrophy, mission: Mission(description: "Achieve 30 Points on Blind Sequence", goal: 30, type: .highScore)),
-            AppIcon(iconName: "Star_AppIcon", previewImage: "Star_AppIcon_Preview", isLocked: !unlockedStar, mission: Mission(description: "Achieve 40 Points on Blind Sequence", goal: 40, type: .highScore)),
-            AppIcon(iconName: "Crown_AppIcon", previewImage: "Crown_AppIcon_Preview", isLocked: !unlockedCrown, mission: Mission(description: "Achieve 50 Points on Blind Sequence", goal: 50, type: .highScore)),
-            AppIcon(iconName: nil, previewImage: "ComingSoon_Preview", isLocked: true, mission: Mission(description: "More Icons & Missions Coming Soon!", goal: 100, type: .highScore)),
+    
+    enum GroupingType: String, CaseIterable {
+        case rewardType = "Reward"
+        case game = "Mini Game"
+        case missionType = "Mission Type"
+        case difficulty = "Difficulty"
+        
+        var icon: String {
+            switch self {
+            case .rewardType: return "square.grid.2x2"
+            case .game: return "gamecontroller"
+            case .missionType: return "target"
+            case .difficulty: return "chart.bar"
+            }
+        }
+    }
+    
+    let iconColumns: [GridItem] = Array(repeating: .init(.flexible(), spacing: 8), count: 4)
+    let themeColumns: [GridItem] = Array(repeating: .init(.flexible(), spacing: 12), count: 2)
+    
+    // MARK: - Data Generation
+    
+    private func generateMissions() -> [Mission] {
+        var missions: [Mission] = []
+        
+        // Blind Sequence Missions
+        missions += [
+            Mission(description: "Score 20 points in Blind Sequence", goal: 20, type: .highScore, game: .blindSequence, rewardType: .appIcon, difficulty: .easy),
+            Mission(description: "Score 30 points in Blind Sequence", goal: 30, type: .highScore, game: .blindSequence, rewardType: .appIcon, difficulty: .medium),
+            Mission(description: "Play 10 Blind Sequence games", goal: 10, type: .gamesPlayed, game: .blindSequence, rewardType: .theme, difficulty: .easy),
+            Mission(description: "Subscribe to Premium", goal: 1, type: .subscribed, game: .blindSequence, rewardType: .font, difficulty: .easy),
+        ]
+        
+        // Memory Challenge Missions
+        missions += [
+            Mission(description: "Score 25 in Memory Challenge", goal: 25, type: .highScore, game: .memoryChallenge, rewardType: .theme, difficulty: .medium),
+            Mission(description: "Play 50 Memory games", goal: 50, type: .gamesPlayed, game: .memoryChallenge, rewardType: .appIcon, difficulty: .medium),
+            Mission(description: "Score 35 in Memory Challenge", goal: 35, type: .highScore, game: .memoryChallenge, rewardType: .font, difficulty: .medium),
+        ]
+        
+        // Speed Tap Missions
+        missions += [
+            Mission(description: "Get 10 consecutive wins in Speed Tap", goal: 10, type: .consecutiveWins, game: .speedTap, rewardType: .appIcon, difficulty: .hard),
+            Mission(description: "Score 45 in Speed Tap", goal: 45, type: .highScore, game: .speedTap, rewardType: .theme, difficulty: .expert),
+        ]
+        
+        // Color Match Missions
+        missions += [
+            Mission(description: "Score 35 in Color Match", goal: 35, type: .highScore, game: .colorMatch, rewardType: .appIcon, difficulty: .hard),
+            Mission(description: "Complete 100 Color Match games", goal: 100, type: .gamesPlayed, game: .colorMatch, rewardType: .theme, difficulty: .hard),
+            Mission(description: "Maintain 14-day streak", goal: 14, type: .dailyStreak, game: .colorMatch, rewardType: .font, difficulty: .easy),
+            Mission(description: "Maintain 30-day streak", goal: 30, type: .dailyStreak, game: .colorMatch, rewardType: .appIcon, difficulty: .legendary)
+        ]
+        
+        // Pattern Trace Missions
+        missions += [
+            Mission(description: "Get 20 perfect rounds in Pattern Trace", goal: 20, type: .perfectRounds, game: .patternTrace, rewardType: .theme, difficulty: .hard),
+            Mission(description: "Play 25 Pattern Trace games", goal: 25, type: .gamesPlayed, game: .patternTrace, rewardType: .font, difficulty: .medium),
+        ]
+        
+        return missions
+    }
+    
+    private func generateAppIcons() -> [AppIcon] {
+        let missions = generateMissions().filter { $0.rewardType == .appIcon }
+        
+        return [
+            AppIcon(iconName: nil, previewImage: "Default_AppIcon_Preview", isLocked: false, mission: nil, category: "Classic"),
+            AppIcon(iconName: "Medal_AppIcon", previewImage: "Medal_AppIcon_Preview", isLocked: missions.count > 0 ? !checkMissionComplete(missions[0]) : true, mission: missions.count > 0 ? missions[0] : nil, category: "Achievement"),
+            AppIcon(iconName: "Trophy_AppIcon", previewImage: "Trophy_AppIcon_Preview", isLocked: missions.count > 1 ? !checkMissionComplete(missions[1]) : true, mission: missions.count > 1 ? missions[1] : nil, category: "Achievement"),
+            AppIcon(iconName: "Star_AppIcon", previewImage: "Star_AppIcon_Preview", isLocked: missions.count > 2 ? !checkMissionComplete(missions[2]) : true, mission: missions.count > 2 ? missions[2] : nil, category: "Achievement"),
+            AppIcon(iconName: "Crown_AppIcon", previewImage: "Crown_AppIcon_Preview", isLocked: missions.count > 3 ? !checkMissionComplete(missions[3]) : true, mission: missions.count > 3 ? missions[3] : nil, category: "Royal"),
+            AppIcon(iconName: "Diamond_AppIcon", previewImage: "Diamond_AppIcon_Preview", isLocked: missions.count > 4 ? !checkMissionComplete(missions[4]) : true, mission: missions.count > 4 ? missions[4] : nil, category: "Premium"),
+            AppIcon(iconName: "Fire_AppIcon", previewImage: "Fire_AppIcon_Preview", isLocked: missions.count > 5 ? !checkMissionComplete(missions[5]) : true, mission: missions.count > 5 ? missions[5] : nil, category: "Elite"),
+            AppIcon(iconName: "Galaxy_AppIcon", previewImage: "Galaxy_AppIcon_Preview", isLocked: missions.count > 6 ? !checkMissionComplete(missions[6]) : true, mission: missions.count > 6 ? missions[6] : nil, category: "Cosmic")
         ]
     }
-
+    
+    private func generateThemes() -> [AppTheme] {
+        let missions = generateMissions().filter { $0.rewardType == .theme }
+        
+        return [
+            AppTheme(name: "Classic", primaryColor: .blue, secondaryColor: .gray, accentColor: .orange, backgroundColor: Color(.systemBackground), textColor: Color(.label), icon: "DefaultTheme_Image", isLocked: false, mission: nil),
+            AppTheme(name: "Ocean", primaryColor: .blue, secondaryColor: .cyan, accentColor: .teal, backgroundColor: Color.blue.opacity(0.1), textColor: .blue, icon: "OceanTheme_Image", isLocked: missions.count > 0 ? !checkMissionComplete(missions[0]) : true, mission: missions.count > 0 ? missions[0] : nil),
+            AppTheme(name: "Sunset", primaryColor: .orange, secondaryColor: .pink, accentColor: .red, backgroundColor: Color.orange.opacity(0.1), textColor: .orange, icon: "SunsetTheme_Image", isLocked: missions.count > 1 ? !checkMissionComplete(missions[1]) : true, mission: missions.count > 1 ? missions[1] : nil),
+            AppTheme(name: "Forest", primaryColor: .green, secondaryColor: .mint, accentColor: .green, backgroundColor: Color.green.opacity(0.1), textColor: .green, icon: "ForestTheme_Image", isLocked: missions.count > 2 ? !checkMissionComplete(missions[2]) : true, mission: missions.count > 2 ? missions[2] : nil),
+            AppTheme(name: "Galaxy", primaryColor: .purple, secondaryColor: .indigo, accentColor: .purple, backgroundColor: Color.purple.opacity(0.1), textColor: .purple, icon: "GalaxyTheme_Image", isLocked: missions.count > 3 ? !checkMissionComplete(missions[3]) : true, mission: missions.count > 3 ? missions[3] : nil),
+            AppTheme(name: "Crimson", primaryColor: .red, secondaryColor: .pink, accentColor: .red, backgroundColor: Color.red.opacity(0.1), textColor: .red, icon: "CrimsonTheme_Image", isLocked: missions.count > 4 ? !checkMissionComplete(missions[4]) : true, mission: missions.count > 4 ? missions[4] : nil)
+        ]
+    }
+    
+    private func generateFonts() -> [AppFont] {
+        let missions = generateMissions().filter { $0.rewardType == .font }
+        
+        return [
+            AppFont(name: "System", fontName: "System", previewText: "Abc 123", isLocked: false, mission: nil),
+            AppFont(name: "Rounded", fontName: "SF Pro Rounded", previewText: "Abc 123", isLocked: missions.count > 0 ? !checkMissionComplete(missions[0]) : true, mission: missions.count > 0 ? missions[0] : nil),
+            AppFont(name: "Mono", fontName: "SF Mono", previewText: "Abc 123", isLocked: missions.count > 1 ? !checkMissionComplete(missions[1]) : true, mission: missions.count > 1 ? missions[1] : nil),
+            AppFont(name: "Serif", fontName: "Times New Roman", previewText: "Abc 123", isLocked: missions.count > 2 ? !checkMissionComplete(missions[2]) : true, mission: missions.count > 2 ? missions[2] : nil)
+        ]
+    }
+    
+    private func checkMissionComplete(_ mission: Mission) -> Bool {
+        let progress = getProgress(for: mission)
+        return progress >= mission.goal
+    }
+    
+    private func getProgress(for mission: Mission) -> Int {
+        switch (mission.type, mission.game) {
+        case (.gamesPlayed, .blindSequence): return blindSequenceGames
+        case (.gamesPlayed, .memoryChallenge): return memoryGames
+        case (.gamesPlayed, .speedTap): return speedTapGames
+        case (.gamesPlayed, .colorMatch): return colorMatchGames
+        case (.gamesPlayed, .patternTrace): return patternTraceGames
+        case (.highScore, .blindSequence): return blindSequenceScore
+        case (.highScore, .memoryChallenge): return memoryScore
+        case (.highScore, .speedTap): return speedTapScore
+        case (.highScore, .colorMatch): return colorMatchScore
+        case (.highScore, .patternTrace): return patternTraceScore
+        case (.consecutiveWins, _): return consecutiveWins
+        case (.perfectRounds, _): return perfectRounds
+        case (.subscribed, _): return subscribed
+        case (.dailyStreak, _): return dailyStreak
+        default: return 0
+        }
+    }
+    
+    // MARK: - Grouped Data
+    
+    private var groupedData: [(String, [AppIcon], [AppTheme], [AppFont])] {
+        let allIcons = generateAppIcons()
+        let allThemes = generateThemes()
+        let allFonts = generateFonts()
+        
+        switch groupByType {
+        case .game:
+            return GameType.allCases.map { game in
+                let icons = allIcons.filter { icon in
+                    guard let mission = icon.mission else { return game == .blindSequence && icon.iconName == nil }
+                    return mission.game == game
+                }
+                let themes = allThemes.filter { theme in
+                    guard let mission = theme.mission else { return game == .blindSequence && theme.name == "Classic" }
+                    return mission.game == game
+                }
+                let fonts = allFonts.filter { font in
+                    guard let mission = font.mission else { return game == .blindSequence && font.name == "System" }
+                    return mission.game == game
+                }
+                return (game.rawValue, icons, themes, fonts)
+            }.filter { !$0.1.isEmpty || !$0.2.isEmpty || !$0.3.isEmpty }
+            
+        case .missionType:
+            return MissionType.allCases.map { missionType in
+                let icons = allIcons.filter { $0.mission?.type == missionType }
+                let themes = allThemes.filter { $0.mission?.type == missionType }
+                let fonts = allFonts.filter { $0.mission?.type == missionType }
+                return (missionType.rawValue, icons, themes, fonts)
+            }.filter { !$0.1.isEmpty || !$0.2.isEmpty || !$0.3.isEmpty }
+            
+        case .difficulty:
+            return Mission.Difficulty.allCases.map { difficulty in
+                let icons = allIcons.filter { $0.mission?.difficulty == difficulty }
+                let themes = allThemes.filter { $0.mission?.difficulty == difficulty }
+                let fonts = allFonts.filter { $0.mission?.difficulty == difficulty }
+                return (difficulty.rawValue, icons, themes, fonts)
+            }.filter { !$0.1.isEmpty || !$0.2.isEmpty || !$0.3.isEmpty }
+            
+        case .rewardType:
+            return [
+                ("App Icons", allIcons, [], []),
+                ("Themes", [], allThemes, []),
+                ("Fonts", [], [], allFonts)
+            ]
+        }
+    }
+    
     var body: some View {
-        ZStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Change App Icon")
-                    .font(.title2.bold())
-
-                Text("Click on a locked icon to see the mission to claim it.")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-
-                LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(appIcons.indices, id: \.self) { index in
-                        let icon = appIcons[index]
-                        let isLast = index == appIcons.count - 1
-
-                        AppIconGridItem(
-                            icon: icon,
-                            isComingSoon: isLast,
-                            isUnlocking: unlockingIconIndex == index && isUnlocking,
-                            isSelected: (selectedIcon == icon.iconName || (selectedIcon == nil && icon.iconName == nil))
-                        ) {
-                            if !icon.isLocked && !isLast {
-                                changeAppIcon(to: icon.iconName)
-                                selectedIcon = icon.iconName
-                            } else if icon.isLocked, let mission = icon.mission {
-                                let progress: Int
-                                switch mission.type {
-                                case .gamesPlayed: progress = totalGamesPlayed
-                                case .highScore: progress = highScore
-                                case .subscribed: progress = subscribed
-                                }
-
-                                if progress >= mission.goal {
-                                    unlockingIconIndex = index
-                                    isUnlocking = true
-
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                        withAnimation {
-                                            appIcons[index].isLocked = false
-                                            isUnlocking = false
-                                            unlockingIconIndex = nil
-
-                                            switch icon.iconName {
-                                            case "Medal_AppIcon": unlockedMedal = true
-                                            case "Trophy_AppIcon": unlockedTrophy = true
-                                            case "Crown_AppIcon": unlockedCrown = true
-                                            case "Star_AppIcon": unlockedStar = true
-                                            default: break
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    if showToast {
-                                        withAnimation {
-                                            showToast = false
-                                        }
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                            showToastWithMission(mission: mission, progress: progress)
-                                        }
-                                    } else {
-                                        showToastWithMission(mission: mission, progress: progress)
+        NavigationView {
+            ZStack {
+                currentTheme.backgroundColor.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Content
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(groupedData.enumerated()), id: \.offset) { index, group in
+                                VStack(spacing: 0) {
+                                    GroupSectionView(
+                                        title: group.0,
+                                        icons: group.1,
+                                        themes: group.2,
+                                        fonts: group.3,
+                                        theme: currentTheme,
+                                        selectedIcon: selectedIcon,
+                                        selectedTheme: currentTheme,
+                                        selectedFont: currentFont,
+                                        iconColumns: iconColumns,
+                                        themeColumns: themeColumns,
+                                        onIconTap: { icon in handleIconTap(icon: icon) },
+                                        onThemeTap: { theme in handleThemeSelection(theme: theme) },
+                                        onFontTap: { font in handleFontSelection(font: font) }
+                                    )
+                                    
+                                    // Divider between groups
+                                    if index < groupedData.count - 1 {
+                                        Divider()
+                                            .background(currentTheme.textColor.opacity(0.2))
+                                            .padding(.vertical, 20)
                                     }
                                 }
                             }
                         }
+                        .padding(.horizontal)
                     }
                 }
-                Spacer()
+                
+                // Toast Overlay
+                if showToast {
+                    MissionToast(
+                        isShown: $showToast,
+                        title: "🔒 Mission Required",
+                        message: toastMessage,
+                        icon: Image(systemName: "target"),
+                        alignment: .bottom,
+                        theme: currentTheme,
+                        goal: toastGoal,
+                        progress: toastProgress,
+                        difficulty: toastDifficulty
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .id(toastID)
+                    .zIndex(1)
+                }
             }
-            .padding(.top, 15)
-            .padding()
-            .navigationTitle("Choose App Icon")
-
-            // ✅ Actual Toast view (conditionally shown)
-            if showToast {
-                MissionToast(
-                    isShown: $showToast,
-                    title: "🔒 Mission to Unlock",
-                    message: toastMessage,
-                    icon: Image(systemName: "exclamationmark.circle"),
-                    alignment: .bottom,
-                    goal: toastGoal,
-                    progress: toastProgress
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .id(toastID)
-                .padding(.bottom, 12)
-                .zIndex(1)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { showFilterSheet = true } label: {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundColor(currentTheme.textColor)
+                            .padding(.vertical, 5)
+                            .padding(.horizontal, 2)
+                    }
+                }
+                
+                ToolbarItem(placement: .principal) {
+                    Text("Customisation Center")
+                        .font(.custom("Nunito-Black", size: 22))
+                        .foregroundColor(currentTheme.textColor)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundColor(currentTheme.textColor)
+                            .padding(.vertical, 3)
+                            .padding(.horizontal, 3)
+                    }
+                }
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: toastID) // Ensures all transitions animate
+        .sheet(isPresented: $showFilterSheet) {
+            FilterSheet(
+                selectedGrouping: $groupByType,
+                theme: currentTheme
+            )
+        }
         .onAppear {
-            initializeAppIcons()
-            Analytics.logEvent(AnalyticsEventScreenView, parameters: [
-                AnalyticsParameterScreenName: "CustomiseAppIcon",
-                AnalyticsParameterScreenClass: "CustomiseAppIconView"
-            ])
+            setupInitialStates()
         }
     }
-
+    
+    private var filterControls: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // Group By Picker
+                Menu {
+                    ForEach(GroupingType.allCases, id: \.self) { type in
+                        Button(action: { groupByType = type }) {
+                            HStack {
+                                Image(systemName: type.icon)
+                                Text(type.rawValue)
+                                    .font(.custom("Nunito-Black", size: 14))
+                                if groupByType == type {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: groupByType.icon)
+                        Text("Group: \(groupByType.rawValue)")
+                            .font(.custom("Nunito-Black", size: 14))
+                        Image(systemName: "chevron.down")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(currentTheme.accentColor.opacity(0.15))
+                    .foregroundColor(currentTheme.accentColor)
+                    .cornerRadius(20)
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+    
+    // MARK: - Filter Sheet
+    
+    struct FilterSheet: View {
+        @Binding var selectedGrouping: GroupingType
+        let theme: AppTheme
+        @Environment(\.presentationMode) var presentationMode
+        
+        var body: some View {
+            NavigationView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Group rewards by:")
+                        .font(.custom("Nunito-Black", size: 18))
+                        .foregroundColor(theme.textColor)
+                        .padding(.top)
+                    
+                    VStack(spacing: 12) {
+                        ForEach(GroupingType.allCases, id: \.self) { grouping in
+                            Button(action: {
+                                selectedGrouping = grouping
+                                presentationMode.wrappedValue.dismiss()
+                            }) {
+                                HStack {
+                                    Image(systemName: grouping.icon)
+                                        .foregroundColor(theme.accentColor)
+                                        .frame(width: 24)
+                                    
+                                    Text(grouping.rawValue)
+                                        .font(.custom("Nunito-Black", size: 16))
+                                        .foregroundColor(theme.textColor)
+                                    
+                                    Spacer()
+                                    
+                                    if selectedGrouping == grouping {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(theme.accentColor)
+                                    }
+                                }
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(selectedGrouping == grouping ? theme.accentColor.opacity(0.1) : theme.backgroundColor)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(selectedGrouping == grouping ? theme.accentColor : theme.textColor.opacity(0.2), lineWidth: 1)
+                                        )
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer()
+                }
+                .padding()
+                .background(theme.backgroundColor)
+                .navigationTitle("Group By")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Done") {
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                        .font(.custom("Nunito-Black", size: 14))
+                        .foregroundColor(theme.accentColor)
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func setupInitialStates() {
+        if let savedTheme = generateThemes().first(where: { $0.name == selectedThemeName }) {
+            currentTheme = savedTheme
+        }
+        
+        if let savedFont = generateFonts().first(where: { $0.name == selectedFontName }) {
+            currentFont = savedFont
+        }
+        
+        selectedIcon = selectedIconName
+    }
+    
+    private func handleIconTap(icon: AppIcon) {
+        if !icon.isLocked {
+            changeAppIcon(to: icon.iconName)
+            selectedIcon = icon.iconName
+            selectedIconName = icon.iconName
+        } else if let mission = icon.mission {
+            showMissionToast(mission: mission)
+        }
+    }
+    
+    private func handleThemeSelection(theme: AppTheme) {
+        if !theme.isLocked {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                currentTheme = theme
+                selectedThemeName = theme.name
+            }
+        } else if let mission = theme.mission {
+            showMissionToast(mission: mission)
+        }
+    }
+    
+    private func handleFontSelection(font: AppFont) {
+        if !font.isLocked {
+            currentFont = font
+            selectedFontName = font.name
+        } else if let mission = font.mission {
+            showMissionToast(mission: mission)
+        }
+    }
+    
+    private func showMissionToast(mission: Mission) {
+        let progress = getProgress(for: mission)
+        
+        if progress >= mission.goal {
+            // Handle unlock animation here
+            return
+        }
+        
+        toastMessage = mission.description
+        toastProgress = progress
+        toastGoal = mission.goal
+        toastDifficulty = mission.difficulty
+        toastID = UUID()
+        
+        withAnimation {
+            showToast = true
+        }
+        
+        toastDismissWorkItem?.cancel()
+        let newDismissWorkItem = DispatchWorkItem {
+            withAnimation {
+                showToast = false
+            }
+        }
+        toastDismissWorkItem = newDismissWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: newDismissWorkItem)
+    }
+    
     private func changeAppIcon(to name: String?) {
         guard UIApplication.shared.supportsAlternateIcons else { return }
         UIApplication.shared.setAlternateIconName(name) { error in
@@ -4761,88 +5452,336 @@ struct CustomiseAppIconView: View {
             }
         }
     }
-    
-    private func showToastWithMission(mission: Mission, progress: Int) {
-        toastMessage = mission.description
-        toastProgress = progress
-        toastGoal = mission.goal
-        toastID = UUID() // Forces transition in the toast view
-        showToast = true
-
-        // Cancel any previous dismiss
-        toastDismissWorkItem?.cancel()
-
-        // Schedule dismiss
-        let newDismissWorkItem = DispatchWorkItem {
-            withAnimation {
-                showToast = false
-            }
-        }
-        toastDismissWorkItem = newDismissWorkItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: newDismissWorkItem)
-    }
 }
 
-struct AppIconGridItem: View {
-    let icon: AppIcon
-    let isComingSoon: Bool
-    let isUnlocking: Bool
-    let isSelected: Bool
-    let onTap: () -> Void
+// MARK: - Group Section View
 
-    @State private var animateUnlock: Bool = false
-
+struct GroupSectionView: View {
+    let title: String
+    let icons: [AppIcon]
+    let themes: [AppTheme]
+    let fonts: [AppFont]
+    let theme: AppTheme
+    let selectedIcon: String?
+    let selectedTheme: AppTheme
+    let selectedFont: AppFont
+    let iconColumns: [GridItem]
+    let themeColumns: [GridItem]
+    let onIconTap: (AppIcon) -> Void
+    let onThemeTap: (AppTheme) -> Void
+    let onFontTap: (AppFont) -> Void
+    
     var body: some View {
-        VStack(spacing: 4) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white)
-                    .shadow(radius: 4)
-
-                Image(icon.previewImage)
-                    .resizable()
-                    .scaledToFit()
-                    .padding(10)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-
-                if isComingSoon {
-                    Color.black.opacity(0.4)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-
-                    Image(systemName: "clock.fill")
-                        .foregroundColor(.white)
-                        .font(.title2)
-                } else if icon.isLocked {
-                    Color.black.opacity(0.4)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-
-                    if isUnlocking {
-                        Image(systemName: "lock.open.fill")
-                            .foregroundColor(.green)
-                            .font(.system(size: 28))
-                            .scaleEffect(animateUnlock ? 1.4 : 1.0)
-                            .opacity(animateUnlock ? 0.2 : 1)
-                            .onAppear {
-                                withAnimation(.easeOut(duration: 1)) {
-                                    animateUnlock.toggle()
-                                }
+        VStack(alignment: .leading, spacing: 16) {
+            // Group Title
+            Text(title)
+                .font(.custom("Nunito-Black", size: 24))
+                .foregroundColor(theme.textColor)
+                .padding(.leading, 4)
+            
+            // App Icons Section
+            if !icons.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    if icons.count > 1 {
+                        Text("App Icons")
+                            .font(.custom("Nunito-Black", size: 18))
+                            .foregroundColor(theme.accentColor)
+                            .padding(.leading, 4)
+                    }
+                    
+                    LazyVGrid(columns: iconColumns, spacing: 16) {
+                        ForEach(icons) { icon in
+                            AppIconGridItem(
+                                icon: icon,
+                                theme: theme,
+                                isSelected: selectedIcon == icon.iconName || (selectedIcon == nil && icon.iconName == nil)
+                            ) {
+                                onIconTap(icon)
                             }
-                    } else {
-                        Image(systemName: "lock.fill")
-                            .foregroundColor(.white)
-                            .font(.title2)
+                        }
                     }
                 }
             }
-            .frame(width: 60, height: 60)
+            
+            // Themes Section
+            if !themes.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    if themes.count > 1 {
+                        Text("Themes")
+                            .font(.custom("Nunito-Black", size: 18))
+                            .foregroundColor(theme.accentColor)
+                            .padding(.leading, 4)
+                    }
+                    
+                    LazyVGrid(columns: themeColumns, spacing: 16) {
+                        ForEach(themes) { themeItem in
+                            ThemeCard(
+                                theme: themeItem,
+                                currentTheme: theme,
+                                isSelected: selectedTheme.name == themeItem.name
+                            ) {
+                                onThemeTap(themeItem)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Fonts Section
+            if !fonts.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    if fonts.count > 1 {
+                        Text("Fonts")
+                            .font(.custom("Nunito-Black", size: 18))
+                            .foregroundColor(theme.accentColor)
+                            .padding(.leading, 4)
+                    }
+                    
+                    VStack(spacing: 12) {
+                        ForEach(fonts) { font in
+                            FontCard(
+                                font: font,
+                                theme: theme,
+                                isSelected: selectedFont.name == font.name
+                            ) {
+                                onFontTap(font)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Supporting Views
+
+struct AppIconGridItem: View {
+    let icon: AppIcon
+    let theme: AppTheme
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(LinearGradient(
+                        gradient: Gradient(colors: [theme.backgroundColor, theme.primaryColor.opacity(0.1)]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                    .shadow(color: theme.accentColor.opacity(0.2), radius: 8, x: 0, y: 4)
+                
+                Image(icon.previewImage)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                
+                if icon.isLocked {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.black.opacity(0.7))
+                    
+                    VStack(spacing: 4) {
+                        Image(systemName: "lock.fill")
+                            .foregroundColor(.white)
+                            .font(.title2)
+                        
+                        if let mission = icon.mission {
+                            HStack(spacing: 2) {
+                                Image(systemName: mission.difficulty.icon)
+                                    .font(.caption2)
+                                Text(mission.difficulty.rawValue)
+                                    .font(.custom("Nunito-Black", size: 10))
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundColor(mission.difficulty.color)
+                        }
+                    }
+                }
+            }
+            .frame(width: 80, height: 80)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(
+                        isSelected ?
+                        LinearGradient(gradient: Gradient(colors: [theme.accentColor, theme.primaryColor]), startPoint: .topLeading, endPoint: .bottomTrailing) :
+                        LinearGradient(gradient: Gradient(colors: [Color.clear]), startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: isSelected ? 3 : 0
+                    )
+                    .shadow(color: isSelected ? theme.accentColor : Color.clear, radius: 8, x: 0, y: 0)
+            )
+            .scaleEffect(isSelected ? 1.05 : 1.0)
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
+            
+            Text(icon.iconName?.replacingOccurrences(of: "_AppIcon", with: "") ?? "Default")
+                .font(.custom("Nunito-Black", size: 12))
+                .fontWeight(.medium)
+                .foregroundColor(theme.textColor)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+        }
+        .onTapGesture {
+            onTap()
+        }
+    }
+}
+
+struct ThemeCard: View {
+    let theme: AppTheme
+    let currentTheme: AppTheme
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                theme.primaryColor.opacity(0.8),
+                                theme.secondaryColor.opacity(0.6),
+                                theme.accentColor.opacity(0.4)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(height: 100)
+                
+                VStack {
+                    Image(systemName: theme.icon)
+                        .font(.title)
+                        .foregroundColor(.white)
+                    
+                    HStack(spacing: 2) {
+                        Circle().fill(theme.primaryColor).frame(width: 8, height: 8)
+                        Circle().fill(theme.secondaryColor).frame(width: 8, height: 8)
+                        Circle().fill(theme.accentColor).frame(width: 8, height: 8)
+                    }
+                }
+                
+                if theme.isLocked {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.black.opacity(0.7))
+                    
+                    VStack(spacing: 4) {
+                        Image(systemName: "lock.fill")
+                            .foregroundColor(.white)
+                            .font(.title2)
+                        
+                        if let mission = theme.mission {
+                            HStack(spacing: 2) {
+                                Image(systemName: mission.difficulty.icon)
+                                    .font(.caption)
+                                Text(mission.difficulty.rawValue)
+                                    .font(.custom("Nunito-Black", size: 10))
+                                    .fontWeight(.semibold)
+                            }
+                            .foregroundColor(mission.difficulty.color)
+                        }
+                    }
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.orange.opacity(isSelected ? 0.9 : 0), lineWidth: 3)
-                    .shadow(color: isSelected ? Color.orange : Color.clear, radius: 6, x: 0, y: 0)
+                    .stroke(currentTheme.accentColor, lineWidth: isSelected ? 3 : 0)
+                    .shadow(color: isSelected ? currentTheme.accentColor : Color.clear, radius: 8, x: 0, y: 0)
             )
-            .onTapGesture {
-                onTap()
+            
+            VStack(spacing: 4) {
+                Text(theme.name)
+                    .font(.custom("Nunito-Black", size: 16))
+                    .foregroundColor(currentTheme.textColor)
+                
+                if let mission = theme.mission {
+                    Text(mission.description)
+                        .font(.custom("Nunito-Black", size: 11))
+                        .foregroundColor(currentTheme.textColor.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
             }
+        }
+        .scaleEffect(isSelected ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isSelected)
+        .onTapGesture {
+            onTap()
+        }
+    }
+}
+
+struct FontCard: View {
+    let font: AppFont
+    let theme: AppTheme
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(font.name)
+                    .font(.custom("Nunito-Black", size: 18))
+                    .foregroundColor(theme.textColor)
+                
+                Text(font.previewText)
+                    .font(font.font(size: 24))
+                    .foregroundColor(theme.accentColor)
+                
+                if let mission = font.mission {
+                    HStack(spacing: 4) {
+                        Image(systemName: mission.difficulty.icon)
+                            .font(.caption)
+                            .foregroundColor(mission.difficulty.color)
+                        Text(mission.description)
+                            .font(.custom("Nunito-Black", size: 12))
+                            .foregroundColor(theme.textColor.opacity(0.7))
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            ZStack {
+                Circle()
+                    .fill(theme.backgroundColor)
+                    .frame(width: 60, height: 60)
+                    .overlay(
+                        Circle()
+                            .stroke(theme.accentColor, lineWidth: isSelected ? 3 : 1)
+                    )
+                
+                if font.isLocked {
+                    Circle()
+                        .fill(Color.black.opacity(0.7))
+                        .frame(width: 60, height: 60)
+                    
+                    Image(systemName: "lock.fill")
+                        .foregroundColor(.white)
+                        .font(.title3)
+                } else {
+                    Text("Aa")
+                        .font(font.font(size: 20))
+                        .foregroundColor(theme.accentColor)
+                }
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(theme.backgroundColor)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isSelected ? theme.accentColor : theme.textColor.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                )
+                .shadow(color: theme.accentColor.opacity(isSelected ? 0.3 : 0.1), radius: isSelected ? 8 : 4, x: 0, y: 2)
+        )
+        .scaleEffect(isSelected ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isSelected)
+        .onTapGesture {
+            onTap()
         }
     }
 }

@@ -123,6 +123,14 @@ struct DefaultListView: View {
     
     @State private var progressLoading: Bool = false       // ← shows the loader
     @State private var publishError: String? = nil         // ← error messaging
+    
+    // Blank Items composer
+    @State private var showBlankItemsFS = false
+    @State private var blankDrafts: [BlankItemDraft] = [BlankItemDraft()] // start with 1
+    @State private var draftError: String? = nil
+
+    // hold personal images picked for new items -> uploaded on publish
+    @State private var pendingPersonalImages: [String: UIImage] = [:]  // itemID -> image
 
     init(
         rankoName: String,
@@ -180,7 +188,7 @@ struct DefaultListView: View {
                                     .foregroundColor(.white)
                                     .padding(.leading, 10)
                                 Text(isPrivate ? "Private" : "Public")
-                                    .font(.system(size: 12, weight: .bold, design: .default))
+                                    .font(.custom("Nunito-Black", size: 12))
                                     .foregroundColor(.white)
                                     .padding(.trailing, 10)
                                     .padding(.vertical, 8)
@@ -198,7 +206,7 @@ struct DefaultListView: View {
                                         .foregroundColor(.white)
                                         .padding(.leading, 10)
                                     Text(cat.name)
-                                        .font(.system(size: 12, weight: .bold, design: .default))
+                                        .font(.custom("Nunito-Black", size: 12))
                                         .foregroundColor(.white)
                                         .padding(.trailing, 10)
                                         .padding(.vertical, 8)
@@ -234,10 +242,20 @@ struct DefaultListView: View {
                         Divider()
                         
                         Button(role: .destructive) {
-                            
-                        } label: {
-                            Label("Delete Ranko", systemImage: "trash")
-                        }
+                                Task {
+                                    // 1) best-effort: delete all personal images for this ranko
+                                    await deleteRankoPersonalFolderAsync(rankoID: listUUID)
+
+                                    // 2) TODO: remove from Realtime DB + Algolia if you also want that here
+                                    //    try? await deleteRankoFromFirebase(listUUID)
+                                    //    try? await deleteRankoFromAlgolia(listUUID)
+
+                                    // 3) dismiss view (or pop one level)
+                                    dismiss()
+                                }
+                            } label: {
+                                Label("Delete Ranko", systemImage: "trash")
+                            }
                     }
                     
                     ZStack(alignment: .bottom) {
@@ -536,8 +554,8 @@ struct DefaultListView: View {
                                             )
                                             .simultaneousGesture(
                                                 LongPressGesture(minimumDuration: 0.0).onEnded { _ in
-                                                    print("Blank would open")
                                                     withAnimation { addButtonTapped = false }
+                                                    showBlankItemsFS = true
                                                     let impact = UIImpactFeedbackGenerator(style: .heavy)
                                                     impact.prepare()
                                                     impact.impactOccurred(intensity: 1.0)
@@ -793,6 +811,15 @@ struct DefaultListView: View {
                                                                 deleteButtonHovered = false
                                                                 exitButtonTapped = false
                                                             }
+                                                            Task {
+                                                                await deleteRankoPersonalFolderAsync(rankoID: listUUID)
+                                                                // if you also remove DB/Algolia here, do it after the cleanup:
+                                                                // try? await deleteRankoFromFirebase(listUUID)
+                                                                // try? await deleteRankoFromAlgolia(listUUID)
+                                                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                                                    dismiss()
+                                                                }
+                                                            }
                                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { dismiss() }
                                                         } else {
                                                             // snap back
@@ -914,7 +941,7 @@ struct DefaultListView: View {
                         ProgressView("Saving your Ranko…")
                             .padding(.vertical, 8)
                         Text("Saving to Firebase + Algolia")
-                            .font(.footnote.weight(.semibold))
+                            .font(.custom("Nunito-Black", size: 12))
                             .foregroundStyle(.white.opacity(0.9))
                     }
                     .padding(18)
@@ -933,7 +960,10 @@ struct DefaultListView: View {
             Button("Retry") {
                 startPublishAndDismiss()
             }
-            Button("Cancel", role: .cancel) { }
+            Button("Cancel", role: .cancel) {
+                // 🔥 Nuke only if the user gives up
+                Task { await deleteRankoPersonalFolderAsync(rankoID: listUUID) }
+            }
         } message: {
             Text(publishError ?? "Something went wrong.")
         }
@@ -993,6 +1023,15 @@ struct DefaultListView: View {
                 onSave(updatedItem)
             }
         }
+        .fullScreenCover(isPresented: $showBlankItemsFS) {
+            BlankItemsComposer(
+                rankoID: listUUID,                  // 👈 add this
+                drafts: $blankDrafts,
+                error: $draftError,
+                canAddMore: blankDrafts.count < 10,
+                onCommit: { appendDraftsToSelectedRanko() }
+            )
+        }
         .onAppear {
             refreshItemImages()
         }
@@ -1004,6 +1043,12 @@ struct DefaultListView: View {
     
     // Item Helpers
     private func delete(_ item: RankoItem) {
+        // attempt storage delete IFF this item used a personal image (not placeholder)
+        let imgURL = item.record.ItemImage
+        if !isPlaceholderURL(imgURL) {
+            Task { await deleteStorageImage(rankoID: listUUID, itemID: item.id) }
+        }
+
         selectedRankoItems.removeAll { $0.id == item.id }
         normalizeRanks()
     }
@@ -1044,15 +1089,6 @@ struct DefaultListView: View {
                 progressLoading = false
                 publishError = error.localizedDescription
             }
-        }
-    }
-
-    private func publishRanko() async throws {
-        // run both saves concurrently; finish only when both do
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask { try await saveRankedListToAlgoliaAsync() }
-            group.addTask { try await saveRankedListToFirebaseAsync() }
-            try await group.waitForAll()
         }
     }
 
@@ -1169,12 +1205,8 @@ struct DefaultListView: View {
     // Wrap Firebase setValue into async/await
     private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            ref.setValue(value) { error, _ in
-                if let error = error {
-                    cont.resume(throwing: error)
-                } else {
-                    cont.resume()
-                }
+            ref.setValue(value) { err, _ in
+                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
             }
         }
     }
@@ -1192,6 +1224,742 @@ struct DefaultListView: View {
             }
         }
     }
+    
+    private struct BlankItemsComposer: View {
+        @Environment(\.dismiss) private var dismiss
+        @StateObject private var user_data = UserInformation.shared
+
+        let rankoID: String                                  // 👈 new
+
+        @Binding var drafts: [BlankItemDraft]
+        @Binding var error: String?
+        let canAddMore: Bool
+        let onCommit: () -> Void
+
+        @State private var activeDraftID: String? = nil
+        @State private var showNewImageSheet = false
+        @State private var showPhotoPicker = false
+        @State private var showImageCropper = false
+        @State private var imageForCropping: UIImage? = nil
+        @State private var backupImage: UIImage? = nil
+        @State private var isCleaningUp = false
+
+        // convenience
+        private var placeholderURL: String {
+            "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/placeholderImages%2FitemPlaceholder.png?alt=media&token="
+        }
+        private func finalURL(for draftID: String) -> String {
+            "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(rankoID)%2F\(draftID).jpg?alt=media&token="
+        }
+        
+        private var anyUploading: Bool {
+            drafts.contains { $0.isUploading }
+        }
+
+        private var hasUploadError: Bool {
+            drafts.contains { $0.uploadError != nil }
+        }
+
+        /// true when every draft is "image-ready":
+        /// - no image: ok
+        /// - has image: must have finished upload (itemImageURL != nil) and no error
+        private var imagesReady: Bool {
+            drafts.allSatisfy { d in
+                if d.image == nil {
+                    return !d.isUploading && d.uploadError == nil
+                } else {
+                    return !d.isUploading && d.uploadError == nil && d.itemImageURL != nil
+                }
+            }
+        }
+
+        var body: some View {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        ForEach(drafts.indices, id: \.self) { i in
+                            DraftCard(
+                                draft: $drafts[i],
+                                title: "new item",
+                                subtitle: "tap to add image (optional)",
+                                onTapImage: {
+                                    activeDraftID = drafts[i].id
+                                    backupImage = drafts[i].image
+                                    showNewImageSheet = true
+                                },
+                                onDelete: {
+                                    // try to delete only if it was a real uploaded image
+                                    let draft = drafts[i]
+                                    if !isPlaceholderURL(draft.itemImageURL) {
+                                        Task { await deleteStorageImage(rankoID: rankoID, itemID: draft.id) }
+                                    }
+                                    
+                                    withAnimation {
+                                        drafts.remove(at: i)
+                                        if drafts.isEmpty { drafts.append(BlankItemDraft()) }
+                                    }
+                                    
+                                    print("deleting itemID: \(draft.id)")
+                                }
+                            )
+                            .contextMenu {
+                                Button(role: .confirm) {
+                                    activeDraftID = drafts[i].id
+                                    backupImage = drafts[i].image
+                                    showNewImageSheet = true
+                                } label: { Label("Add Image", systemImage: "photo.fill") }
+                                
+                                Button(role: .destructive) {
+                                    let draft = drafts[i]
+                                    if !isPlaceholderURL(draft.itemImageURL) {
+                                        Task { await deleteStorageImage(rankoID: rankoID, itemID: draft.id) }
+                                    }
+                                    
+                                    withAnimation {
+                                        drafts.remove(at: i)
+                                        if drafts.isEmpty { drafts.append(BlankItemDraft()) }
+                                    }
+                                    
+                                    print("deleting itemID: \(draft.id)")
+                                    
+                                } label: { Label("Delete", systemImage: "trash") }
+                                
+                                Button(role: .close) {
+                                    drafts[i].description = ""
+                                    drafts[i].image = nil
+                                    drafts[i].name = ""
+                                    
+                                    let draft = drafts[i]
+                                    
+                                    if !isPlaceholderURL(draft.itemImageURL) {
+                                        Task { await deleteStorageImage(rankoID: rankoID, itemID: draft.id) }
+                                    }
+                                    
+                                    print("deleting itemID: \(draft.id)")
+                                    
+                                } label: { Label("Clear All", systemImage: "delete.right.fill") }
+                            }
+                        }
+
+                        Button {
+                            withAnimation { drafts.append(BlankItemDraft()) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "plus.app.fill")
+                                    .font(.custom("Nunito-Black", size: 18))
+                                Text("add another blank item")
+                                    .font(.custom("Nunito-Black", size: 15))
+                            }
+                        }
+                        .buttonStyle(.glassProminent)
+                        .disabled(!canAddMore)
+                        .opacity(canAddMore ? 1 : 0.5)
+                        .padding(.top, 8)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            Task {
+                                isCleaningUp = true
+                                // try to delete all uploaded personal images for current drafts
+                                await deleteAllDraftImages()
+                                isCleaningUp = false
+                                dismiss()
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "xmark")
+                                if isCleaningUp {
+                                    ProgressView().controlSize(.mini)
+                                }
+                            }
+                        }
+                        .disabled(isCleaningUp || !imagesReady)
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Text("Add New Blank Items")
+                            .font(.custom("Nunito-Black", size: 20))
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            // validate names
+                            let bad = drafts.first { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                            if bad != nil {
+                                error = "please give every blank item a name (the * one)."
+                                return
+                            }
+                            
+                            // extra guard: images must be ready
+                            guard imagesReady else {
+                                error = hasUploadError
+                                ? "fix image upload errors before saving."
+                                : "please wait for images to finish uploading."
+                                return
+                            }
+                            
+                            // fill placeholder URL for any imageless drafts before commit
+                            for i in drafts.indices where drafts[i].itemImageURL == nil {
+                                drafts[i].itemImageURL = placeholderURL
+                            }
+                            error = nil
+                            onCommit()
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 18, weight: .bold))
+                                // tiny spinner if anything is still uploading
+                                if anyUploading {
+                                    ProgressView().controlSize(.mini)
+                                }
+                            }
+                        }
+                        .disabled(!imagesReady)   // ← hard lock until uploads are done & clean
+                    }
+                }
+                .alert("upload error", isPresented: .init(
+                    get: { drafts.contains { $0.uploadError != nil } },
+                    set: { if !$0 { for i in drafts.indices { drafts[i].uploadError = nil } } }
+                )) {
+                    Button("ok", role: .cancel) {}
+                } message: {
+                    Text(drafts.first(where: { $0.uploadError != nil })?.uploadError ?? "unknown error")
+                }
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showNewImageSheet) {
+                NewImageSheet(pickFromLibrary: {
+                    showNewImageSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showPhotoPicker = true }
+                })
+                .presentationDetents([.fraction(0.4)])
+                .presentationBackground(Color.white)
+            }
+            .sheet(isPresented: $showPhotoPicker) {
+                ImagePicker(image: $imageForCropping, isPresented: $showPhotoPicker)
+            }
+            .fullScreenCover(isPresented: $showImageCropper) {
+                if let img = imageForCropping {
+                    SwiftyCropView(
+                        imageToCrop: img,
+                        maskShape: .square,
+                        configuration: SwiftyCropConfiguration(
+                            maxMagnificationScale: 8.0,
+                            maskRadius: 190.0,
+                            cropImageCircular: false,
+                            rotateImage: false,
+                            rotateImageWithButtons: true,
+                            usesLiquidGlassDesign: true,
+                            zoomSensitivity: 3.0
+                        ),
+                        onCancel: {
+                            imageForCropping = nil
+                            showImageCropper = false
+                            restoreBackupForActiveDraft()
+                        },
+                        onComplete: { cropped in
+                            imageForCropping = nil
+                            showImageCropper = false
+                            // 👇 immediately try to upload with timeout
+                            if let id = activeDraftID { Task { await uploadCropped(cropped!, for: id) } }
+                        }
+                    )
+                }
+            }
+            .onChange(of: imageForCropping) { _, newVal in
+                if newVal != nil { showImageCropper = true }
+            }
+        }
+        
+        private func makeJPEGMetadata(rankoID: String, itemID: String, userID: String) -> StorageMetadata {
+            let md = StorageMetadata()
+            md.contentType = "image/jpeg"
+
+            // add some useful tags like your profile code does (timestamp, owner, etc.)
+            let now = Date()
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
+            fmt.timeZone = TimeZone(identifier: "Australia/Sydney") // AEST/AEDT
+            fmt.dateFormat = "yyyyMMddHHmmss"
+            let ts = fmt.string(from: now)
+
+            md.customMetadata = [
+                "rankoID": rankoID,
+                "itemID": itemID,
+                "userID": userID,
+                "uploadedAt": ts
+            ]
+            return md
+        }
+
+        // MARK: - Upload w/ 10s timeout
+
+        private func uploadCropped(_ img: UIImage, for draftID: String) async {
+            guard let data = img.jpegData(compressionQuality: 0.9) else {
+                setUpload(error: "couldn't encode image", for: draftID); return
+            }
+            setUploading(true, for: draftID)
+
+            let path = "rankoPersonalImages/\(rankoID)/\(draftID).jpg"
+            let ref  = Storage.storage().reference().child(path)
+            let metadata = makeJPEGMetadata(rankoID: rankoID, itemID: draftID, userID: user_data.userID)
+
+            do {
+                try await withTimeout(seconds: 10) {
+                    _ = try await ref.putDataAsync(data, metadata: metadata)  // 👈 pass metadata
+                }
+
+                // success → set image + deterministic URL string (your requested format)
+                setUploadSuccess(image: img, url: finalURL(for: draftID), for: draftID)
+                print("image uploaded successfully for itemID: \(draftID)")
+
+                // (optional) also mirror a tiny index in Realtime DB like your profile fn:
+                // try? await setValueAsync(
+                //   Database.database().reference()
+                //     .child("RankoData").child(rankoID)
+                //     .child("RankoItemImages").child(draftID),
+                //   value: ["path": path, "modified": metadata.customMetadata?["uploadedAt"] ?? ""]
+                // )
+
+            } catch {
+                let msg: String
+                if error is TimeoutErr { msg = "upload timed out, please try again." }
+                else { msg = (error as NSError).localizedDescription }
+                setUpload(error: msg, for: draftID)
+            }
+        }
+
+        private enum TimeoutErr: Error { case timedOut }
+        private func withTimeout<T>(seconds: Double, _ op: @escaping () async throws -> T) async throws -> T {
+            try await withThrowingTaskGroup(of: T.self) { group in
+                group.addTask { try await op() }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                    throw TimeoutErr.timedOut
+                }
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
+            }
+        }
+
+        // MARK: - Draft mutations
+
+        private func setUploading(_ uploading: Bool, for id: String) {
+            if let i = drafts.firstIndex(where: { $0.id == id }) {
+                drafts[i].isUploading = uploading
+                drafts[i].uploadError = nil
+            }
+        }
+        private func setUploadSuccess(image: UIImage, url: String, for id: String) {
+            if let i = drafts.firstIndex(where: { $0.id == id }) {
+                drafts[i].image = image
+                drafts[i].itemImageURL = url
+                drafts[i].isUploading = false
+                drafts[i].uploadError = nil
+            }
+        }
+        private func setUpload(error: String, for id: String) {
+            if let i = drafts.firstIndex(where: { $0.id == id }) {
+                drafts[i].isUploading = false
+                drafts[i].uploadError = error
+            }
+        }
+
+        private func restoreBackupForActiveDraft() {
+            guard let id = activeDraftID, let backup = backupImage,
+                  let idx = drafts.firstIndex(where: { $0.id == id }) else { return }
+            drafts[idx].image = backup
+        }
+        
+        private func deleteAllDraftImages() async {
+            // collect every draft that has a *non-placeholder* uploaded URL
+            let targets = drafts
+                .filter { !isPlaceholderURL($0.itemImageURL) }
+                .map { $0.id }
+
+            guard !targets.isEmpty else { return }
+
+            // delete all in parallel but don't hang forever
+            do {
+                try await withTimeout(seconds: 10) {
+                    try await withThrowingTaskGroup(of: Void.self) { group in
+                        for id in targets {
+                            group.addTask {
+                                await deleteStorageImage(rankoID: rankoID, itemID: id)
+                            }
+                        }
+                        // wait (errors are already caught inside deleteStorageImage; it never throws)
+                        try await group.waitForAll()
+                    }
+                }
+            } catch {
+                // optional: you could surface a toast here if you want
+                #if DEBUG
+                print("⚠️ cleanup timeout/err: \(error.localizedDescription)")
+                #endif
+            }
+        }
+    }
+
+    // one draft card UI
+    private struct DraftCard: View {
+        @Binding var draft: BlankItemDraft
+        let title: String
+        let subtitle: String
+        var onTapImage: () -> Void
+        var onDelete: () -> Void
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(title.uppercased())
+                        .font(.custom("Nunito-Black", size: 12))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if draft.isUploading {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+
+                Button(action: onTapImage) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.gray.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                            )
+                            .frame(width: 240, height: 240)
+
+                        if let img = draft.image {
+                            Image(uiImage: img)
+                                .resizable().scaledToFill()
+                                .frame(width: 240, height: 240)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        } else {
+                            VStack(spacing: 10) {
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .font(.system(size: 28, weight: .black))
+                                    .opacity(0.35)
+                                Text(subtitle.uppercased())
+                                    .font(.custom("Nunito-Black", size: 13))
+                                    .opacity(0.6)
+                            }
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(draft.isUploading)
+
+                VStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        TextField("Item Name *", text: $draft.name)
+                            .font(.system(size: 16, weight: .heavy))
+                            .autocorrectionDisabled(true)
+                        Spacer()
+                    }
+                    .padding(10)
+                    .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+
+                    TextField("Item Description (optional)", text: $draft.description, axis: .vertical)
+                        .lineLimit(1...3)
+                        .font(.system(size: 14, weight: .semibold))
+                        .autocorrectionDisabled(true)
+                        .padding(10)
+                        .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+                }
+
+                HStack {
+                    if let err = draft.uploadError {
+                        Label(err, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                            .font(.caption)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                    Button {
+                        onDelete()
+                    } label: {
+                        Image(systemName: "trash.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(draft.isUploading)
+                    .opacity(draft.isUploading ? 0.5 : 1)
+                }
+            }
+            .padding(14)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .onChange(of: draft.description) {
+                let draftDescription = draft.description
+                if draftDescription.range(of: "\n") != nil {
+                    hideKeyboard()
+                    draft.description = draftDescription.replacingOccurrences(of: "\n", with: "")
+                }
+            }
+        }
+    }
+
+    // “photos” bottom sheet like your EditProfileView
+    private struct NewImageSheet: View {
+        var pickFromLibrary: () -> Void
+        var body: some View {
+            ScrollView {
+                VStack(spacing: 16) {
+                    HStack {
+                        Text("Photos").font(.system(size: 14, weight: .bold))
+                        Spacer()
+                        Button(action: pickFromLibrary) {
+                            Text("Show Photo Library")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(Color(hex: 0x0288FE))
+                        }
+                    }
+                    .padding(.horizontal, 24)
+
+                    // simple row buttons (camera/files hooks left for you if needed)
+                    Divider().padding(.horizontal, 24)
+                    Button(action: pickFromLibrary) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "photo.stack")
+                            Text("Photo Library")
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                    }
+                    Button(action: {}) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "folder")
+                            Text("Files")
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                    }
+                }
+                .padding(.top, 18)
+            }
+        }
+    }
+    
+    private func uploadPersonalImagesAsync() async throws {
+        guard !pendingPersonalImages.isEmpty else { return }
+
+        let storage = Storage.storage()
+        let bucketPathRoot = "rankoPersonalImages/\(listUUID)" // use your listUUID as rankoID
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for (itemID, image) in pendingPersonalImages {
+                group.addTask {
+                    let ref = storage.reference().child("\(bucketPathRoot)/\(itemID).jpg")
+                    guard let data = image.jpegData(compressionQuality: 0.9) else {
+                        throw PublishErr.invalidUserID // reusing an error; you can add a dedicated one
+                    }
+                    _ = try await ref.putDataAsync(data, metadata: nil)
+                }
+            }
+            try await group.waitForAll()
+        }
+    }
+    
+    private func publishRanko() async throws {
+        // 1) upload all personal images first (hard gate)
+        try await uploadPersonalImagesAsync()
+
+        // 2) now that uploads succeeded, rewrite ItemImage URLs for the affected items
+        let urlBase = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(listUUID)%2F"
+
+        for idx in selectedRankoItems.indices {
+            let itemID = selectedRankoItems[idx].id
+            guard pendingPersonalImages[itemID] != nil else { continue }
+
+            let newURL = "\(urlBase)\(itemID).jpg?alt=media&token="
+            let oldRecord = selectedRankoItems[idx].record
+            let updatedRecord = oldRecord.withItemImage(newURL)
+            let updatedItem = selectedRankoItems[idx].withRecord(updatedRecord)
+
+            selectedRankoItems[idx] = updatedItem
+        }
+
+        // 3) proceed with both saves
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { try await saveRankedListToAlgoliaAsync() }
+            group.addTask { try await saveRankedListToFirebaseAsync() }
+            try await group.waitForAll()
+        }
+
+        // 4) clear cache on success
+        pendingPersonalImages.removeAll()
+    }
+    
+    private func deleteRankoPersonalFolderAsync(rankoID: String) async {
+        let root = Storage.storage().reference()
+            .child("rankoPersonalImages")
+            .child(rankoID)
+        await deleteAllRecursively(at: root)
+    }
+
+    private func deleteAllRecursively(at ref: StorageReference) async {
+        do {
+            let list = try await ref.listAll()
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for item in list.items {
+                    group.addTask {
+                        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                            item.delete { err in
+                                if let err = err { cont.resume(throwing: err) }
+                                else { cont.resume() }
+                            }
+                        }
+                    }
+                }
+                for prefix in list.prefixes {
+                    group.addTask { await deleteAllRecursively(at: prefix) }
+                }
+                try await group.waitForAll()
+            }
+            // Folders aren't real objects; deleting `ref` is typically a no-op, ignore errors.
+            _ = try? await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                ref.delete { _ in cont.resume() }
+            }
+        } catch {
+            #if DEBUG
+            print("⚠️ failed to purge \(ref.fullPath): \(error.localizedDescription)")
+            #endif
+        }
+    }
+    
+    private func appendDraftsToSelectedRanko() {
+        let placeholderURL = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/placeholderImages%2FitemPlaceholder.png?alt=media&token="
+        var nextRank = (selectedRankoItems.map(\.rank).max() ?? 0) + 1
+
+        for draft in blankDrafts {
+            let newItemID = UUID().uuidString
+            let url = draft.itemImageURL ?? placeholderURL
+
+            let rec = RankoRecord(
+                objectID: newItemID,
+                ItemName: draft.name,
+                ItemDescription: draft.description,
+                ItemCategory: "",
+                ItemImage: url                              // 👈 DB value visible in your rows
+            )
+            let item = RankoItem(id: newItemID, rank: nextRank, votes: 0, record: rec)
+            selectedRankoItems.append(item)
+            nextRank += 1
+        }
+
+        blankDrafts = [BlankItemDraft()]
+        draftError = nil
+    }
+}
+
+private let placeholderItemURL =
+  "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/placeholderImages%2FitemPlaceholder.png?alt=media&token="
+
+@inline(__always)
+private func isPlaceholderURL(_ url: String?) -> Bool {
+    guard let url = url else { return true }
+    return url.contains("/placeholderImages%2FitemPlaceholder.png")
+}
+
+@inline(__always)
+private func personalImagePath(rankoID: String, itemID: String) -> String {
+    "rankoPersonalImages/\(rankoID)/\(itemID).jpg"
+}
+
+private func deleteStorageImage(rankoID: String, itemID: String) async {
+    let ref = Storage.storage().reference().child(personalImagePath(rankoID: rankoID, itemID: itemID))
+    do {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            ref.delete { err in
+                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
+            }
+        }
+        #if DEBUG
+        print("✅ deleted storage image for \(itemID)")
+        #endif
+    } catch {
+        // swallow errors (file may not exist, race with upload, etc.)
+        #if DEBUG
+        print("⚠️ delete failed for \(itemID): \(error.localizedDescription)")
+        #endif
+    }
+}
+
+// already used for upload timeout — reuse for cleanup too
+private enum TimeoutErr: Error { case timedOut }
+private func withTimeout<T>(seconds: Double, _ op: @escaping () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask { try await op() }
+        group.addTask {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            throw TimeoutErr.timedOut
+        }
+        let result = try await group.next()!
+        group.cancelAll()
+        return result
+    }
+}
+
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+private extension UUID {
+    var string: String { uuidString }
+}
+
+private extension StorageReference {
+    func putDataAsync(_ data: Data, metadata: StorageMetadata? = nil) async throws -> StorageMetadata {
+        try await withCheckedThrowingContinuation { cont in
+            self.putData(data, metadata: metadata) { meta, err in
+                if let err = err { cont.resume(throwing: err) }
+                else { cont.resume(returning: meta ?? StorageMetadata()) }
+            }
+        }
+    }
+}
+
+// helpers — keeps your code tidy
+private extension RankoRecord {
+    func withItemImage(_ url: String) -> RankoRecord {
+        RankoRecord(
+            objectID: objectID,
+            ItemName: ItemName,
+            ItemDescription: ItemDescription,
+            ItemCategory: ItemCategory,
+            ItemImage: url
+        )
+    }
+}
+
+private extension RankoItem {
+    func withRecord(_ newRecord: RankoRecord) -> RankoItem {
+        RankoItem(
+            id: id,
+            rank: rank,
+            votes: votes,
+            record: newRecord
+        )
+    }
+}
+
+struct BlankItemDraft: Identifiable, Equatable {
+    let id = UUID().uuidString
+    var image: UIImage? = nil
+    var name: String = ""
+    var description: String = ""
+
+    // new:
+    var itemImageURL: String? = nil        // final URL to store in DB
+    var isUploading: Bool = false          // spinner state
+    var uploadError: String? = nil         // show to user if upload fails/times out
 }
 
 struct DefaultListAccessory: View {

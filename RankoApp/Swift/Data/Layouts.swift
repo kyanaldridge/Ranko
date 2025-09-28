@@ -46,7 +46,7 @@ struct LayoutGridCell: View {
                 Image(layout.imageName)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(height: UIScreen.main.bounds.width * 0.35)
+//                    .frame(height: UIScreen.main.bounds.width * 0.35)
                     .clipped()
                     .cornerRadius(10)
                 VStack(alignment: .center, spacing: 4) {
@@ -209,8 +209,8 @@ struct LayoutPickerView: View {
                                                 Image(layout.imageName)
                                                     .resizable()
                                                     .aspectRatio(contentMode: .fill)
-                                                    .frame(width: UIScreen.main.bounds.width * 0.25,
-                                                           height: UIScreen.main.bounds.width * 0.25)
+//                                                    .frame(width: UIScreen.main.bounds.width * 0.25,
+//                                                           height: UIScreen.main.bounds.width * 0.25)
                                                     .clipped()
                                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                                                     .overlay(

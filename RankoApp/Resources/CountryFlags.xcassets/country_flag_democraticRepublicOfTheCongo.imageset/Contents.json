@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "country_flag_democraticRepublicOfTheCongo.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

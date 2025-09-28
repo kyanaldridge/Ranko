@@ -14,7 +14,6 @@ struct RankoUserInformation: Codable { // Used in Introduction Survey
     let userDetails: RankoUserDetails
     let userProfilePicture: RankoUserProfilePicture
     let userStats: RankoUserStats
-    
 }
 
 struct RankoUserDetails: Codable {
@@ -113,11 +112,19 @@ struct RankoList: Identifiable, Codable {
     let listName: String
     let listDescription: String   // from "RankoDescription"
     let type: String
-    let category: String          // from "RankoCategory"
+    let categoryName: String
+    let categoryIcon: String
+    let categoryColour: UInt
     let isPrivate: String          // e.g. "Private" / "Public"
     let userCreator: String       // from "RankoUserID"
     let dateTime: String          // from "RankoDateTime" e.g. "2024-04-06-17-42"
     var items: [RankoItem]
+}
+
+struct RankoCategoryInfo: Codable, Hashable {
+    let name: String
+    let icon: String
+    let colour: UInt
 }
 
 struct RankoRecord: Codable, Identifiable, Equatable, Hashable {

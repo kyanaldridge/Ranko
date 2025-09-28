@@ -36,172 +36,175 @@ struct ItemDetailView: View {
     
     var body: some View {
         let flatItems = itemsArray.flatMap { $0 }
-        let widthDiff = UIScreen.main.bounds.width - pageWidth
-        
-        NavigationView {
-            VStack(spacing: 20) {
-                ScrollView(.horizontal) {
-                    HStack(spacing: spacing) {
-                        ForEach(0..<flatItems.count, id: \.self) { idx in
-                            let item = flatItems[idx]
-                            VStack(spacing: 12) {
-                                VStack {
-                                    ZStack(alignment: .bottom) {
-                                        AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
-                                            switch phase {
-                                            case .empty:
-                                                ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                            case .success(let image):
-                                                image.resizable().scaledToFill()
-                                                    .frame(
-                                                        width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
-                                                        height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
-                                                    )
-                                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                            case .failure:
-                                                Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                            @unknown default:
-                                                EmptyView()
+        GeometryReader { geo in
+            let widthDiff = geo.size.width - pageWidth
+            
+            NavigationView {
+                VStack(spacing: 20) {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: spacing) {
+                            ForEach(0..<flatItems.count, id: \.self) { idx in
+                                let item = flatItems[idx]
+                                VStack(spacing: 12) {
+                                    VStack {
+                                        ZStack(alignment: .bottom) {
+                                            AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
+                                                switch phase {
+                                                case .empty:
+                                                    ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                                case .success(let image):
+                                                    image.resizable().scaledToFill()
+                                                        .frame(
+                                                            width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
+                                                            height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
+                                                        )
+                                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                                case .failure:
+                                                    Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                                @unknown default:
+                                                    EmptyView()
+                                                }
                                             }
-                                        }
-                                        
-                                        VStack(spacing: 8) {
-                                            Text(item.record.ItemName)
-                                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                                .foregroundColor(Color(hex: 0x857467))
-                                                .multilineTextAlignment(.center)
-                                                .textCase(.uppercase)
                                             
-                                            ScrollView(.horizontal, showsIndicators: false) {
-                                                HStack(spacing: 12) {
-                                                    ForEach(ItemDetailView.types, id: \.self) { type in
-                                                        Group {
-                                                            if type == "Camera" {
-                                                                Image(systemName: "camera")
-                                                                    .font(.system(size: 12, weight: .bold))
-                                                            } else {
-                                                                Text(type)
-                                                                    .font(.system(size: 10, weight: .bold))
+                                            VStack(spacing: 8) {
+                                                Text(item.record.ItemName)
+                                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                                    .foregroundColor(Color(hex: 0x857467))
+                                                    .multilineTextAlignment(.center)
+                                                    .textCase(.uppercase)
+                                                
+                                                ScrollView(.horizontal, showsIndicators: false) {
+                                                    HStack(spacing: 12) {
+                                                        ForEach(ItemDetailView.types, id: \.self) { type in
+                                                            Group {
+                                                                if type == "Camera" {
+                                                                    Image(systemName: "camera")
+                                                                        .font(.system(size: 12, weight: .bold))
+                                                                } else {
+                                                                    Text(type)
+                                                                        .font(.system(size: 10, weight: .bold))
+                                                                }
                                                             }
-                                                        }
-                                                        .padding(.vertical, 7)
-                                                        .foregroundColor(selectedType == type ? Color(hex: 0x857467) : .gray.opacity(0.35))
-                                                        .contentShape(Rectangle())
-                                                        .onTapGesture {
-                                                            withAnimation(.snappy) {
-                                                                selectedType = type
+                                                            .padding(.vertical, 7)
+                                                            .foregroundColor(selectedType == type ? Color(hex: 0x857467) : .gray.opacity(0.35))
+                                                            .contentShape(Rectangle())
+                                                            .onTapGesture {
+                                                                withAnimation(.snappy) {
+                                                                    selectedType = type
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
-                                            }
-                                            
-                                            if selectedType == "Camera" {
                                                 
-                                            } else {
-                                                Divider()
+                                                if selectedType == "Camera" {
+                                                    
+                                                } else {
+                                                    Divider()
+                                                }
+                                                
+                                                
+                                                tabContent(for: item)
                                             }
-                                            
-                                            
-                                            tabContent(for: item)
+                                            .padding()
+                                            .frame(width: pageWidth)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 16)
+                                                    .fill(Color.white)
+                                                    .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
+                                            )
+                                            .offset(y: selectedType == "Camera" ? 120 : 90)
                                         }
-                                        .padding()
-                                        .frame(width: pageWidth)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .fill(Color.white)
-                                                .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
-                                        )
-                                        .offset(y: selectedType == "Camera" ? 120 : 90)
+                                        .frame(width: pageWidth, height: pageHeight)
+                                        .padding(.bottom, 30)
                                     }
-                                    .frame(width: pageWidth, height: pageHeight)
-                                    .padding(.bottom, 30)
+                                }
+                                .shadow(color: .black.opacity(0.2), radius: 15)
+                                .frame(width: pageWidth, height: pageHeight)
+                                .scrollTransition { content, phase in
+                                    content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
                                 }
                             }
-                            .shadow(color: .black.opacity(0.2), radius: 15)
-                            .frame(width: pageWidth, height: pageHeight)
-                            .scrollTransition { content, phase in
-                                content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
+                        }.scrollTargetLayout()
+                            .padding(.bottom, 60)
+                    }
+                    
+                    .contentMargins(widthDiff / 2, for: .scrollContent)
+                    .scrollTargetBehavior(.viewAligned)
+                    .frame(height: pageHeight * 1.3)
+                    .scrollPosition(id: $scrollPosition, anchor: .center)
+                    .scrollIndicators(.hidden)
+                    .onAppear { setupCarousel() }
+                    .onChange(of: scrollPosition) { newPos, pos in
+                        guard let pos = pos else { return }
+                        currentCenteredIndex = pos % items.count
+                        handleWrap(at: pos)
+                        scheduleAutoScroll(from: pos)
+                    }
+                    
+                    if let pos = scrollPosition {
+                        Image(systemName: "\((pos % items.count) + 1).circle.fill")
+                            .font(.system(size: 25, weight: .regular, design: .default))
+                            .foregroundColor(Color(hex: 0x857467))
+                            .padding(.top, 40)
+                    }
+                    
+                    Slider(
+                        value: Binding(
+                            get: { Double(currentCenteredIndex) },
+                            set: { newValue in
+                                let newIndex = Int(newValue.rounded())
+                                currentCenteredIndex = newIndex
+                                withAnimation {
+                                    scrollPosition = newIndex + items.count // keep middle copy in focus
+                                }
                             }
+                        ),
+                        in: 0...Double(items.count - 1),
+                        step: 1
+                    )
+                    .sensoryFeedback(.increase, trigger: scrollPosition)
+                    .padding(.horizontal, 50)
+                    .accentColor(Color(hex: 0x857467))
+                }
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Edit") {
+                            showEditSheet = true
                         }
-                    }.scrollTargetLayout()
-                        .padding(.bottom, 60)
-                }
-                
-                .contentMargins(widthDiff / 2, for: .scrollContent)
-                .scrollTargetBehavior(.viewAligned)
-                .frame(height: pageHeight * 1.3)
-                .scrollPosition(id: $scrollPosition, anchor: .center)
-                .scrollIndicators(.hidden)
-                .onAppear { setupCarousel() }
-                .onChange(of: scrollPosition) { newPos, pos in
-                    guard let pos = pos else { return }
-                    currentCenteredIndex = pos % items.count
-                    handleWrap(at: pos)
-                    scheduleAutoScroll(from: pos)
-                }
-                
-                if let pos = scrollPosition {
-                    Image(systemName: "\((pos % items.count) + 1).circle.fill")
-                        .font(.system(size: 25, weight: .regular, design: .default))
-                        .foregroundColor(Color(hex: 0x857467))
-                        .padding(.top, 40)
-                }
-                
-                Slider(
-                    value: Binding(
-                        get: { Double(currentCenteredIndex) },
-                        set: { newValue in
-                            let newIndex = Int(newValue.rounded())
-                            currentCenteredIndex = newIndex
-                            withAnimation {
-                                scrollPosition = newIndex + items.count // keep middle copy in focus
-                            }
-                        }
-                    ),
-                    in: 0...Double(items.count - 1),
-                    step: 1
-                )
-                .sensoryFeedback(.increase, trigger: scrollPosition)
-                .padding(.horizontal, 50)
-                .accentColor(Color(hex: 0x857467))
-            }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Edit") {
-                        showEditSheet = true
                     }
                 }
-            }
-            .sheet(isPresented: $showEditSheet) {
-                // Determine which item is centered
-                let centerIdx = (scrollPosition ?? 0) % items.count
-                let currentItem = items.sorted { $0.rank < $1.rank }[centerIdx]
-                EditItemView(
-                    item: currentItem,
-                    listID: listID
-                ) { newName, newDesc in
-                    // build updated record & item
-                    let rec = currentItem.record
-                    let updatedRecord = RankoRecord(
-                        objectID: rec.objectID,
-                        ItemName: newName,
-                        ItemDescription: newDesc,
-                        ItemCategory: "",
-                        ItemImage: rec.ItemImage
-                    )
-                    let updatedItem = RankoItem(
-                        id: currentItem.id,
-                        rank: currentItem.rank,
-                        votes: currentItem.votes,
-                        record: updatedRecord
-                    )
-                    // callback to parent
-                    onSave(updatedItem)
+                .sheet(isPresented: $showEditSheet) {
+                    // Determine which item is centered
+                    let centerIdx = (scrollPosition ?? 0) % items.count
+                    let currentItem = items.sorted { $0.rank < $1.rank }[centerIdx]
+                    EditItemView(
+                        item: currentItem,
+                        listID: listID
+                    ) { newName, newDesc in
+                        // build updated record & item
+                        let rec = currentItem.record
+                        let updatedRecord = RankoRecord(
+                            objectID: rec.objectID,
+                            ItemName: newName,
+                            ItemDescription: newDesc,
+                            ItemCategory: "",
+                            ItemImage: rec.ItemImage
+                        )
+                        let updatedItem = RankoItem(
+                            id: currentItem.id,
+                            rank: currentItem.rank,
+                            votes: currentItem.votes,
+                            record: updatedRecord
+                        )
+                        // callback to parent
+                        onSave(updatedItem)
+                    }
                 }
+                
+                // edit sheet integration remains unchanged
             }
-            
-            // edit sheet integration remains unchanged
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .presentationDetents([.fraction(0.8), .large])
         .presentationDragIndicator(.automatic)
@@ -731,171 +734,174 @@ struct ItemDetailViewSpectate: View {
     
     var body: some View {
         let flatItems = itemsArray.flatMap { $0 }
-        let widthDiff = UIScreen.main.bounds.width - pageWidth
-        
-        NavigationView {
-            ZStack {
-                //backgroundColor.ignoresSafeArea().animation(.easeInOut(duration: 0.4), value: backgroundColor)
-                Color.gray
-                    .opacity(0.15)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 20) {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: spacing) {
-                            ForEach(0..<flatItems.count, id: \.self) { idx in
-                                let item = flatItems[idx]
-                                VStack(spacing: 12) {
-                                    VStack {
-                                        ZStack(alignment: .bottom) {
-                                            AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
-                                                switch phase {
-                                                case .empty:
-                                                    ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                                case .success(let image):
-                                                    image.resizable().scaledToFill()
-                                                        .frame(
-                                                            width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
-                                                            height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
-                                                        )
-                                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                                case .failure:
-                                                    Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                                @unknown default:
-                                                    EmptyView()
+        GeometryReader { geo in
+            let widthDiff = geo.size.width - pageWidth
+            
+            NavigationView {
+                ZStack {
+                    //backgroundColor.ignoresSafeArea().animation(.easeInOut(duration: 0.4), value: backgroundColor)
+                    Color.gray
+                        .opacity(0.15)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 20) {
+                        ScrollView(.horizontal) {
+                            HStack(spacing: spacing) {
+                                ForEach(0..<flatItems.count, id: \.self) { idx in
+                                    let item = flatItems[idx]
+                                    VStack(spacing: 12) {
+                                        VStack {
+                                            ZStack(alignment: .bottom) {
+                                                AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
+                                                    switch phase {
+                                                    case .empty:
+                                                        ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                                    case .success(let image):
+                                                        image.resizable().scaledToFill()
+                                                            .frame(
+                                                                width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
+                                                                height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
+                                                            )
+                                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                                    case .failure:
+                                                        Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                                    @unknown default:
+                                                        EmptyView()
+                                                    }
                                                 }
-                                            }
-
-                                            VStack(spacing: 8) {
-                                                Text(item.record.ItemName)
-                                                    .font(.caption).fontWeight(.bold)
-                                                    .multilineTextAlignment(.center)
-                                                    .textCase(.uppercase)
-
-                                                ScrollView(.horizontal, showsIndicators: false) {
-                                                    HStack(spacing: 12) {
-                                                        ForEach(ItemDetailView.types, id: \.self) { type in
-                                                            Group {
-                                                                if type == "Camera" {
-                                                                    Image(systemName: "camera")
-                                                                        .font(.system(size: 12, weight: .bold))
-                                                                } else {
-                                                                    Text(type)
-                                                                        .font(.system(size: 10, weight: .bold))
+                                                
+                                                VStack(spacing: 8) {
+                                                    Text(item.record.ItemName)
+                                                        .font(.caption).fontWeight(.bold)
+                                                        .multilineTextAlignment(.center)
+                                                        .textCase(.uppercase)
+                                                    
+                                                    ScrollView(.horizontal, showsIndicators: false) {
+                                                        HStack(spacing: 12) {
+                                                            ForEach(ItemDetailView.types, id: \.self) { type in
+                                                                Group {
+                                                                    if type == "Camera" {
+                                                                        Image(systemName: "camera")
+                                                                            .font(.system(size: 12, weight: .bold))
+                                                                    } else {
+                                                                        Text(type)
+                                                                            .font(.system(size: 10, weight: .bold))
+                                                                    }
                                                                 }
-                                                            }
-                                                            .padding(.vertical, 7)
-                                                            .foregroundColor(selectedType == type ? .orange : .gray.opacity(0.35))
-                                                            .contentShape(Rectangle())
-                                                            .onTapGesture {
-                                                                withAnimation(.snappy) {
-                                                                    selectedType = type
+                                                                .padding(.vertical, 7)
+                                                                .foregroundColor(selectedType == type ? .orange : .gray.opacity(0.35))
+                                                                .contentShape(Rectangle())
+                                                                .onTapGesture {
+                                                                    withAnimation(.snappy) {
+                                                                        selectedType = type
+                                                                    }
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                }
-                                                
-                                                if selectedType == "Camera" {
                                                     
-                                                } else {
-                                                    Divider()
+                                                    if selectedType == "Camera" {
+                                                        
+                                                    } else {
+                                                        Divider()
+                                                    }
+                                                    
+                                                    
+                                                    tabContent(for: item)
                                                 }
-                                                
-
-                                                tabContent(for: item)
+                                                .padding()
+                                                .frame(width: pageWidth)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 16)
+                                                        .fill(Color.white)
+                                                        .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
+                                                )
+                                                .offset(y: selectedType == "Camera" ? 120 : 90)
                                             }
-                                            .padding()
-                                            .frame(width: pageWidth)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .fill(Color.white)
-                                                    .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
-                                            )
-                                            .offset(y: selectedType == "Camera" ? 120 : 90)
+                                            .frame(width: pageWidth, height: pageHeight)
+                                            .padding(.bottom, 30)
                                         }
-                                        .frame(width: pageWidth, height: pageHeight)
-                                        .padding(.bottom, 30)
+                                    }
+                                    .shadow(color: .black.opacity(0.2), radius: 15)
+                                    .frame(width: pageWidth, height: pageHeight)
+                                    .scrollTransition { content, phase in
+                                        content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
                                     }
                                 }
-                                .shadow(color: .black.opacity(0.2), radius: 15)
-                                .frame(width: pageWidth, height: pageHeight)
-                                .scrollTransition { content, phase in
-                                    content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
-                                }
-                            }
-                        }.scrollTargetLayout()
-                            .padding(.bottom, 60)
-                    }
-                    
-                    .contentMargins(widthDiff / 2, for: .scrollContent)
-                    .scrollTargetBehavior(.viewAligned)
-                    .frame(height: pageHeight * 1.3)
-                    .scrollPosition(id: $scrollPosition, anchor: .center)
-                    .scrollIndicators(.hidden)
-                    .onAppear { setupCarousel() }
-                    .onChange(of: scrollPosition) { newPos, pos in
-                        guard let pos = pos else { return }
-                        currentCenteredIndex = pos % items.count
-                        handleWrap(at: pos)
-                        scheduleAutoScroll(from: pos)
-                    }
-                    
-                    
-                    HStack(spacing: 10) {
-                        ForEach(0..<items.count, id: \.self) { i in
-                            let isSelected = i == currentCenteredIndex
-                            let item = items[i]
-                            let rankColor: Color = {
-                                switch item.rank {
-                                case 1: return Color(red: 1, green: 0.65, blue: 0)
-                                case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
-                                case 3: return Color(red: 0.56, green: 0.33, blue: 0)
-                                default: return .white.opacity(0.8)
-                                }
-                            }()
-                            
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected ? rankColor : Color.white.opacity(0.3))
-                                    .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
-                                    .animation(.easeInOut(duration: 0.1), value: currentCenteredIndex)
+                            }.scrollTargetLayout()
+                                .padding(.bottom, 60)
+                        }
+                        
+                        .contentMargins(widthDiff / 2, for: .scrollContent)
+                        .scrollTargetBehavior(.viewAligned)
+                        .frame(height: pageHeight * 1.3)
+                        .scrollPosition(id: $scrollPosition, anchor: .center)
+                        .scrollIndicators(.hidden)
+                        .onAppear { setupCarousel() }
+                        .onChange(of: scrollPosition) { newPos, pos in
+                            guard let pos = pos else { return }
+                            currentCenteredIndex = pos % items.count
+                            handleWrap(at: pos)
+                            scheduleAutoScroll(from: pos)
+                        }
+                        
+                        
+                        HStack(spacing: 10) {
+                            ForEach(0..<items.count, id: \.self) { i in
+                                let isSelected = i == currentCenteredIndex
+                                let item = items[i]
+                                let rankColor: Color = {
+                                    switch item.rank {
+                                    case 1: return Color(red: 1, green: 0.65, blue: 0)
+                                    case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
+                                    case 3: return Color(red: 0.56, green: 0.33, blue: 0)
+                                    default: return .white.opacity(0.8)
+                                    }
+                                }()
                                 
-                                if isSelected {
-                                    if item.rank > 3 {
-                                        Text("\(item.rank)")
-                                            .font(.caption.bold())
-                                            .foregroundColor(.black)
-                                            .transition(.opacity.combined(with: .scale))
-                                            .animation(.bouncy(duration: 1), value: currentCenteredIndex)
-                                    } else {
-                                        Text("\(item.rank)")
-                                            .font(.caption.bold())
-                                            .foregroundColor(.white)
-                                            .transition(.opacity.combined(with: .scale))
-                                    }
+                                ZStack {
+                                    Circle()
+                                        .fill(isSelected ? rankColor : Color.white.opacity(0.3))
+                                        .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
+                                        .animation(.easeInOut(duration: 0.1), value: currentCenteredIndex)
                                     
+                                    if isSelected {
+                                        if item.rank > 3 {
+                                            Text("\(item.rank)")
+                                                .font(.caption.bold())
+                                                .foregroundColor(.black)
+                                                .transition(.opacity.combined(with: .scale))
+                                                .animation(.bouncy(duration: 1), value: currentCenteredIndex)
+                                        } else {
+                                            Text("\(item.rank)")
+                                                .font(.caption.bold())
+                                                .foregroundColor(.white)
+                                                .transition(.opacity.combined(with: .scale))
+                                        }
+                                        
+                                    }
                                 }
-                            }
-                            .onTapGesture {
-                                withAnimation {
-                                    scrollPosition = i + items.count
+                                .onTapGesture {
+                                    withAnimation {
+                                        scrollPosition = i + items.count
+                                    }
                                 }
                             }
                         }
-                    }
-                    .padding(.top, 8)
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "door.left.hand.open")
+                        .padding(.top, 8)
                     }
                 }
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "door.left.hand.open")
+                        }
+                    }
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
     
@@ -995,227 +1001,230 @@ struct GroupItemDetailView: View {
     
     var body: some View {
         let flatItems = itemsArray.flatMap { $0 }
-        let widthDiff = UIScreen.main.bounds.width - pageWidth
-        
-        NavigationView {
-            ZStack {
-                //backgroundColor.ignoresSafeArea().animation(.easeInOut(duration: 0.4), value: backgroundColor)
-                Color.gray
-                    .opacity(0.15)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 20) {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: spacing) {
-                            ForEach(0..<flatItems.count, id: \.self) { idx in
-                                let item = flatItems[idx]
-                                VStack(spacing: 12) {
-                                    VStack {
-                                        ZStack(alignment: .bottom) {
-                                            AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
-                                                switch phase {
-                                                case .empty:
-                                                    ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                                case .success(let image):
-                                                    image.resizable().scaledToFill()
-                                                        .frame(
-                                                            width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
-                                                            height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
-                                                        )
-                                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                                case .failure:
-                                                    Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                                @unknown default:
-                                                    EmptyView()
+        GeometryReader { geo in
+            let widthDiff = geo.size.width - pageWidth
+            
+            NavigationView {
+                ZStack {
+                    //backgroundColor.ignoresSafeArea().animation(.easeInOut(duration: 0.4), value: backgroundColor)
+                    Color.gray
+                        .opacity(0.15)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 20) {
+                        ScrollView(.horizontal) {
+                            HStack(spacing: spacing) {
+                                ForEach(0..<flatItems.count, id: \.self) { idx in
+                                    let item = flatItems[idx]
+                                    VStack(spacing: 12) {
+                                        VStack {
+                                            ZStack(alignment: .bottom) {
+                                                AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
+                                                    switch phase {
+                                                    case .empty:
+                                                        ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                                    case .success(let image):
+                                                        image.resizable().scaledToFill()
+                                                            .frame(
+                                                                width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
+                                                                height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
+                                                            )
+                                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                                    case .failure:
+                                                        Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                                    @unknown default:
+                                                        EmptyView()
+                                                    }
                                                 }
-                                            }
-
-                                            VStack(spacing: 8) {
-                                                Text(item.record.ItemName)
-                                                    .font(.caption).fontWeight(.bold)
-                                                    .multilineTextAlignment(.center)
-                                                    .textCase(.uppercase)
-
-                                                ScrollView(.horizontal, showsIndicators: false) {
-                                                    HStack(spacing: 12) {
-                                                        ForEach(ItemDetailView.types, id: \.self) { type in
-                                                            Group {
-                                                                if type == "Camera" {
-                                                                    Image(systemName: "camera")
-                                                                        .font(.system(size: 12, weight: .bold))
-                                                                } else {
-                                                                    Text(type)
-                                                                        .font(.system(size: 10, weight: .bold))
+                                                
+                                                VStack(spacing: 8) {
+                                                    Text(item.record.ItemName)
+                                                        .font(.caption).fontWeight(.bold)
+                                                        .multilineTextAlignment(.center)
+                                                        .textCase(.uppercase)
+                                                    
+                                                    ScrollView(.horizontal, showsIndicators: false) {
+                                                        HStack(spacing: 12) {
+                                                            ForEach(ItemDetailView.types, id: \.self) { type in
+                                                                Group {
+                                                                    if type == "Camera" {
+                                                                        Image(systemName: "camera")
+                                                                            .font(.system(size: 12, weight: .bold))
+                                                                    } else {
+                                                                        Text(type)
+                                                                            .font(.system(size: 10, weight: .bold))
+                                                                    }
                                                                 }
-                                                            }
-                                                            .padding(.vertical, 7)
-                                                            .foregroundColor(selectedType == type ? .orange : .gray.opacity(0.35))
-                                                            .contentShape(Rectangle())
-                                                            .onTapGesture {
-                                                                withAnimation(.snappy) {
-                                                                    selectedType = type
+                                                                .padding(.vertical, 7)
+                                                                .foregroundColor(selectedType == type ? .orange : .gray.opacity(0.35))
+                                                                .contentShape(Rectangle())
+                                                                .onTapGesture {
+                                                                    withAnimation(.snappy) {
+                                                                        selectedType = type
+                                                                    }
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                }
-                                                
-                                                if selectedType == "Camera" {
                                                     
-                                                } else {
-                                                    Divider()
+                                                    if selectedType == "Camera" {
+                                                        
+                                                    } else {
+                                                        Divider()
+                                                    }
+                                                    
+                                                    
+                                                    tabContent(for: item)
                                                 }
-                                                
-
-                                                tabContent(for: item)
+                                                .padding()
+                                                .frame(width: pageWidth)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 16)
+                                                        .fill(Color.white)
+                                                        .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
+                                                )
+                                                .offset(y: selectedType == "Camera" ? 120 : 90)
                                             }
-                                            .padding()
-                                            .frame(width: pageWidth)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .fill(Color.white)
-                                                    .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
-                                            )
-                                            .offset(y: selectedType == "Camera" ? 120 : 90)
+                                            .frame(width: pageWidth, height: pageHeight)
+                                            .padding(.bottom, 30)
                                         }
-                                        .frame(width: pageWidth, height: pageHeight)
-                                        .padding(.bottom, 30)
+                                    }
+                                    .shadow(color: .black.opacity(0.2), radius: 15)
+                                    .frame(width: pageWidth, height: pageHeight)
+                                    .scrollTransition { content, phase in
+                                        content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
                                     }
                                 }
-                                .shadow(color: .black.opacity(0.2), radius: 15)
-                                .frame(width: pageWidth, height: pageHeight)
-                                .scrollTransition { content, phase in
-                                    content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
-                                }
-                            }
-                        }.scrollTargetLayout()
-                            .padding(.bottom, 60)
-                    }
-                    
-                    .contentMargins(widthDiff / 2, for: .scrollContent)
-                    .scrollTargetBehavior(.viewAligned)
-                    .frame(height: pageHeight * 1.3)
-                    .scrollPosition(id: $scrollPosition, anchor: .center)
-                    .scrollIndicators(.hidden)
-                    .onAppear { setupCarousel() }
-                    .onChange(of: scrollPosition) { newPos, pos in
-                        guard let pos = pos else { return }
-                        currentCenteredIndex = pos % items.count
-                        handleWrap(at: pos)
-                        scheduleAutoScroll(from: pos)
-                    }
-                    
-                    HStack(spacing: 10) {
-                        ForEach(0..<numberOfRows, id: \.self) { i in
-                            // highlight whenever this is the tapped‐row
-                            let isSelected = (i == rowIndex)
-                            let displayRow = i + 1
-                            let rankColor: Color = {
-                                switch displayRow {
-                                case 1: return Color(red: 1, green: 0.65, blue: 0)
-                                case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
-                                case 3: return Color(red: 0.56, green: 0.33, blue: 0)
-                                default: return .white.opacity(0.8)
-                                }
-                            }()
-
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected ? rankColor : Color.white.opacity(0.3))
-                                    .frame(width: isSelected ? 30 : 12,
-                                           height: isSelected ? 30 : 12)
-
-                                Text("\(displayRow)")
-                                    .font(.caption.bold())
-                                    .foregroundColor(isSelected
-                                        ? (displayRow <= 3 ? .white : .black)
-                                                     : .clear)
-                            }
+                            }.scrollTargetLayout()
+                                .padding(.bottom, 60)
                         }
-                    }
-                    .padding(.top, 8)
-                    
-                    HStack(spacing: 10) {
-                        ForEach(0..<items.count, id: \.self) { i in
-                            let isSelected = i == currentCenteredIndex
-                            let item = items[i]
-                            let actualRank = (item.rank) - (rowIndex * 1000) - 1000
-                            let rankColor: Color = {
-                                switch actualRank {
-                                case 1: return Color(red: 1, green: 0.65, blue: 0)
-                                case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
-                                case 3: return Color(red: 0.56, green: 0.33, blue: 0)
-                                default: return .white.opacity(0.8)
-                                }
-                            }()
-                            
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected ? rankColor : Color.white.opacity(0.3))
-                                    .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
-                                    .animation(.easeInOut(duration: 0.1), value: currentCenteredIndex)
+                        
+                        .contentMargins(widthDiff / 2, for: .scrollContent)
+                        .scrollTargetBehavior(.viewAligned)
+                        .frame(height: pageHeight * 1.3)
+                        .scrollPosition(id: $scrollPosition, anchor: .center)
+                        .scrollIndicators(.hidden)
+                        .onAppear { setupCarousel() }
+                        .onChange(of: scrollPosition) { newPos, pos in
+                            guard let pos = pos else { return }
+                            currentCenteredIndex = pos % items.count
+                            handleWrap(at: pos)
+                            scheduleAutoScroll(from: pos)
+                        }
+                        
+                        HStack(spacing: 10) {
+                            ForEach(0..<numberOfRows, id: \.self) { i in
+                                // highlight whenever this is the tapped‐row
+                                let isSelected = (i == rowIndex)
+                                let displayRow = i + 1
+                                let rankColor: Color = {
+                                    switch displayRow {
+                                    case 1: return Color(red: 1, green: 0.65, blue: 0)
+                                    case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
+                                    case 3: return Color(red: 0.56, green: 0.33, blue: 0)
+                                    default: return .white.opacity(0.8)
+                                    }
+                                }()
                                 
-                                if isSelected {
-                                    if actualRank > 3 {
-                                        Text("\(actualRank)")
-                                            .font(.caption.bold())
-                                            .foregroundColor(.black)
-                                            .transition(.opacity.combined(with: .scale))
-                                            .animation(.bouncy(duration: 1), value: currentCenteredIndex)
-                                    } else {
-                                        Text("\(actualRank)")
-                                            .font(.caption.bold())
-                                            .foregroundColor(.white)
-                                            .transition(.opacity.combined(with: .scale))
-                                    }
+                                ZStack {
+                                    Circle()
+                                        .fill(isSelected ? rankColor : Color.white.opacity(0.3))
+                                        .frame(width: isSelected ? 30 : 12,
+                                               height: isSelected ? 30 : 12)
                                     
-                                }
-                            }
-                            .onTapGesture {
-                                withAnimation {
-                                    scrollPosition = i + items.count
+                                    Text("\(displayRow)")
+                                        .font(.caption.bold())
+                                        .foregroundColor(isSelected
+                                                         ? (displayRow <= 3 ? .white : .black)
+                                                         : .clear)
                                 }
                             }
                         }
+                        .padding(.top, 8)
+                        
+                        HStack(spacing: 10) {
+                            ForEach(0..<items.count, id: \.self) { i in
+                                let isSelected = i == currentCenteredIndex
+                                let item = items[i]
+                                let actualRank = (item.rank) - (rowIndex * 1000) - 1000
+                                let rankColor: Color = {
+                                    switch actualRank {
+                                    case 1: return Color(red: 1, green: 0.65, blue: 0)
+                                    case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
+                                    case 3: return Color(red: 0.56, green: 0.33, blue: 0)
+                                    default: return .white.opacity(0.8)
+                                    }
+                                }()
+                                
+                                ZStack {
+                                    Circle()
+                                        .fill(isSelected ? rankColor : Color.white.opacity(0.3))
+                                        .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
+                                        .animation(.easeInOut(duration: 0.1), value: currentCenteredIndex)
+                                    
+                                    if isSelected {
+                                        if actualRank > 3 {
+                                            Text("\(actualRank)")
+                                                .font(.caption.bold())
+                                                .foregroundColor(.black)
+                                                .transition(.opacity.combined(with: .scale))
+                                                .animation(.bouncy(duration: 1), value: currentCenteredIndex)
+                                        } else {
+                                            Text("\(actualRank)")
+                                                .font(.caption.bold())
+                                                .foregroundColor(.white)
+                                                .transition(.opacity.combined(with: .scale))
+                                        }
+                                        
+                                    }
+                                }
+                                .onTapGesture {
+                                    withAnimation {
+                                        scrollPosition = i + items.count
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.top, 8)
                     }
-                    .padding(.top, 8)
                 }
-            }
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Edit") {
-                        showEditSheet = true
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Edit") {
+                            showEditSheet = true
+                        }
                     }
                 }
-            }
-            .sheet(isPresented: $showEditSheet) {
-                // Determine which item is centered
-                let centerIdx = (scrollPosition ?? 0) % items.count
-                let currentItem = items.sorted { $0.rank < $1.rank }[centerIdx]
-                EditItemView(
-                    item: currentItem,
-                    listID: listID
-                ) { newName, newDesc in
-                    // build updated record & item
-                    let rec = currentItem.record
-                    let updatedRecord = RankoRecord(
-                        objectID: rec.objectID,
-                        ItemName: newName,
-                        ItemDescription: newDesc,
-                        ItemCategory: "",
-                        ItemImage: rec.ItemImage
-                    )
-                    let updatedItem = RankoItem(
-                        id: currentItem.id,
-                        rank: currentItem.rank,
-                        votes: currentItem.votes,
-                        record: updatedRecord
-                    )
-                    // callback to parent
-                    onSave(updatedItem)
+                .sheet(isPresented: $showEditSheet) {
+                    // Determine which item is centered
+                    let centerIdx = (scrollPosition ?? 0) % items.count
+                    let currentItem = items.sorted { $0.rank < $1.rank }[centerIdx]
+                    EditItemView(
+                        item: currentItem,
+                        listID: listID
+                    ) { newName, newDesc in
+                        // build updated record & item
+                        let rec = currentItem.record
+                        let updatedRecord = RankoRecord(
+                            objectID: rec.objectID,
+                            ItemName: newName,
+                            ItemDescription: newDesc,
+                            ItemCategory: "",
+                            ItemImage: rec.ItemImage
+                        )
+                        let updatedItem = RankoItem(
+                            id: currentItem.id,
+                            rank: currentItem.rank,
+                            votes: currentItem.votes,
+                            record: updatedRecord
+                        )
+                        // callback to parent
+                        onSave(updatedItem)
+                    }
                 }
+                // edit sheet integration remains unchanged
             }
-            // edit sheet integration remains unchanged
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
     
@@ -1315,192 +1324,195 @@ struct GroupItemDetailViewSpectate: View {
     
     var body: some View {
         let flatItems = itemsArray.flatMap { $0 }
-        let widthDiff = UIScreen.main.bounds.width - pageWidth
-        
-        NavigationView {
-            ZStack {
-                //backgroundColor.ignoresSafeArea().animation(.easeInOut(duration: 0.4), value: backgroundColor)
-                Color.gray
-                    .opacity(0.15)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 20) {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: spacing) {
-                            ForEach(0..<flatItems.count, id: \.self) { idx in
-                                let item = flatItems[idx]
-                                VStack(spacing: 12) {
-                                    VStack {
-                                        ZStack(alignment: .bottom) {
-                                            AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
-                                                switch phase {
-                                                case .empty:
-                                                    ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                                case .success(let image):
-                                                    image.resizable().scaledToFill()
-                                                        .frame(
-                                                            width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
-                                                            height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
-                                                        )
-                                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                                case .failure:
-                                                    Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
-                                                @unknown default:
-                                                    EmptyView()
+        GeometryReader { geo in
+            let widthDiff = geo.size.width - pageWidth
+            
+            NavigationView {
+                ZStack {
+                    //backgroundColor.ignoresSafeArea().animation(.easeInOut(duration: 0.4), value: backgroundColor)
+                    Color.gray
+                        .opacity(0.15)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 20) {
+                        ScrollView(.horizontal) {
+                            HStack(spacing: spacing) {
+                                ForEach(0..<flatItems.count, id: \.self) { idx in
+                                    let item = flatItems[idx]
+                                    VStack(spacing: 12) {
+                                        VStack {
+                                            ZStack(alignment: .bottom) {
+                                                AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
+                                                    switch phase {
+                                                    case .empty:
+                                                        ProgressView().frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                                    case .success(let image):
+                                                        image.resizable().scaledToFill()
+                                                            .frame(
+                                                                width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth,
+                                                                height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth
+                                                            )
+                                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                                    case .failure:
+                                                        Color.gray.frame(width: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth, height: selectedType == "Camera" ? pageWidth * 1.2 : pageWidth)
+                                                    @unknown default:
+                                                        EmptyView()
+                                                    }
                                                 }
-                                            }
-
-                                            VStack(spacing: 8) {
-                                                Text(item.record.ItemName)
-                                                    .font(.caption).fontWeight(.bold)
-                                                    .multilineTextAlignment(.center)
-                                                    .textCase(.uppercase)
-
-                                                ScrollView(.horizontal, showsIndicators: false) {
-                                                    HStack(spacing: 12) {
-                                                        ForEach(ItemDetailView.types, id: \.self) { type in
-                                                            Group {
-                                                                if type == "Camera" {
-                                                                    Image(systemName: "camera")
-                                                                        .font(.system(size: 12, weight: .bold))
-                                                                } else {
-                                                                    Text(type)
-                                                                        .font(.system(size: 10, weight: .bold))
+                                                
+                                                VStack(spacing: 8) {
+                                                    Text(item.record.ItemName)
+                                                        .font(.caption).fontWeight(.bold)
+                                                        .multilineTextAlignment(.center)
+                                                        .textCase(.uppercase)
+                                                    
+                                                    ScrollView(.horizontal, showsIndicators: false) {
+                                                        HStack(spacing: 12) {
+                                                            ForEach(ItemDetailView.types, id: \.self) { type in
+                                                                Group {
+                                                                    if type == "Camera" {
+                                                                        Image(systemName: "camera")
+                                                                            .font(.system(size: 12, weight: .bold))
+                                                                    } else {
+                                                                        Text(type)
+                                                                            .font(.system(size: 10, weight: .bold))
+                                                                    }
                                                                 }
-                                                            }
-                                                            .padding(.vertical, 7)
-                                                            .foregroundColor(selectedType == type ? .orange : .gray.opacity(0.35))
-                                                            .contentShape(Rectangle())
-                                                            .onTapGesture {
-                                                                withAnimation(.snappy) {
-                                                                    selectedType = type
+                                                                .padding(.vertical, 7)
+                                                                .foregroundColor(selectedType == type ? .orange : .gray.opacity(0.35))
+                                                                .contentShape(Rectangle())
+                                                                .onTapGesture {
+                                                                    withAnimation(.snappy) {
+                                                                        selectedType = type
+                                                                    }
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                }
-                                                
-                                                if selectedType == "Camera" {
                                                     
-                                                } else {
-                                                    Divider()
+                                                    if selectedType == "Camera" {
+                                                        
+                                                    } else {
+                                                        Divider()
+                                                    }
+                                                    
+                                                    
+                                                    tabContent(for: item)
                                                 }
-                                                
-
-                                                tabContent(for: item)
+                                                .padding()
+                                                .frame(width: pageWidth)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 16)
+                                                        .fill(Color.white)
+                                                        .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
+                                                )
+                                                .offset(y: selectedType == "Camera" ? 120 : 90)
                                             }
-                                            .padding()
-                                            .frame(width: pageWidth)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .fill(Color.white)
-                                                    .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 4)
-                                            )
-                                            .offset(y: selectedType == "Camera" ? 120 : 90)
+                                            .frame(width: pageWidth, height: pageHeight)
+                                            .padding(.bottom, 30)
                                         }
-                                        .frame(width: pageWidth, height: pageHeight)
-                                        .padding(.bottom, 30)
+                                    }
+                                    .shadow(color: .black.opacity(0.2), radius: 15)
+                                    .frame(width: pageWidth, height: pageHeight)
+                                    .scrollTransition { content, phase in
+                                        content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
                                     }
                                 }
-                                .shadow(color: .black.opacity(0.2), radius: 15)
-                                .frame(width: pageWidth, height: pageHeight)
-                                .scrollTransition { content, phase in
-                                    content.scaleEffect(y: phase.isIdentity ? 1 : 0.7)
-                                }
-                            }
-                        }.scrollTargetLayout()
-                            .padding(.bottom, 60)
-                    }
-                    
-                    .contentMargins(widthDiff / 2, for: .scrollContent)
-                    .scrollTargetBehavior(.viewAligned)
-                    .frame(height: pageHeight * 1.3)
-                    .scrollPosition(id: $scrollPosition, anchor: .center)
-                    .scrollIndicators(.hidden)
-                    .onAppear { setupCarousel() }
-                    .onChange(of: scrollPosition) { newPos, pos in
-                        guard let pos = pos else { return }
-                        currentCenteredIndex = pos % items.count
-                        handleWrap(at: pos)
-                        scheduleAutoScroll(from: pos)
-                    }
-                    
-                    HStack(spacing: 10) {
-                        ForEach(0..<numberOfRows, id: \.self) { i in
-                            // highlight whenever this is the tapped‐row
-                            let isSelected = (i == rowIndex)
-                            let displayRow = i + 1
-                            let rankColor: Color = {
-                                switch displayRow {
-                                case 1: return Color(red: 1, green: 0.65, blue: 0)
-                                case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
-                                case 3: return Color(red: 0.56, green: 0.33, blue: 0)
-                                default: return .white.opacity(0.8)
-                                }
-                            }()
-
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected ? rankColor : Color.white.opacity(0.3))
-                                    .frame(width: isSelected ? 30 : 12,
-                                           height: isSelected ? 30 : 12)
-
-                                Text("\(displayRow)")
-                                    .font(.caption.bold())
-                                    .foregroundColor(isSelected
-                                        ? (displayRow <= 3 ? .white : .black)
-                                                     : .clear)
-                            }
+                            }.scrollTargetLayout()
+                                .padding(.bottom, 60)
                         }
-                    }
-                    .padding(.top, 8)
-                    
-                    HStack(spacing: 10) {
-                        ForEach(0..<items.count, id: \.self) { i in
-                            let isSelected = i == currentCenteredIndex
-                            let item = items[i]
-                            let actualRank = (item.rank) - (rowIndex * 1000) - 1000
-                            let rankColor: Color = {
-                                switch actualRank {
-                                case 1: return Color(red: 1, green: 0.65, blue: 0)
-                                case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
-                                case 3: return Color(red: 0.56, green: 0.33, blue: 0)
-                                default: return .white.opacity(0.8)
-                                }
-                            }()
-                            
-                            ZStack {
-                                Circle()
-                                    .fill(isSelected ? rankColor : Color.white.opacity(0.3))
-                                    .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
-                                    .animation(.easeInOut(duration: 0.1), value: currentCenteredIndex)
+                        
+                        .contentMargins(widthDiff / 2, for: .scrollContent)
+                        .scrollTargetBehavior(.viewAligned)
+                        .frame(height: pageHeight * 1.3)
+                        .scrollPosition(id: $scrollPosition, anchor: .center)
+                        .scrollIndicators(.hidden)
+                        .onAppear { setupCarousel() }
+                        .onChange(of: scrollPosition) { newPos, pos in
+                            guard let pos = pos else { return }
+                            currentCenteredIndex = pos % items.count
+                            handleWrap(at: pos)
+                            scheduleAutoScroll(from: pos)
+                        }
+                        
+                        HStack(spacing: 10) {
+                            ForEach(0..<numberOfRows, id: \.self) { i in
+                                // highlight whenever this is the tapped‐row
+                                let isSelected = (i == rowIndex)
+                                let displayRow = i + 1
+                                let rankColor: Color = {
+                                    switch displayRow {
+                                    case 1: return Color(red: 1, green: 0.65, blue: 0)
+                                    case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
+                                    case 3: return Color(red: 0.56, green: 0.33, blue: 0)
+                                    default: return .white.opacity(0.8)
+                                    }
+                                }()
                                 
-                                if isSelected {
-                                    if actualRank > 3 {
-                                        Text("\(actualRank)")
-                                            .font(.caption.bold())
-                                            .foregroundColor(.black)
-                                            .transition(.opacity.combined(with: .scale))
-                                            .animation(.bouncy(duration: 1), value: currentCenteredIndex)
-                                    } else {
-                                        Text("\(actualRank)")
-                                            .font(.caption.bold())
-                                            .foregroundColor(.white)
-                                            .transition(.opacity.combined(with: .scale))
-                                    }
+                                ZStack {
+                                    Circle()
+                                        .fill(isSelected ? rankColor : Color.white.opacity(0.3))
+                                        .frame(width: isSelected ? 30 : 12,
+                                               height: isSelected ? 30 : 12)
                                     
-                                }
-                            }
-                            .onTapGesture {
-                                withAnimation {
-                                    scrollPosition = i + items.count
+                                    Text("\(displayRow)")
+                                        .font(.caption.bold())
+                                        .foregroundColor(isSelected
+                                                         ? (displayRow <= 3 ? .white : .black)
+                                                         : .clear)
                                 }
                             }
                         }
+                        .padding(.top, 8)
+                        
+                        HStack(spacing: 10) {
+                            ForEach(0..<items.count, id: \.self) { i in
+                                let isSelected = i == currentCenteredIndex
+                                let item = items[i]
+                                let actualRank = (item.rank) - (rowIndex * 1000) - 1000
+                                let rankColor: Color = {
+                                    switch actualRank {
+                                    case 1: return Color(red: 1, green: 0.65, blue: 0)
+                                    case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)
+                                    case 3: return Color(red: 0.56, green: 0.33, blue: 0)
+                                    default: return .white.opacity(0.8)
+                                    }
+                                }()
+                                
+                                ZStack {
+                                    Circle()
+                                        .fill(isSelected ? rankColor : Color.white.opacity(0.3))
+                                        .frame(width: isSelected ? 30 : 12, height: isSelected ? 30 : 12)
+                                        .animation(.easeInOut(duration: 0.1), value: currentCenteredIndex)
+                                    
+                                    if isSelected {
+                                        if actualRank > 3 {
+                                            Text("\(actualRank)")
+                                                .font(.caption.bold())
+                                                .foregroundColor(.black)
+                                                .transition(.opacity.combined(with: .scale))
+                                                .animation(.bouncy(duration: 1), value: currentCenteredIndex)
+                                        } else {
+                                            Text("\(actualRank)")
+                                                .font(.caption.bold())
+                                                .foregroundColor(.white)
+                                                .transition(.opacity.combined(with: .scale))
+                                        }
+                                        
+                                    }
+                                }
+                                .onTapGesture {
+                                    withAnimation {
+                                        scrollPosition = i + items.count
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.top, 8)
                     }
-                    .padding(.top, 8)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
     

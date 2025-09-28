@@ -37,88 +37,6 @@ struct MainTabView: View {
     }
 }
 
-
-
-
-struct KeyboardDiagnosticsView: View {
-    @StateObject private var kb = KeyboardMonitor()
-    @State private var text: String = ""
-    @FocusState private var focused: Bool
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            // Header stats
-            VStack(spacing: 8) {
-                Text("Keyboard Diagnostics")
-                    .font(.system(size: 22, weight: .bold))
-                HStack(spacing: 16) {
-                    Stat("Visible", kb.isVisible ? "Yes" : "No")
-                    Stat("Height", "\(Int(kb.height)) pt")
-                    Stat("Anim", String(format: "%.2fs", kb.animationDuration))
-                }
-                .font(.system(.caption, design: .rounded))
-                
-                // Current frames (screen coordinates)
-                Text("End Frame: \(rectString(kb.endFrame))")
-                    .font(.footnote.monospaced())
-                    .foregroundStyle(.secondary)
-                Text("Begin Frame: \(rectString(kb.beginFrame))")
-                    .font(.footnote.monospaced())
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 12)
-            
-            Divider()
-            
-            // Controls
-            HStack {
-                Button("Focus Text") { focused = true }
-                Button("Dismiss")     { hideKeyboard() }
-                Spacer()
-                Button("Clear Log")   { kb.events.removeAll() }
-            }
-            .buttonStyle(.bordered)
-            
-            // Text box (to summon the keyboard)
-            TextField("Type here…", text: $text)
-                .textFieldStyle(.roundedBorder)
-                .focused($focused)
-                .padding(.horizontal)
-            
-            // Event log
-            List(kb.events.reversed()) { evt in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(evt.name).bold()
-                        Spacer()
-                        Text(evt.time, style: .time)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("begin: \(rectString(evt.begin))  end: \(rectString(evt.end))")
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                    Text("duration: \(String(format: "%.2f", evt.duration))s  curve: \(evt.curve.rawValue)  local: \(evt.isLocal?.description ?? "-")")
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                }
-                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-            }
-            .listStyle(.plain)
-        }
-        .padding(.bottom, max(0, kb.height - kb.safeAreaBottomInset)) // keep content visible
-        .animation(.easeInOut(duration: kb.animationDuration), value: kb.height)
-        .navigationTitle("Keyboard Debug")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-    
-    private func hideKeyboard() {
-        focused = false
-        #if canImport(UIKit)
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        #endif
-    }
-}
-
 // Small stat pill
 private func Stat(_ title: String, _ value: String) -> some View {
     VStack {
@@ -134,107 +52,6 @@ private func rectString(_ r: CGRect) -> String {
     "[x:\(Int(r.origin.x)) y:\(Int(r.origin.y)) w:\(Int(r.size.width)) h:\(Int(r.size.height))]"
 }
 
-// MARK: - Keyboard monitor
-
-final class KeyboardMonitor: ObservableObject {
-    // Published diagnostics
-    @Published var height: CGFloat = 0
-    @Published var beginFrame: CGRect = .zero
-    @Published var endFrame: CGRect = .zero
-    @Published var animationDuration: Double = 0.25
-    @Published var isVisible: Bool = false
-    @Published var events: [KBEvent] = []
-    
-    // Safe-area bottom inset (for padding calc)
-    var safeAreaBottomInset: CGFloat {
-        #if canImport(UIKit)
-        return UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first?.safeAreaInsets.bottom ?? 0
-        #else
-        return 0
-        #endif
-    }
-    
-    private var bag = Set<AnyCancellable>()
-    
-    init() {
-        let names: [Notification.Name] = [
-            UIResponder.keyboardWillShowNotification,
-            UIResponder.keyboardDidShowNotification,
-            UIResponder.keyboardWillHideNotification,
-            UIResponder.keyboardDidHideNotification,
-            UIResponder.keyboardWillChangeFrameNotification,
-            UIResponder.keyboardDidChangeFrameNotification
-        ]
-        
-        let center = NotificationCenter.default
-        names.forEach { name in
-            center.publisher(for: name)
-                .sink { [weak self] in self?.handle($0) }
-                .store(in: &bag)
-        }
-    }
-    
-    private func handle(_ note: Notification) {
-        let ui = note.userInfo ?? [:]
-        
-        let begin = (ui[UIResponder.keyboardFrameBeginUserInfoKey] as? CGRect) ?? .zero
-        let end   = (ui[UIResponder.keyboardFrameEndUserInfoKey]   as? CGRect) ?? .zero
-        let dur   = (ui[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
-        let curveRaw = (ui[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int) ?? UIView.AnimationCurve.easeInOut.rawValue
-        let curve = UIView.AnimationCurve(rawValue: curveRaw) ?? .easeInOut
-        let local = (ui[UIResponder.keyboardIsLocalUserInfoKey] as? Bool)
-        
-        // Calculate effective on-screen height (accounts for floating/undocked)
-        let effectiveHeight = Self.effectiveHeight(from: end)
-        
-        // Update state on main queue
-        DispatchQueue.main.async {
-            self.beginFrame = begin
-            self.endFrame = end
-            self.animationDuration = dur
-            self.height = effectiveHeight
-            self.isVisible = effectiveHeight > 0.0
-            
-            let event = KBEvent(name: Self.friendlyName(note.name),
-                                time: Date(),
-                                begin: begin,
-                                end: end,
-                                duration: dur,
-                                curve: curve,
-                                isLocal: local)
-            self.events.append(event)
-            
-            // Also print to Xcode console
-            print("[KB] \(event.name)  height=\(Int(effectiveHeight))  begin=\(begin)  end=\(end) dur=\(String(format: "%.2f", dur)) curve=\(curve.rawValue) local=\(local?.description ?? "-")")
-        }
-    }
-    
-    private static func friendlyName(_ name: Notification.Name) -> String {
-        switch name {
-        case UIResponder.keyboardWillShowNotification:        return "keyboardWillShow"
-        case UIResponder.keyboardDidShowNotification:         return "keyboardDidShow"
-        case UIResponder.keyboardWillHideNotification:        return "keyboardWillHide"
-        case UIResponder.keyboardDidHideNotification:         return "keyboardDidHide"
-        case UIResponder.keyboardWillChangeFrameNotification: return "keyboardWillChangeFrame"
-        case UIResponder.keyboardDidChangeFrameNotification:  return "keyboardDidChangeFrame"
-        default: return name.rawValue
-        }
-    }
-    
-    private static func effectiveHeight(from end: CGRect) -> CGFloat {
-        #if canImport(UIKit)
-        let screen = UIScreen.main.bounds
-        guard end.intersects(screen) else { return 0 }
-        // when docked: height = screen.maxY - end.minY; when hidden: 0
-        return max(0, screen.maxY - max(end.minY, 0))
-        #else
-        return end.height
-        #endif
-    }
-}
-
 // MARK: - Event model
 
 struct KBEvent: Identifiable {
@@ -246,17 +63,6 @@ struct KBEvent: Identifiable {
     let duration: Double
     let curve: UIView.AnimationCurve
     let isLocal: Bool?
-}
-
-// MARK: - Preview
-
-struct KeyboardDiagnosticsView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationView {
-            KeyboardDiagnosticsView()
-        }
-        .preferredColorScheme(.dark)
-    }
 }
 
 
@@ -401,6 +207,94 @@ struct CurvedTabBarView: View {
             opt.enabled = value
             layouts[name] = opt
         }
+    }
+    
+    private func waitForChipsReadyAsync(maxWait: TimeInterval = 3.0) async {
+        let start = Date()
+        while repo.topLevelChips.isEmpty && Date().timeIntervalSince(start) < maxWait {
+            try? await Task.sleep(nanoseconds: 80_000_000) // 0.08s poll
+        }
+    }
+    
+    @MainActor
+    private func runCategoryTapSequenceAsync(
+        for categoryID: String,
+        initialDelay: TimeInterval = 0.25,   // slowed a bit
+        stepDelay: TimeInterval = 0.45       // slowed a bit
+    ) async {
+        withAnimation { currentTab = "Category" }
+        localSelection   = nil
+        expandedParentID = nil
+        expandedSubID    = nil
+        selectedPath     = []
+
+        repo.loadOnce()
+        await waitForChipsReadyAsync()
+
+        let steps = makeTapSequence(from: categoryID)
+
+        // small kick-off pause so level-1 mounts before we tap
+        try? await Task.sleep(nanoseconds: UInt64((0.10 + initialDelay) * 1_000_000_000))
+
+        for id in steps {
+            if Task.isCancelled { return }
+            if let chip = chipByID(id) {
+                withAnimation { handleChipTap(chip) }
+            } else {
+                print("⚠️ chip not found for id \(id)")
+            }
+            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+        }
+    }
+    
+    @MainActor
+    private func runRandomAutofillAndFlowAsync() async {
+        // lock UI + reset
+        withAnimation {
+            disableAllButtons = true
+            currentTab = "Name"
+            rankoName = ""
+            rankoDescription = ""
+            localSelection = nil
+            expandedParentID = nil
+            expandedSubID = nil
+            selectedPath = []
+        }
+
+        // wait 0.2s before starting (as requested)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        // pick sample
+        let current = randomSamplePair()
+
+        // 1) typewriter name (await until fully entered)
+        await typewriterSetRankoNameAsync(current.name, perChar: 0.035, leadingDelay: 0.10)
+
+        // 2) 0.4s pause
+        try? await Task.sleep(nanoseconds: 400_000_000)
+
+        // 3) run slower category tap sequence (await until done)
+        await runCategoryTapSequenceAsync(for: current.category.id, initialDelay: 0.25, stepDelay: 0.45)
+
+        // 4) 0.4s pause
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        
+        withAnimation { currentTab = "Layout" }
+        
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // 5) pick layout with animation
+        withAnimation { selectedLayoutName = "Default" }
+
+        // 6) 0.4s pause
+        try? await Task.sleep(nanoseconds: 400_000_000)
+
+        // 7) open ranko sheet and close create sheet
+        openRankoSheet = true
+        withAnimation { showCreateSheet = false }
+
+        // unlock UI
+        disableAllButtons = false
     }
     
     // Async forward typing you can await in a loop (keeps your existing sync version untouched)
@@ -890,7 +784,9 @@ struct CurvedTabBarView: View {
                 ZStack(alignment: .bottom) {
                     Rectangle()
                         .fill(Color.black.opacity(0.5))
+                        .ignoresSafeArea()
                         .transition(.opacity)
+                        .zIndex(1)
                     
                     // top bar overlay with Cancel
                     VStack {
@@ -984,8 +880,8 @@ struct CurvedTabBarView: View {
                                         expandedSubID = nil
                                         selectedPath = []
                                     }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                        runRandomAutofillAndFlow()
+                                    Task { @MainActor in
+                                        await runRandomAutofillAndFlowAsync()
                                     }
                                 }
                                 .simultaneousGesture(
@@ -1521,6 +1417,14 @@ struct CurvedTabBarView: View {
                         // drive the sheet animation with your constant duration
                         animateSheetHeight()
                     }
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal:   .move(edge: .bottom).combined(with: .opacity)
+                        )
+                    )
+                    .zIndex(2)
+                    .animation(.spring(response: 0.42, dampingFraction: 0.88), value: showCreateSheet)
                     
                     
                     if tutorialMode {
@@ -1783,14 +1687,23 @@ struct CurvedTabBarView: View {
             selectedPath = []
             selectedLayoutName = nil
         }) {
-            DefaultListView(
-                rankoName: rankoName,
-                description: rankoDescription,
-                isPrivate: rankoPrivacy,
-                // TODO: if you want to pass the selected category, map your SampleCategoryChip → CategoryChip here.
-                category: localSelection,
-                onSave: { _ in }
-            )
+            if selectedLayoutName == "Default" {
+                DefaultListView(
+                    rankoName: rankoName,
+                    description: rankoDescription,
+                    isPrivate: rankoPrivacy,
+                    // TODO: if you want to pass the selected category, map your SampleCategoryChip → CategoryChip here.
+                    category: localSelection,
+                    onSave: { _ in }
+                )
+            } else if selectedLayoutName == "Tier" {
+                GroupListView(
+                    rankoName: rankoName,
+                    description: rankoDescription,
+                    isPrivate: rankoPrivacy,
+                    category: localSelection
+                )
+            }
         }
         .ignoresSafeArea(.keyboard)
         .edgesIgnoringSafeArea(.all)

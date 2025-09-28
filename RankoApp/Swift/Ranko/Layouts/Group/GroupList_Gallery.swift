@@ -78,7 +78,6 @@ struct GroupListGallery: View {
         guard
             let listName    = dict["RankoName"]        as? String,
             let description = dict["RankoDescription"] as? String,
-            let category    = dict["RankoCategory"]    as? String,
             let type        = dict["RankoType"]        as? String,
             let privacy     = dict["RankoPrivacy"]     as? Bool,
             let dateTime    = dict["RankoDateTime"]    as? String,
@@ -127,7 +126,9 @@ struct GroupListGallery: View {
             listName:         listName,
             listDescription:  description,
             type:             type,
-            category:         category,
+            categoryName: "Albums",
+            categoryIcon: "circle.circle",
+            categoryColour: 0xFFFFFF,
             isPrivate:        privacy ? "Private" : "Public",
             userCreator:      userCreator,
             dateTime:         dateTime,
@@ -160,7 +161,7 @@ struct GroupListIndividualGallery: View {
                     .foregroundColor(Color(hex: 0x514343))
                     .multilineTextAlignment(.leading)
                 HStack(spacing: 6) {
-                    FeaturedCategoryBadge(text: listData.category)
+                    FeaturedCategoryBadge(text: listData.categoryName)
                     Text("• \(timeAgo(from: String(listData.dateTime)))")
                         .font(.custom("Nunito-Black", size: 9))
                         .foregroundColor(Color(hex: 0x514343))

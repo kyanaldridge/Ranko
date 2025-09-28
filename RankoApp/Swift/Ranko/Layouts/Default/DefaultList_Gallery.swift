@@ -28,7 +28,7 @@ struct DefaultListIndividualGallery: View {
                     .foregroundColor(Color(hex: 0x514343))
                     .multilineTextAlignment(.leading)
                 HStack(spacing: 6) {
-                    FeaturedCategoryBadge(text: listData.category)
+                    FeaturedCategoryBadge(text: listData.categoryName)
                     Text("• \(timeAgo(from: String(listData.dateTime)))")
                         .font(.custom("Nunito-Black", size: 9))
                         .foregroundColor(Color(hex: 0x514343))
@@ -116,7 +116,9 @@ struct DefaultListIndividualGallery: View {
                     listName: "Top 10 Albums of the 1970s to 2010s",
                     listDescription: "my fav albums",
                     type: "default",
-                    category: "Albums",
+                    categoryName: "Albums",
+                    categoryIcon: "circle.circle",
+                    categoryColour: 0xFFFFFF,
                     isPrivate: "false",
                     userCreator: "",
                     dateTime: "20230718094500",

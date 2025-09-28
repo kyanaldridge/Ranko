@@ -185,7 +185,9 @@ struct ExploreView: View {
                 listName: name,
                 listDescription: description,
                 type: type,
-                category: category,
+                categoryName: "Albums",
+                categoryIcon: "circle.circle",
+                categoryColour: 0xFFFFFF,
                 isPrivate: isPrivate ? "Private" : "Public",
                 userCreator: userID,
                 dateTime: dateTimeStr,
@@ -594,7 +596,9 @@ struct ExploreListsDisplay: View {
         listName: "Top 10 Albums This Decade",
         listDescription: "My current fave bangers — argue with your mum 😌",
         type: "default",
-        category: "Songs",
+        categoryName: "Songs",
+        categoryIcon: "music.note",
+        categoryColour: 0xFFFFFF,
         isPrivate: "Public",
         userCreator: "user_abc123",
         dateTime: "20250815123045", // yyyyMMddHHmmss
@@ -619,7 +623,9 @@ struct ExploreListsDisplay: View {
         listName: "My Favourite Ice Cream Flavours",
         listDescription: "My current fave flavours — argue with your mum 😌",
         type: "default",
-        category: "Ice Cream",
+        categoryName: "Ice Cream",
+        categoryIcon: "snowflake",
+        categoryColour: 0xFFFFFF,
         isPrivate: "Public",
         userCreator: "user_abc123",
         dateTime: "20250822165913", // yyyyMMddHHmmss
@@ -741,7 +747,9 @@ struct ExploreListsDisplay: View {
                     listName: name,
                     listDescription: description,
                     type: type,
-                    category: category,
+                    categoryName: "Albums",
+                    categoryIcon: "circle.circle",
+                    categoryColour: 0xFFFFFF,
                     isPrivate: isPrivate ? "Private" : "Public",
                     userCreator: userID,
                     dateTime: dateTimeStr,
@@ -858,7 +866,7 @@ struct DefaultListExploreView: View {
                     Rectangle()
                         .fill(Color.clear)
                         .frame(width: 42)
-                    HomeCategoryBadge1(text: listData.category)
+                    HomeCategoryBadge1(text: listData.categoryName)
                 }
                 
                 HStack(spacing: 4) {
@@ -1313,7 +1321,9 @@ struct GroupListExploreView: View {
             listName: listData.listName,
             listDescription: listData.listDescription,
             type: listData.type,
-            category: listData.category,
+            categoryName: "Albums",
+            categoryIcon: "circle.circle",
+            categoryColour: 0xFFFFFF,
             isPrivate: listData.isPrivate,
             userCreator: listData.userCreator,
             dateTime: listData.dateTime,

@@ -424,7 +424,7 @@ struct FeaturedCategoryBadge: View {
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(categoryChipIconColors[text]!)
+                .fill(categoryChipIconColors[text] ?? .black)
                 .opacity(0.15)
         )
     }

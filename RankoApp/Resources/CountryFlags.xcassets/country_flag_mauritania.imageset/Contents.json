@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "country_flag_mauritania.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

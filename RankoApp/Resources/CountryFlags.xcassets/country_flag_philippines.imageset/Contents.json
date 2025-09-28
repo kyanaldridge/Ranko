@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "country_flag_philippines.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

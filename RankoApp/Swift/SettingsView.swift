@@ -25,9 +25,9 @@ struct SettingsView: View {
     @Environment(\.requestReview) private var requestReview
     @Namespace private var transition
     
-    @StateObject private var auth = MusicAuthManager()
+//    @StateObject private var auth = MusicAuthManager()
 //    @StateObject var spotify = Spotify()
-    @StateObject private var player = PlayerManager()
+//    @StateObject private var player = PlayerManager()
     @StateObject private var user_data = UserInformation.shared
     
     // Store the tint as a String value (note the dot prefix to match our mapping below)
@@ -195,9 +195,7 @@ struct SettingsView: View {
                 )
         }
         .fullScreenCover(isPresented: $suggestionsIdeasView) {
-            AppleMusicView()
-                .environmentObject(auth)
-                .environmentObject(player)
+            SuggestionsIdeasView()
                 .navigationTransition(
                     .zoom(sourceID: "Suggestions & Ideas", in: transition)
                 )

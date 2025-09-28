@@ -174,28 +174,52 @@ struct HomeView: View {
 
     // ✅ NEW: fetch a single Ranko list from Firebase by objectID
     private func fetchRankoList(_ objectID: String, completion: @escaping (RankoList?) -> Void) {
-        let ref = Database.database().reference().child("RankoData").child(objectID)
+        let ref = Database.database().reference()
+            .child("RankoData")
+            .child(objectID)
+
         ref.observeSingleEvent(of: .value) { snap in
-            guard let dict = snap.value as? [String: Any],
-                  let name = dict["RankoName"] as? String,
-                  let description = dict["RankoDescription"] as? String,
-                  let category = dict["RankoCategory"] as? String,
-                  let type = dict["RankoType"] as? String,
-                  let isPrivate = dict["RankoPrivacy"] as? Bool,
-                  let userID = dict["RankoUserID"] as? String,
-                  let dateTimeStr = dict["RankoDateTime"] as? String,
-                  let itemsDict = dict["RankoItems"] as? [String: [String: Any]] else {
-                completion(nil)
-                return
+            guard let dict = snap.value as? [String: Any] else {
+                completion(nil); return
             }
 
+            // Core fields
+            guard
+                let name = dict["RankoName"] as? String,
+                let description = dict["RankoDescription"] as? String,
+                let type = dict["RankoType"] as? String,
+                let isPrivate = dict["RankoPrivacy"] as? Bool,
+                let userID = dict["RankoUserID"] as? String,
+                let dateTimeStr = dict["RankoDateTime"] as? String
+            else {
+                completion(nil); return
+            }
+
+            // Category (nested)
+            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
+            let catName  = (cat["name"] as? String) ?? ""
+            let catIcon  = (cat["icon"] as? String) ?? ""
+            let catColour = intFromAny(cat["colour"]) ?? 0  // store as Int; convert to your Color later
+
+            // Items
+            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
             let items: [RankoItem] = itemsDict.compactMap { itemID, item in
-                guard let itemName = item["ItemName"] as? String,
-                      let itemDesc = item["ItemDescription"] as? String,
-                      let itemImage = item["ItemImage"] as? String else { return nil }
-                let rank = item["ItemRank"] as? Int ?? 0
-                let votes = item["ItemVotes"] as? Int ?? 0
-                let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: category, ItemImage: itemImage)
+                guard
+                    let itemName = item["ItemName"] as? String,
+                    let itemDesc = item["ItemDescription"] as? String,
+                    let itemImage = item["ItemImage"] as? String
+                else { return nil }
+
+                let rank  = intFromAny(item["ItemRank"])  ?? 0
+                let votes = intFromAny(item["ItemVotes"]) ?? 0
+
+                let record = RankoRecord(
+                    objectID: itemID,
+                    ItemName: itemName,
+                    ItemDescription: itemDesc,
+                    ItemCategory: "category",  // replace if you store real per-item category
+                    ItemImage: itemImage
+                )
                 return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
             }
 
@@ -204,14 +228,27 @@ struct HomeView: View {
                 listName: name,
                 listDescription: description,
                 type: type,
-                category: category,
+                categoryName: catName,
+                categoryIcon: catIcon,
+                categoryColour: catColour,
                 isPrivate: isPrivate ? "Private" : "Public",
                 userCreator: userID,
                 dateTime: dateTimeStr,
                 items: items
             )
-            completion(list)
+
+            // If UI code expects main thread:
+            DispatchQueue.main.async { completion(list) }
         }
+    }
+
+    // Helper to safely coerce Firebase numbers/strings into Int
+    private func intFromAny(_ any: Any?) -> Int? {
+        if let i = any as? Int { return i }
+        if let d = any as? Double { return Int(d) }
+        if let s = any as? String { return Int(s) }
+        if let n = any as? NSNumber { return n.intValue }
+        return nil
     }
 
     // ✅ NEW: load next batch of 6 (refill queue if needed)
@@ -657,7 +694,7 @@ struct DefaultListHomeView: View {
                 .padding(.horizontal, 10)
             HStack(alignment: .top) {
                 Group {
-                    AsyncImage(url: URL(string: "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media&token=\(Secrets.firebaseToken)")) { phase in
+                    AsyncImage(url: URL(string: "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media&token=\(user_data.userID)")) { phase in
                         if let img = phase.image {
                             img.resizable()
                                 .scaledToFill()
@@ -718,7 +755,7 @@ struct DefaultListHomeView: View {
                     Rectangle()
                         .fill(Color.clear)
                         .frame(width: 42)
-                    HomeCategoryBadge1(text: listData.category)
+                    HomeCategoryBadge1(text: listData.categoryName)
                 }
                 
                 HStack(spacing: 4) {
@@ -1030,7 +1067,7 @@ struct DefaultListHomeView: View {
         
         index.partialUpdateObjects(updates: updates) { result in
             switch result {
-            case .success(let response):
+            case .success(_):
                 print("✅ Algolia RankoLikes updated")
             case .failure(let error):
                 print("❌ Algolia update failed:", error)
@@ -1063,7 +1100,7 @@ struct DefaultListHomeView: View {
         
         index.partialUpdateObjects(updates: updates) { result in
             switch result {
-            case .success(let response):
+            case .success(_):
                 print("✅ Algolia RankoComments updated")
             case .failure(let error):
                 print("❌ Algolia update failed:", error)
@@ -1163,7 +1200,9 @@ struct DefaultListHomeView_Previews: PreviewProvider {
         listName: "Top 10 Albums This Decade",
         listDescription: "My current fave bangers — argue with your mum 😌",
         type: "default",
-        category: "Songs",
+        categoryName: "Songs",
+        categoryIcon: "music.note",
+        categoryColour: 0xFFFFFF,
         isPrivate: "Public",
         userCreator: "2FOqyZfO5TNOdoJ0B3KrX99za1SLJ3",
         dateTime: "20250815123045", // yyyyMMddHHmmss
@@ -1220,7 +1259,9 @@ struct HomeListsDisplay: View {
         listName: "Top 10 Albums This Decade",
         listDescription: "My current fave bangers — argue with your mum 😌",
         type: "default",
-        category: "Songs",
+        categoryName: "Songs",
+        categoryIcon: "music.note",
+        categoryColour: 0xFFFFFF,
         isPrivate: "Public",
         userCreator: "user_abc123",
         dateTime: "20250815123045", // yyyyMMddHHmmss
@@ -1245,7 +1286,9 @@ struct HomeListsDisplay: View {
         listName: "My Favourite Ice Cream Flavours",
         listDescription: "My current fave flavours — argue with your mum 😌",
         type: "default",
-        category: "Ice Cream",
+        categoryName: "Ice Cream",
+        categoryIcon: "snowflake",
+        categoryColour: 0xFFFFFF,
         isPrivate: "Public",
         userCreator: "user_abc123",
         dateTime: "20250822165913", // yyyyMMddHHmmss
@@ -1366,7 +1409,9 @@ struct HomeListsDisplay: View {
                     listName: name,
                     listDescription: description,
                     type: type,
-                    category: category,
+                    categoryName: "Albums",
+                    categoryIcon: "circle.circle",
+                    categoryColour: 0xFFFFFF,
                     isPrivate: isPrivate ? "Private" : "Public",
                     userCreator: userID,
                     dateTime: dateTimeStr,
@@ -1405,7 +1450,9 @@ struct GroupListHomeView: View {
             listName: listData.listName,
             listDescription: listData.listDescription,
             type: listData.type,
-            category: listData.category,
+            categoryName: "Albums",
+            categoryIcon: "circle.circle",
+            categoryColour: 0xFFFFFF,
             isPrivate: listData.isPrivate,
             userCreator: listData.userCreator,
             dateTime: listData.dateTime,

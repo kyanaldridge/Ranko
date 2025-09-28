@@ -1190,38 +1190,6 @@ extension DateFormatter {
     }()
 }
 
-struct ThemeCard: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "paintbrush.fill")
-                .font(.system(size: 25))
-                .foregroundColor(Color(hex: 0xFFEBBC))
-                .padding(.bottom, 3)
-            Text("THEME")
-                .font(.caption2)
-                .foregroundColor(Color(hex: 0xFFEBBC))
-            Text("September")
-                .font(.headline)
-                .foregroundColor(Color(hex: 0xFFEBBC))
-            Button {
-                
-            } label: {
-                Text("Pick Theme")
-                    .font(.caption)
-                    .fontWeight(.bold)
-            }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 5)
-                .background(Color(hex: 0xFFEBBC))
-                .foregroundColor(Color(hex: 0x87400F))
-                .cornerRadius(12)
-        }
-        .frame(width: 140, height: 160)
-        .background(LinearGradient(colors: [Color(hex: 0xD46C18), Color(hex: 0xE0851D)], startPoint: .top, endPoint: .bottom))
-        .cornerRadius(20)
-    }
-}
-
 struct EventCard: View {
     var body: some View {
         VStack(spacing: 10) {
