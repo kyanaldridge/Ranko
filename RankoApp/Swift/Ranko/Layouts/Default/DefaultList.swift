@@ -1202,7 +1202,7 @@ struct DefaultListView: View {
         // Build the category object exactly like RTDB expects
         // If you have a hex/brand colour on the chip, use it; otherwise fall back to a neutral.
         let categoryDict: [String: Any] = [
-            "colour": category.colour ?? "0x000000", // add `colourHex` on your model if needed
+            "colour": category.colour, // add `colourHex` on your model if needed
             "icon":   category.icon,
             "name":   category.name
         ]
@@ -1270,7 +1270,7 @@ struct DefaultListView: View {
         @Environment(\.dismiss) private var dismiss
         @StateObject private var user_data = UserInformation.shared
 
-        let rankoID: String                                  // 👈 new
+        let rankoID: String
 
         @Binding var drafts: [BlankItemDraft]
         @Binding var error: String?
@@ -1284,6 +1284,9 @@ struct DefaultListView: View {
         @State private var imageForCropping: UIImage? = nil
         @State private var backupImage: UIImage? = nil
         @State private var isCleaningUp = false
+        
+        @FocusState private var focusedField: Field?
+        enum Field: Hashable { case name(String), description(String) }
 
         // convenience
         private var placeholderURL: String {
@@ -1318,77 +1321,61 @@ struct DefaultListView: View {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: 16) {
-                        ForEach(drafts.indices, id: \.self) { i in
+                        ForEach(drafts, id: \.id) { draft in
+                            let draftID = draft.id
                             DraftCard(
-                                draft: $drafts[i],
-                                title: "new item",
+                                draft: bindingForDraft(id: draftID),      // ← binding resolved by id
+                                title: "Blank Item #\((drafts.firstIndex(where: { $0.id == draftID }) ?? 0) + 1)",
                                 subtitle: "tap to add image (optional)",
+                                focusedField: $focusedField,
                                 onTapImage: {
-                                    activeDraftID = drafts[i].id
-                                    backupImage = drafts[i].image
+                                    activeDraftID = draftID
+                                    backupImage = drafts.first(where: { $0.id == draftID })?.image
                                     showNewImageSheet = true
                                 },
                                 onDelete: {
-                                    // try to delete only if it was a real uploaded image
-                                    let draft = drafts[i]
-                                    if !isPlaceholderURL(draft.itemImageURL) {
-                                        Task { await deleteStorageImage(rankoID: rankoID, itemID: draft.id) }
-                                    }
-                                    
-                                    withAnimation {
-                                        drafts.remove(at: i)
-                                        if drafts.isEmpty { drafts.append(BlankItemDraft()) }
-                                    }
-                                    
-                                    print("deleting itemID: \(draft.id)")
+                                    removeDraft(id: draftID)              // ← remove by id (no captured i)
                                 }
                             )
                             .contextMenu {
-                                Button(role: .confirm) {
-                                    activeDraftID = drafts[i].id
-                                    backupImage = drafts[i].image
+                                Button(role: .none) {                     // was .confirm (invalid role)
+                                    activeDraftID = draftID
+                                    backupImage = drafts.first(where: { $0.id == draftID })?.image
                                     showNewImageSheet = true
                                 } label: { Label("Add Image", systemImage: "photo.fill") }
-                                
+
                                 Button(role: .destructive) {
-                                    let draft = drafts[i]
-                                    if !isPlaceholderURL(draft.itemImageURL) {
-                                        Task { await deleteStorageImage(rankoID: rankoID, itemID: draft.id) }
-                                    }
-                                    
-                                    withAnimation {
-                                        drafts.remove(at: i)
-                                        if drafts.isEmpty { drafts.append(BlankItemDraft()) }
-                                    }
-                                    
-                                    print("deleting itemID: \(draft.id)")
-                                    
+                                    removeDraft(id: draftID)
                                 } label: { Label("Delete", systemImage: "trash") }
-                                
-                                Button(role: .close) {
-                                    drafts[i].description = ""
-                                    drafts[i].image = nil
-                                    drafts[i].name = ""
-                                    
-                                    let draft = drafts[i]
-                                    
-                                    if !isPlaceholderURL(draft.itemImageURL) {
-                                        Task { await deleteStorageImage(rankoID: rankoID, itemID: draft.id) }
+
+                                Button(role: .none) {
+                                    // clear fields on the live binding if it still exists
+                                    if let idx = drafts.firstIndex(where: { $0.id == draftID }) {
+                                        drafts[idx].description = ""
+                                        drafts[idx].image = nil
+                                        drafts[idx].name = ""
+                                        // try to delete uploaded image if not placeholder
+                                        if !isPlaceholderURL(drafts[idx].itemImageURL) {
+                                            Task { await deleteStorageImage(rankoID: rankoID, itemID: draftID) }
+                                        }
+                                        DispatchQueue.main.async { focusedField = .name(draftID) }
                                     }
-                                    
-                                    print("deleting itemID: \(draft.id)")
-                                    
                                 } label: { Label("Clear All", systemImage: "delete.right.fill") }
                             }
                         }
-
+                        
                         Button {
-                            withAnimation { drafts.append(BlankItemDraft()) }
+                            let newDraft = BlankItemDraft()
+                            let newID = newDraft.id
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                drafts.append(newDraft)
+                            }
+                            DispatchQueue.main.async { focusedField = .name(newID) }
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "plus.app.fill")
+                                Image(systemName: "plus")
                                     .font(.custom("Nunito-Black", size: 18))
-                                Text("add another blank item")
+                                Text("ADD ANOTHER BLANK ITEM")
                                     .font(.custom("Nunito-Black", size: 15))
                             }
                         }
@@ -1514,6 +1501,55 @@ struct DefaultListView: View {
             .onChange(of: imageForCropping) { _, newVal in
                 if newVal != nil { showImageCropper = true }
             }
+        }
+        
+        // Safely produce a Binding<BlankItemDraft> by id.
+        // If the draft got removed, the getter returns a harmless placeholder (so SwiftUI won’t crash during transition).
+        private func bindingForDraft(id: String) -> Binding<BlankItemDraft> {
+            Binding(
+                get: {
+                    drafts.first(where: { $0.id == id }) ?? BlankItemDraft()
+                },
+                set: { updated in
+                    if let idx = drafts.firstIndex(where: { $0.id == id }) {
+                        drafts[idx] = updated
+                    }
+                }
+            )
+        }
+
+        // Centralized, index-safe removal with focus + cleanup + animation.
+        private func removeDraft(id: String) {
+            guard let idx = drafts.firstIndex(where: { $0.id == id }) else { return }
+            let draft = drafts[idx]
+
+            // try to delete uploaded image if it’s not a placeholder
+            if !isPlaceholderURL(draft.itemImageURL) {
+                Task { await deleteStorageImage(rankoID: rankoID, itemID: id) }
+            }
+
+            // compute a sensible neighbor BEFORE mutation
+            let nextFocusID: String? = {
+                if drafts.count <= 1 { return nil }
+                let neighborIndex = idx == drafts.count - 1 ? idx - 1 : idx + 1
+                return drafts[neighborIndex].id
+            }()
+
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                drafts.remove(at: idx)
+                if drafts.isEmpty { drafts.append(BlankItemDraft()) }
+            }
+
+            // restore focus after the view updates
+            DispatchQueue.main.async {
+                if let nid = nextFocusID, drafts.contains(where: { $0.id == nid }) {
+                    focusedField = .name(nid)
+                } else if let firstID = drafts.first?.id {
+                    focusedField = .name(firstID)
+                }
+            }
+
+            print("deleting itemID: \(id)")
         }
         
         private func makeJPEGMetadata(rankoID: String, itemID: String, userID: String) -> StorageMetadata {
@@ -1652,6 +1688,7 @@ struct DefaultListView: View {
         @Binding var draft: BlankItemDraft
         let title: String
         let subtitle: String
+        let focusedField: FocusState<BlankItemsComposer.Field?>.Binding   // ✅ accept focus binding
         var onTapImage: () -> Void
         var onDelete: () -> Void
 
@@ -1662,57 +1699,122 @@ struct DefaultListView: View {
                         .font(.custom("Nunito-Black", size: 12))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    if draft.isUploading {
-                        ProgressView().controlSize(.small)
-                    }
+                    if draft.isUploading { ProgressView().controlSize(.small) }
                 }
-
-                Button(action: onTapImage) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.gray.opacity(0.06))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
-                            )
-                            .frame(width: 240, height: 240)
-
-                        if let img = draft.image {
-                            Image(uiImage: img)
-                                .resizable().scaledToFill()
+                
+                HStack {
+                    Spacer(minLength: 0)
+                    Button(action: onTapImage) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.gray.opacity(0.06))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                                )
                                 .frame(width: 240, height: 240)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
-                        } else {
-                            VStack(spacing: 10) {
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .font(.system(size: 28, weight: .black))
-                                    .opacity(0.35)
-                                Text(subtitle.uppercased())
-                                    .font(.custom("Nunito-Black", size: 13))
-                                    .opacity(0.6)
+                            
+                            if let img = draft.image {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 240, height: 240, alignment: .center)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .contentShape(Rectangle())
+                            } else {
+                                VStack(spacing: 10) {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                        .font(.system(size: 28, weight: .black))
+                                        .opacity(0.35)
+                                    Text(subtitle.uppercased())
+                                        .font(.custom("Nunito-Black", size: 13))
+                                        .opacity(0.6)
+                                }
+                                .frame(width: 240, height: 240, alignment: .center)
+                                .contentShape(Rectangle())
                             }
                         }
                     }
+                    .buttonStyle(.plain)
+                    .disabled(draft.isUploading)
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(.plain)
-                .disabled(draft.isUploading)
+                .frame(maxWidth: .infinity)
+                
+                VStack(spacing: 14) {
+                    // NAME
+                    VStack(spacing: 5) {
+                        HStack {
+                            Text("Item Name".uppercased())
+                                .foregroundColor(.secondary)
+                                .font(.custom("Nunito-Black", size: 12))
+                            Text("*").foregroundColor(.red).font(.custom("Nunito-Black", size: 12))
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.leading, 6)
 
-                VStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        TextField("Item Name *", text: $draft.name)
-                            .font(.system(size: 16, weight: .heavy))
-                            .autocorrectionDisabled(true)
-                        Spacer()
+                        HStack(spacing: 6) {
+                            Image(systemName: "textformat.size.larger").foregroundColor(.gray).padding(.trailing, 1)
+                            TextField("Item Name *", text: $draft.name)
+                                .font(.custom("Nunito-Black", size: 18))
+                                .autocorrectionDisabled(true)
+                                .onChange(of: draft.name) { _, v in
+                                    if v.count > 50 { draft.name = String(v.prefix(50)) }
+                                }
+                                .foregroundStyle(.gray)
+                                .focused(focusedField, equals: .name(draft.id))   // ✅ use binding
+                                .submitLabel(.next)
+                                .onSubmit { focusedField.wrappedValue = .description(draft.id) } // ✅ jump to desc
+
+                            Spacer()
+                            Text("\(draft.name.count)/50")
+                                .font(.caption2).fontWeight(.light)
+                                .padding(.top, 15).foregroundColor(.secondary)
+                        }
+                        .padding(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .foregroundColor(Color.gray.opacity(0.08))
+                                .allowsHitTesting(false)
+                        )
                     }
-                    .padding(10)
-                    .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
 
-                    TextField("Item Description (optional)", text: $draft.description, axis: .vertical)
-                        .lineLimit(1...3)
-                        .font(.system(size: 14, weight: .semibold))
-                        .autocorrectionDisabled(true)
-                        .padding(10)
-                        .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+                    // DESCRIPTION
+                    VStack(spacing: 5) {
+                        HStack {
+                            Text("Description".uppercased())
+                                .foregroundColor(.secondary)
+                                .font(.custom("Nunito-Black", size: 12))
+                                .padding(.leading, 6)
+                            Spacer(minLength: 0)
+                        }
+
+                        HStack {
+                            Image(systemName: "textformat.size.smaller").foregroundColor(.gray).padding(.trailing, 1)
+                            TextField("Item Description (optional)", text: $draft.description, axis: .vertical)
+                                .font(.custom("Nunito-Black", size: 18))
+                                .autocorrectionDisabled(true)
+                                .onChange(of: draft.description) { _, v in
+                                    if v.count > 100 { draft.description = String(v.prefix(100)) }
+                                }
+                                .lineLimit(1...3)
+                                .foregroundStyle(.gray)
+                                .focused(focusedField, equals: .description(draft.id))  // ✅ use binding
+                                .submitLabel(.done)
+                                .onSubmit { hideKeyboard() }
+
+                            Spacer()
+                            Text("\(draft.description.count)/100")
+                                .font(.caption2).fontWeight(.light)
+                                .padding(.top, 15).foregroundColor(.secondary)
+                        }
+                        .padding(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .foregroundColor(Color.gray.opacity(0.08))
+                                .allowsHitTesting(false)
+                        )
+                    }
                 }
 
                 HStack {
@@ -1723,10 +1825,11 @@ struct DefaultListView: View {
                             .lineLimit(2)
                     }
                     Spacer()
-                    Button {
-                        onDelete()
-                    } label: {
-                        Image(systemName: "trash.fill")
+                    Button(action: onDelete) {
+                        HStack {
+                            Image(systemName: "trash.fill").font(.system(size: 13, weight: .semibold))
+                            Text("DELETE").font(.custom("Nunito-Black", size: 13))
+                        }
                     }
                     .buttonStyle(.borderless)
                     .disabled(draft.isUploading)
@@ -1736,10 +1839,9 @@ struct DefaultListView: View {
             .padding(14)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             .onChange(of: draft.description) {
-                let draftDescription = draft.description
-                if draftDescription.range(of: "\n") != nil {
+                if draft.description.contains("\n") {
                     hideKeyboard()
-                    draft.description = draftDescription.replacingOccurrences(of: "\n", with: "")
+                    draft.description = draft.description.replacingOccurrences(of: "\n", with: "")
                 }
             }
         }

@@ -5,12 +5,15 @@
 //  Created by Kyan Aldridge on 10/6/2025.
 //
 
+import Foundation
+import InstantSearch
+import UIKit
 import SwiftUI
-import InstantSearchSwiftUI
-import InstantSearchCore
 import Firebase
 import FirebaseAuth
-import Foundation
+import FirebaseStorage
+import FirebaseAnalytics
+import PhotosUI
 import AlgoliaSearchClient
 
 private extension CGFloat {
@@ -114,6 +117,14 @@ struct DefaultListPersonal: View {
     @State private var progressLoading: Bool = false       // ← shows the loader
     @State private var publishError: String? = nil         // ← error messaging
     @State private var imageReloadToken = UUID()
+    
+    // Blank Items composer
+    @State private var showBlankItemsFS = false
+    @State private var blankDrafts: [BlankItemDraft] = [BlankItemDraft()] // start with 1
+    @State private var draftError: String? = nil
+
+    // hold personal images picked for new items -> uploaded on publish
+    @State private var pendingPersonalImages: [String: UIImage] = [:]  // itemID -> image
     
     // MARK: - Init now only requires listID
     init(
@@ -322,6 +333,25 @@ struct DefaultListPersonal: View {
                                                         delete(item)
                                                     } label: {
                                                         Label("Delete", systemImage: "trash")
+                                                    }
+                                                }
+                                                .sheet(item: $itemToEdit) { item in
+                                                    EditItemView(item: item, listID: listID) { newName, newDesc in
+                                                        let rec = item.record
+                                                        let updatedRecord = RankoRecord(
+                                                            objectID: rec.objectID,
+                                                            ItemName: newName,
+                                                            ItemDescription: newDesc,
+                                                            ItemCategory: "",
+                                                            ItemImage: rec.ItemImage
+                                                        )
+                                                        let updatedItem = RankoItem(
+                                                            id: item.id,
+                                                            rank: item.rank,
+                                                            votes: item.votes,
+                                                            record: updatedRecord
+                                                        )
+                                                        onSave(updatedItem)
                                                     }
                                                 }
                                                 .sheet(isPresented: $showEditItemSheet) {
@@ -1023,34 +1053,48 @@ struct DefaultListPersonal: View {
             loadListFromFirebase()
             refreshItemImages()
         }
-        .sheet(isPresented: $showAddItemsSheet, onDismiss : {
+        .sheet(isPresented: $addButtonTapped, onDismiss : {
             possiblyEdited = true
         }) {
             FilterChipPickerView(
                 selectedRankoItems: $selectedRankoItems
             )
         }
-        .sheet(isPresented: $showEditDetailsSheet) {
+        .sheet(isPresented: $editButtonTapped) {
             DefaultListEditDetails(
                 rankoName: rankoName,
                 description: description,
                 isPrivate: isPrivate,
                 category: category
             ) { newName, newDescription, newPrivate, newCategory in
+                rankoName   = newName
+                description = newDescription
+                isPrivate   = newPrivate
+                category    = newCategory
                 possiblyEdited = true
-                rankoName    = newName
-                description  = newDescription
-                isPrivate    = newPrivate
-                category     = newCategory
             }
+            .navigationTransition(
+                .zoom(sourceID: "editButton", in: transition)
+            )
         }
-        .sheet(isPresented: $showReorderSheet) {
+        .sheet(isPresented: $rankButtonTapped) {
             DefaultListReRank(
                 items: selectedRankoItems,
                 onSave: { newOrder in
                     selectedRankoItems = newOrder
                     possiblyEdited = true
                 }
+            )
+        }
+        .fullScreenCover(isPresented: $showBlankItemsFS, onDismiss : {
+            possiblyEdited = true
+        }) {
+            BlankItemsComposer(
+                rankoID: listID,                  // 👈 add this
+                drafts: $blankDrafts,
+                error: $draftError,
+                canAddMore: blankDrafts.count < 10,
+                onCommit: { appendDraftsToSelectedRanko() }
             )
         }
         .alert(isPresented: $showDeleteAlert) {
@@ -1103,8 +1147,133 @@ struct DefaultListPersonal: View {
                 listID: listID
             ) { updated in
                 // replace the old item with the updated one
+                possiblyEdited = true
                 if let idx = selectedRankoItems.firstIndex(where: { $0.id == updated.id }) {
                     selectedRankoItems[idx] = updated
+                }
+            }
+        }
+    }
+    
+    
+    
+    private func appendDraftsToSelectedRanko() {
+        let placeholderURL = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/placeholderImages%2FitemPlaceholder.png?alt=media&token="
+        var nextRank = (selectedRankoItems.map(\.rank).max() ?? 0) + 1
+
+        for draft in blankDrafts {
+            let newItemID = UUID().uuidString
+            let url = draft.itemImageURL ?? placeholderURL
+
+            let rec = RankoRecord(
+                objectID: newItemID,
+                ItemName: draft.name,
+                ItemDescription: draft.description,
+                ItemCategory: "",
+                ItemImage: url                              // 👈 DB value visible in your rows
+            )
+            let item = RankoItem(id: newItemID, rank: nextRank, votes: 0, record: rec)
+            selectedRankoItems.append(item)
+            nextRank += 1
+        }
+
+        blankDrafts = [BlankItemDraft()]
+        draftError = nil
+    }
+
+    // one draft card UI
+    private struct DraftCard: View {
+        @Binding var draft: BlankItemDraft
+        let title: String
+        let subtitle: String
+        var onTapImage: () -> Void
+        var onDelete: () -> Void
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(title.uppercased())
+                        .font(.custom("Nunito-Black", size: 12))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if draft.isUploading {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+
+                Button(action: onTapImage) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.gray.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                            )
+                            .frame(width: 240, height: 240)
+
+                        if let img = draft.image {
+                            Image(uiImage: img)
+                                .resizable().scaledToFill()
+                                .frame(width: 240, height: 240)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        } else {
+                            VStack(spacing: 10) {
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .font(.system(size: 28, weight: .black))
+                                    .opacity(0.35)
+                                Text(subtitle.uppercased())
+                                    .font(.custom("Nunito-Black", size: 13))
+                                    .opacity(0.6)
+                            }
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(draft.isUploading)
+
+                VStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        TextField("Item Name *", text: $draft.name)
+                            .font(.system(size: 16, weight: .heavy))
+                            .autocorrectionDisabled(true)
+                        Spacer()
+                    }
+                    .padding(10)
+                    .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+
+                    TextField("Item Description (optional)", text: $draft.description, axis: .vertical)
+                        .lineLimit(1...3)
+                        .font(.system(size: 14, weight: .semibold))
+                        .autocorrectionDisabled(true)
+                        .padding(10)
+                        .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+                }
+
+                HStack {
+                    if let err = draft.uploadError {
+                        Label(err, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                            .font(.caption)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                    Button {
+                        onDelete()
+                    } label: {
+                        Image(systemName: "trash.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(draft.isUploading)
+                    .opacity(draft.isUploading ? 0.5 : 1)
+                }
+            }
+            .padding(14)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .onChange(of: draft.description) {
+                let draftDescription = draft.description
+                if draftDescription.range(of: "\n") != nil {
+                    hideKeyboard()
+                    draft.description = draftDescription.replacingOccurrences(of: "\n", with: "")
                 }
             }
         }
@@ -1202,22 +1371,22 @@ struct DefaultListPersonal: View {
             guard
                 let name = dict["RankoName"] as? String,
                 let des  = dict["RankoDescription"] as? String,
-                let type = dict["RankoType"] as? String,
-                let isPriv = dict["RankoPrivacy"] as? Bool,
-                let userID = dict["RankoUserID"] as? String
+//                let type = dict["RankoType"] as? String,
+                let isPriv = dict["RankoPrivacy"] as? Bool
+//                let userID = dict["RankoUserID"] as? String
             else { return }
 
             // RankoDateTime is now an object: { RankoCreated, RankoUpdated }
-            var dateTimeStr: String = ""
-            if let dt = dict["RankoDateTime"] as? [String: Any] {
+//            var dateTimeStr: String = ""
+//            if let dt = dict["RankoDateTime"] as? [String: Any] {
                 // prefer Updated, fall back to Created
-                let updated = dt["RankoUpdated"] as? String
-                let created = dt["RankoCreated"] as? String
-                dateTimeStr = updated ?? created ?? ""
-            } else if let s = dict["RankoDateTime"] as? String {
+//                let updated = dt["RankoUpdated"] as? String
+//                let created = dt["RankoCreated"] as? String
+//                dateTimeStr = updated ?? created ?? ""
+//            } else if let s = dict["RankoDateTime"] as? String {
                 // backwards-compat (old shape)
-                dateTimeStr = s
-            }
+//                dateTimeStr = s
+//            }
 
             // Category (nested object)
             var catName  = "Unknown"
@@ -1272,6 +1441,387 @@ struct DefaultListPersonal: View {
             // self.dateTime = dateTimeStr
         }
     }
+    
+    private struct BlankItemsComposer: View {
+        @Environment(\.dismiss) private var dismiss
+        @StateObject private var user_data = UserInformation.shared
+
+        let rankoID: String                                  // 👈 new
+
+        @Binding var drafts: [BlankItemDraft]
+        @Binding var error: String?
+        let canAddMore: Bool
+        let onCommit: () -> Void
+
+        @State private var activeDraftID: String? = nil
+        @State private var showNewImageSheet = false
+        @State private var showPhotoPicker = false
+        @State private var showImageCropper = false
+        @State private var imageForCropping: UIImage? = nil
+        @State private var backupImage: UIImage? = nil
+        @State private var isCleaningUp = false
+
+        // convenience
+        private var placeholderURL: String {
+            "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/placeholderImages%2FitemPlaceholder.png?alt=media&token="
+        }
+        private func finalURL(for draftID: String) -> String {
+            "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(rankoID)%2F\(draftID).jpg?alt=media&token="
+        }
+        
+        private var anyUploading: Bool {
+            drafts.contains { $0.isUploading }
+        }
+
+        private var hasUploadError: Bool {
+            drafts.contains { $0.uploadError != nil }
+        }
+
+        /// true when every draft is "image-ready":
+        /// - no image: ok
+        /// - has image: must have finished upload (itemImageURL != nil) and no error
+        private var imagesReady: Bool {
+            drafts.allSatisfy { d in
+                if d.image == nil {
+                    return !d.isUploading && d.uploadError == nil
+                } else {
+                    return !d.isUploading && d.uploadError == nil && d.itemImageURL != nil
+                }
+            }
+        }
+
+        var body: some View {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        ForEach(drafts.indices, id: \.self) { i in
+                            DraftCard(
+                                draft: $drafts[i],
+                                title: "new item",
+                                subtitle: "tap to add image (optional)",
+                                onTapImage: {
+                                    activeDraftID = drafts[i].id
+                                    backupImage = drafts[i].image
+                                    showNewImageSheet = true
+                                },
+                                onDelete: {
+                                    // try to delete only if it was a real uploaded image
+                                    let draft = drafts[i]
+                                    if !isPlaceholderURL(draft.itemImageURL) {
+                                        Task { await deleteStorageImage(rankoID: rankoID, itemID: draft.id) }
+                                    }
+                                    
+                                    withAnimation {
+                                        drafts.remove(at: i)
+                                        if drafts.isEmpty { drafts.append(BlankItemDraft()) }
+                                    }
+                                    
+                                    print("deleting itemID: \(draft.id)")
+                                }
+                            )
+                            .contextMenu {
+                                Button(role: .confirm) {
+                                    activeDraftID = drafts[i].id
+                                    backupImage = drafts[i].image
+                                    showNewImageSheet = true
+                                } label: { Label("Add Image", systemImage: "photo.fill") }
+                                
+                                Button(role: .destructive) {
+                                    let draft = drafts[i]
+                                    if !isPlaceholderURL(draft.itemImageURL) {
+                                        Task { await deleteStorageImage(rankoID: rankoID, itemID: draft.id) }
+                                    }
+                                    
+                                    withAnimation {
+                                        drafts.remove(at: i)
+                                        if drafts.isEmpty { drafts.append(BlankItemDraft()) }
+                                    }
+                                    
+                                    print("deleting itemID: \(draft.id)")
+                                    
+                                } label: { Label("Delete", systemImage: "trash") }
+                                
+                                Button(role: .close) {
+                                    drafts[i].description = ""
+                                    drafts[i].image = nil
+                                    drafts[i].name = ""
+                                    
+                                    let draft = drafts[i]
+                                    
+                                    if !isPlaceholderURL(draft.itemImageURL) {
+                                        Task { await deleteStorageImage(rankoID: rankoID, itemID: draft.id) }
+                                    }
+                                    
+                                    print("deleting itemID: \(draft.id)")
+                                    
+                                } label: { Label("Clear All", systemImage: "delete.right.fill") }
+                            }
+                        }
+
+                        Button {
+                            withAnimation { drafts.append(BlankItemDraft()) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "plus.app.fill")
+                                    .font(.custom("Nunito-Black", size: 18))
+                                Text("add another blank item")
+                                    .font(.custom("Nunito-Black", size: 15))
+                            }
+                        }
+                        .buttonStyle(.glassProminent)
+                        .disabled(!canAddMore)
+                        .opacity(canAddMore ? 1 : 0.5)
+                        .padding(.top, 8)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            Task {
+                                isCleaningUp = true
+                                // try to delete all uploaded personal images for current drafts
+                                await deleteAllDraftImages()
+                                isCleaningUp = false
+                                dismiss()
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "xmark")
+                                if isCleaningUp {
+                                    ProgressView().controlSize(.mini)
+                                }
+                            }
+                        }
+                        .disabled(isCleaningUp || !imagesReady)
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Text("Add New Blank Items")
+                            .font(.custom("Nunito-Black", size: 20))
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            // validate names
+                            let bad = drafts.first { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                            if bad != nil {
+                                error = "please give every blank item a name (the * one)."
+                                return
+                            }
+                            
+                            // extra guard: images must be ready
+                            guard imagesReady else {
+                                error = hasUploadError
+                                ? "fix image upload errors before saving."
+                                : "please wait for images to finish uploading."
+                                return
+                            }
+                            
+                            // fill placeholder URL for any imageless drafts before commit
+                            for i in drafts.indices where drafts[i].itemImageURL == nil {
+                                drafts[i].itemImageURL = placeholderURL
+                            }
+                            error = nil
+                            onCommit()
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 18, weight: .bold))
+                                // tiny spinner if anything is still uploading
+                                if anyUploading {
+                                    ProgressView().controlSize(.mini)
+                                }
+                            }
+                        }
+                        .disabled(!imagesReady)   // ← hard lock until uploads are done & clean
+                    }
+                }
+                .alert("upload error", isPresented: .init(
+                    get: { drafts.contains { $0.uploadError != nil } },
+                    set: { if !$0 { for i in drafts.indices { drafts[i].uploadError = nil } } }
+                )) {
+                    Button("ok", role: .cancel) {}
+                } message: {
+                    Text(drafts.first(where: { $0.uploadError != nil })?.uploadError ?? "unknown error")
+                }
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showNewImageSheet) {
+                NewImageSheet(pickFromLibrary: {
+                    showNewImageSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showPhotoPicker = true }
+                })
+                .presentationDetents([.fraction(0.4)])
+                .presentationBackground(Color.white)
+            }
+            .sheet(isPresented: $showPhotoPicker) {
+                ImagePicker(image: $imageForCropping, isPresented: $showPhotoPicker)
+            }
+            .fullScreenCover(isPresented: $showImageCropper) {
+                if let img = imageForCropping {
+                    SwiftyCropView(
+                        imageToCrop: img,
+                        maskShape: .square,
+                        configuration: SwiftyCropConfiguration(
+                            maxMagnificationScale: 8.0,
+                            maskRadius: 190.0,
+                            cropImageCircular: false,
+                            rotateImage: false,
+                            rotateImageWithButtons: true,
+                            usesLiquidGlassDesign: true,
+                            zoomSensitivity: 3.0
+                        ),
+                        onCancel: {
+                            imageForCropping = nil
+                            showImageCropper = false
+                            restoreBackupForActiveDraft()
+                        },
+                        onComplete: { cropped in
+                            imageForCropping = nil
+                            showImageCropper = false
+                            // 👇 immediately try to upload with timeout
+                            if let id = activeDraftID { Task { await uploadCropped(cropped!, for: id) } }
+                        }
+                    )
+                }
+            }
+            .onChange(of: imageForCropping) { _, newVal in
+                if newVal != nil { showImageCropper = true }
+            }
+        }
+        
+        private func makeJPEGMetadata(rankoID: String, itemID: String, userID: String) -> StorageMetadata {
+            let md = StorageMetadata()
+            md.contentType = "image/jpeg"
+
+            // add some useful tags like your profile code does (timestamp, owner, etc.)
+            let now = Date()
+            let fmt = DateFormatter()
+            fmt.locale = Locale(identifier: "en_US_POSIX")
+            fmt.timeZone = TimeZone(identifier: "Australia/Sydney") // AEST/AEDT
+            fmt.dateFormat = "yyyyMMddHHmmss"
+            let ts = fmt.string(from: now)
+
+            md.customMetadata = [
+                "rankoID": rankoID,
+                "itemID": itemID,
+                "userID": userID,
+                "uploadedAt": ts
+            ]
+            return md
+        }
+
+        // MARK: - Upload w/ 10s timeout
+
+        private func uploadCropped(_ img: UIImage, for draftID: String) async {
+            guard let data = img.jpegData(compressionQuality: 0.9) else {
+                setUpload(error: "couldn't encode image", for: draftID); return
+            }
+            setUploading(true, for: draftID)
+
+            let path = "rankoPersonalImages/\(rankoID)/\(draftID).jpg"
+            let ref  = Storage.storage().reference().child(path)
+            let metadata = makeJPEGMetadata(rankoID: rankoID, itemID: draftID, userID: user_data.userID)
+
+            do {
+                try await withTimeout(seconds: 10) {
+                    _ = try await ref.putDataAsync(data, metadata: metadata)  // 👈 pass metadata
+                }
+
+                // success → set image + deterministic URL string (your requested format)
+                setUploadSuccess(image: img, url: finalURL(for: draftID), for: draftID)
+                print("image uploaded successfully for itemID: \(draftID)")
+
+                // (optional) also mirror a tiny index in Realtime DB like your profile fn:
+                // try? await setValueAsync(
+                //   Database.database().reference()
+                //     .child("RankoData").child(rankoID)
+                //     .child("RankoItemImages").child(draftID),
+                //   value: ["path": path, "modified": metadata.customMetadata?["uploadedAt"] ?? ""]
+                // )
+
+            } catch {
+                let msg: String
+                if error is TimeoutErr { msg = "upload timed out, please try again." }
+                else { msg = (error as NSError).localizedDescription }
+                setUpload(error: msg, for: draftID)
+            }
+        }
+
+        private enum TimeoutErr: Error { case timedOut }
+        private func withTimeout<T>(seconds: Double, _ op: @escaping () async throws -> T) async throws -> T {
+            try await withThrowingTaskGroup(of: T.self) { group in
+                group.addTask { try await op() }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                    throw TimeoutErr.timedOut
+                }
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
+            }
+        }
+
+        // MARK: - Draft mutations
+
+        private func setUploading(_ uploading: Bool, for id: String) {
+            if let i = drafts.firstIndex(where: { $0.id == id }) {
+                drafts[i].isUploading = uploading
+                drafts[i].uploadError = nil
+            }
+        }
+        private func setUploadSuccess(image: UIImage, url: String, for id: String) {
+            if let i = drafts.firstIndex(where: { $0.id == id }) {
+                drafts[i].image = image
+                drafts[i].itemImageURL = url
+                drafts[i].isUploading = false
+                drafts[i].uploadError = nil
+            }
+        }
+        private func setUpload(error: String, for id: String) {
+            if let i = drafts.firstIndex(where: { $0.id == id }) {
+                drafts[i].isUploading = false
+                drafts[i].uploadError = error
+            }
+        }
+
+        private func restoreBackupForActiveDraft() {
+            guard let id = activeDraftID, let backup = backupImage,
+                  let idx = drafts.firstIndex(where: { $0.id == id }) else { return }
+            drafts[idx].image = backup
+        }
+        
+        private func deleteAllDraftImages() async {
+            // collect every draft that has a *non-placeholder* uploaded URL
+            let targets = drafts
+                .filter { !isPlaceholderURL($0.itemImageURL) }
+                .map { $0.id }
+
+            guard !targets.isEmpty else { return }
+
+            // delete all in parallel but don't hang forever
+            do {
+                try await withTimeout(seconds: 10) {
+                    try await withThrowingTaskGroup(of: Void.self) { group in
+                        for id in targets {
+                            group.addTask {
+                                await deleteStorageImage(rankoID: rankoID, itemID: id)
+                            }
+                        }
+                        // wait (errors are already caught inside deleteStorageImage; it never throws)
+                        try await group.waitForAll()
+                    }
+                }
+            } catch {
+                // optional: you could surface a toast here if you want
+                #if DEBUG
+                print("⚠️ cleanup timeout/err: \(error.localizedDescription)")
+                #endif
+            }
+        }
+    }
 
 
     // Helper to safely coerce Firebase numbers/strings into Int
@@ -1309,6 +1859,46 @@ struct DefaultListPersonal: View {
     private func normalizeRanks() {
         for index in selectedRankoItems.indices {
             selectedRankoItems[index].rank = index + 1
+        }
+    }
+    
+    private struct NewImageSheet: View {
+        var pickFromLibrary: () -> Void
+        var body: some View {
+            ScrollView {
+                VStack(spacing: 16) {
+                    HStack {
+                        Text("Photos").font(.system(size: 14, weight: .bold))
+                        Spacer()
+                        Button(action: pickFromLibrary) {
+                            Text("Show Photo Library")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(Color(hex: 0x0288FE))
+                        }
+                    }
+                    .padding(.horizontal, 24)
+
+                    // simple row buttons (camera/files hooks left for you if needed)
+                    Divider().padding(.horizontal, 24)
+                    Button(action: pickFromLibrary) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "photo.stack")
+                            Text("Photo Library")
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                    }
+                    Button(action: {}) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "folder")
+                            Text("Files")
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                    }
+                }
+                .padding(.top, 18)
+            }
         }
     }
     
@@ -1415,13 +2005,22 @@ struct DefaultListPersonal: View {
 
         let db = Database.database().reference()
         let listRef = db.child("RankoData").child(listID)
+        
+        // timestamps (AEDT/AEST) → yyyymmddHHMMSS
+        let now = Date()
+        let aedtFormatter = DateFormatter()
+        aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
+        aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
+        aedtFormatter.dateFormat = "yyyyMMddHHmmss"
+        let ts = aedtFormatter.string(from: now)
 
         // top-level fields
         let listUpdates: [String: Any] = [
             "RankoName": rankoName,
             "RankoDescription": description,
             "RankoPrivacy": isPrivate,
-            "RankoCategory": catName
+            "RankoCategory": catName,
+            "RankoDateTime": ["RankoUpdated": ts]
         ]
 
         // items blob
@@ -1498,98 +2097,90 @@ struct DefaultListPersonal: View {
     }
 }
 
-struct DefaultListPersonalExit: View {
-    @Environment(\.dismiss) var dismiss
-    
-    var onSave: () -> Void
-    var onLeave: () -> Void
-    var onDelete: () -> Void
+private let placeholderItemURL =
+  "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/placeholderImages%2FitemPlaceholder.png?alt=media&token="
 
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 10) {
-                HStack {
-                    Button {
-                        print("Save Tapped")
-                        let generator = UINotificationFeedbackGenerator()
-                        generator.notificationOccurred(.success)
-                        onSave()
-                        dismiss()
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 16, weight: .bold, design: .default))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                            Text("Save")
-                                .font(.system(size: 16, weight: .bold, design: .default))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                            Spacer()
-                        }
-                        .padding(.vertical, 10)
-                    }
-                    .foregroundColor(Color(hex: 0xFFFFFF))
-                    .tint(Color(hex: 0x42ADFF))
-                    .buttonStyle(.glassProminent)
-                    Button {
-                        print("Don't Save Tapped")
-                        let generator = UINotificationFeedbackGenerator()
-                        generator.notificationOccurred(.warning)
-                        onLeave()
-                        dismiss()
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 16, weight: .bold, design: .default))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                            Text("Don't Save")
-                                .font(.system(size: 16, weight: .bold, design: .default))
-                                .foregroundColor(Color(hex: 0xFFFFFF))
-                            Spacer()
-                        }
-                        .padding(.vertical, 10)
-                    }
-                    .foregroundColor(Color(hex: 0xFFFFFF))
-                    .tint(Color(hex: 0xFE8C34))
-                    .buttonStyle(.glassProminent)
-                }
-                Button {
-                    print("Delete Tapped")
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.warning)
-                    onDelete()
-                    dismiss()
-                } label: {
-                    HStack {
-                        Spacer()
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 16, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                        Text("Delete")
-                            .font(.system(size: 16, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                        Spacer()
-                    }
-                    .padding(.vertical, 10)
-                }
-                .foregroundColor(Color(hex: 0xFFFFFF))
-                .tint(Color(hex: 0xE93B3D))
-                .buttonStyle(.glassProminent)
-            }
-            .padding(.horizontal, 40)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Cancel", systemImage: "xmark") {
-                        dismiss()
-                        print("Cancel Exit Tapped")
-                    }
-                }
+@inline(__always)
+private func isPlaceholderURL(_ url: String?) -> Bool {
+    guard let url = url else { return true }
+    return url.contains("/placeholderImages%2FitemPlaceholder.png")
+}
+
+@inline(__always)
+private func personalImagePath(rankoID: String, itemID: String) -> String {
+    "rankoPersonalImages/\(rankoID)/\(itemID).jpg"
+}
+
+private func deleteStorageImage(rankoID: String, itemID: String) async {
+    let ref = Storage.storage().reference().child(personalImagePath(rankoID: rankoID, itemID: itemID))
+    do {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            ref.delete { err in
+                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
             }
         }
-        .presentationBackground(Color.white)
-        .presentationDetents([.height(300)])
-        .ignoresSafeArea()
+        #if DEBUG
+        print("✅ deleted storage image for \(itemID)")
+        #endif
+    } catch {
+        // swallow errors (file may not exist, race with upload, etc.)
+        #if DEBUG
+        print("⚠️ delete failed for \(itemID): \(error.localizedDescription)")
+        #endif
+    }
+}
+
+// already used for upload timeout — reuse for cleanup too
+private enum TimeoutErr: Error { case timedOut }
+private func withTimeout<T>(seconds: Double, _ op: @escaping () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask { try await op() }
+        group.addTask {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            throw TimeoutErr.timedOut
+        }
+        let result = try await group.next()!
+        group.cancelAll()
+        return result
+    }
+}
+
+private extension UUID {
+    var string: String { uuidString }
+}
+
+private extension StorageReference {
+    func putDataAsync(_ data: Data, metadata: StorageMetadata? = nil) async throws -> StorageMetadata {
+        try await withCheckedThrowingContinuation { cont in
+            self.putData(data, metadata: metadata) { meta, err in
+                if let err = err { cont.resume(throwing: err) }
+                else { cont.resume(returning: meta ?? StorageMetadata()) }
+            }
+        }
+    }
+}
+
+// helpers — keeps your code tidy
+private extension RankoRecord {
+    func withItemImage(_ url: String) -> RankoRecord {
+        RankoRecord(
+            objectID: objectID,
+            ItemName: ItemName,
+            ItemDescription: ItemDescription,
+            ItemCategory: ItemCategory,
+            ItemImage: url
+        )
+    }
+}
+
+private extension RankoItem {
+    func withRecord(_ newRecord: RankoRecord) -> RankoItem {
+        RankoItem(
+            id: id,
+            rank: rank,
+            votes: votes,
+            record: newRecord
+        )
     }
 }
 

@@ -13,614 +13,614 @@ import FirebaseStorage
 import Foundation
 import AlgoliaSearchClient
 
-struct DefaultListVote: View {
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var user_data = UserInformation.shared
-
-    // Required property
-    let listID: String
-
-    // Optional editable properties with defaults
-    @State private var rankoName: String
-    @State private var description: String
-    @State private var isPrivate: Bool
-    @State private var category: SampleCategoryChip?
-    @State private var creatorID: String
-    @State private var creatorName: String
-    @State private var creatorImage: UIImage?
-    @State private var categoryID: String = ""
-    @State private var categoryName: String = ""
-    @State private var categoryIcon: String? = nil
-
-    // Sheets & states
-    @State private var spectateProfile: Bool = false
-    @State private var showTabBar = true
-    @State private var tabBarPresent = false
-    @State private var userVoted = false
-    @State var showSaveRankoSheet = false
-    @State var showVoteSheet = false
-    @State var showCloneSheet = false
-    @State var showEditItemSheet = false
-    @State var showExitSheet = false
-    
-    @State private var toastMessage: String = ""
-    @State private var showToast: Bool = false
-    @State private var toastDismissWorkItem: DispatchWorkItem?
-    @State private var toastID = UUID()
-
-    @State private var activeTab: DefaultListVoteTab = .clone
-    @State private var triggerHaptic: Bool = false
-    @State private var selectedRankoItems: [RankoItem] = []
-    @State private var selectedItem: RankoItem? = nil
-    @State private var itemToEdit: RankoItem? = nil
-    @State private var onSave: ((RankoItem) -> Void)? = nil
-
-    // MARK: - Init now only requires listID
-    init(
-        listID: String,
-        creatorID: String = "",
-        creatorName: String = "",
-        creatorImage: UIImage? = nil,
-        rankoName: String = "",
-        description: String = "",
-        isPrivate: Bool = false,
-        category: SampleCategoryChip? = SampleCategoryChip(id: "", name: "Unknown", icon: "questionmark.circle.fill", colour: "0xFFCF00"),
-        selectedRankoItems: [RankoItem] = []
-    ) {
-        self.listID = listID
-        self.creatorID = creatorID
-        _creatorName = State(initialValue: creatorName)
-        _creatorImage = State(initialValue: creatorImage)
-        _rankoName = State(initialValue: rankoName)
-        _description = State(initialValue: description)
-        _isPrivate = State(initialValue: isPrivate)
-        _category = State(initialValue: category)
-        _selectedRankoItems = State(initialValue: selectedRankoItems)
-    }
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            Color(hex: 0xFFF5E1).ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 7) {
-                    HStack {
-                        Text(rankoName)
-                            .font(.system(size: 28, weight: .black, design: .default))
-                            .foregroundColor(Color(hex: 0x6D400F))
-                        Spacer()
-                    }
-                    .padding(.top, 20)
-                    .padding(.leading, 20)
-                    
-                    HStack {
-                        Text(description.isEmpty ? "No description yet…" : description)
-                            .lineLimit(3)
-                            .font(.system(size: 12, weight: .bold, design: .default))
-                            .foregroundColor(Color(hex: 0x925611))
-                        Spacer()
-                    }
-                    .padding(.top, 5)
-                    .padding(.leading, 20)
-                    
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            HStack(spacing: 4) {
-                                Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
-                                    .font(.system(size: 12, weight: .bold, design: .default))
-                                    .foregroundColor(.white)
-                                    .padding(.leading, 10)
-                                Text(isPrivate ? "Private" : "Public")
-                                    .font(.system(size: 12, weight: .bold, design: .default))
-                                    .foregroundColor(.white)
-                                    .padding(.trailing, 10)
-                                    .padding(.vertical, 8)
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(hex: 0xF2AB69))
-                            )
-                            
-                            if let cat = category {
-                                HStack(spacing: 4) {
-                                    Image(systemName: cat.icon)
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                        .padding(.leading, 10)
-                                    Text(cat.name)
-                                        .font(.system(size: 12, weight: .bold, design: .default))
-                                        .foregroundColor(.white)
-                                        .padding(.trailing, 10)
-                                        .padding(.vertical, 8)
-                                    
-                                }
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(categoryChipIconColors[cat.name] ?? .gray)
-                                        .opacity(0.6)
-                                )
-                            }
-                            
-                            HStack(spacing: 7) {
-                                Group {
-                                    if let img = creatorImage {
-                                        ZStack {
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .fill(Color.white)
-                                                .frame(width: 18, height: 18)
-                                            Image(uiImage: img)
-                                                .resizable()
-                                        }
-                                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                                        
-                                    } else {
-                                        ZStack {
-                                            RoundedRectangle(cornerRadius: 3)
-                                                .fill(Color.white.opacity(0.8))
-                                                .frame(width: 18, height: 18)
-                                            HStack {
-                                                Spacer()
-                                                ThreeRectanglesAnimation(rectangleWidth: 4, rectangleMaxHeight: 12, rectangleSpacing: 1, rectangleCornerRadius: 1, animationDuration: 0.7)
-                                                    .frame(height: 18)
-                                                Spacer()
-                                            }
-                                        }
-                                    }
-                                }
-                                .frame(width: 18, height: 18)
-                                .padding(.leading, 10)
-                                Text(creatorName)
-                                    .font(.system(size: 12, weight: .bold, design: .default))
-                                    .foregroundColor(.white)
-                                    .padding(.trailing, 10)
-                                    .padding(.vertical, 8)
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(hex: 0xF2AB69))
-                            )
-                            .onTapGesture {
-                                spectateProfile = true
-                            }
-                        }
-                        .padding(.top, 5)
-                        .padding(.leading, 20)
-                    }
-                }
-                .padding(.bottom, 5)
-            
-                VStack {
-                    ScrollView {
-                        let sortedItems = selectedRankoItems.sorted(by: sortByVotesThenRank)
-                        
-                        ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
-                            DefaultListVoteItemRow(item: item, votePosition: index + 1)
-                                .onTapGesture {
-                                    selectedItem = item
-                                }
-                                .sheet(isPresented: $showEditItemSheet) {
-                                    // Determine which item is centered
-                                    EditItemView(
-                                        item: item,
-                                        listID: listID
-                                    ) { newName, newDesc in
-                                        // build updated record & item
-                                        let rec = item.record
-                                        let updatedRecord = RankoRecord(
-                                            objectID: rec.objectID,
-                                            ItemName: newName,
-                                            ItemDescription: newDesc,
-                                            ItemCategory: "",
-                                            ItemImage: rec.ItemImage
-                                        )
-                                        let updatedItem = RankoItem(
-                                            id: item.id,
-                                            rank: item.rank,
-                                            votes: item.votes,
-                                            record: updatedRecord
-                                        )
-                                        // callback to parent
-                                        onSave!(updatedItem)
-                                    }
-                                }
-                        }
-                        .padding(.top, 5)
-                        .padding(.bottom, 70)
-                    }
-                    Spacer()
-                }
-            }
-            
-            if showToast {
-                ComingSoonToast(
-                    isShown: $showToast,
-                    title: "🚧 Saving Rankos Feature Coming Soon",
-                    message: toastMessage,
-                    icon: Image(systemName: "hourglass"),
-                    alignment: .bottom
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .id(toastID)
-                .padding(.bottom, 12)
-                .zIndex(1)
-            }
-            
-            VStack {
-                Spacer()
-                Rectangle()
-                    .frame(height: 90)
-                    .foregroundColor(tabBarPresent ? Color(hex: 0xFFEBC2) : .white)
-                    .blur(radius: 23)
-                    .opacity(tabBarPresent ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.4), value: tabBarPresent) // ✅ Fast fade animation
-                    .ignoresSafeArea()
-            }
-            .ignoresSafeArea()
-            
-        }
-        .fullScreenCover(isPresented: $showVoteSheet) {
-            VoteNowView(
-                hasVoted: userVoted,
-                listID:      listID,
-                items:       selectedRankoItems,
-                onComplete:  {
-                    showTabBar = false
-                    tabBarPresent = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        showTabBar = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                            tabBarPresent = true
-                        }
-                    }
-                },
-                onCancel:  {
-                    showTabBar = false
-                    tabBarPresent = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        showTabBar = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                            tabBarPresent = true
-                        }
-                    }
-                }
-            )
-        }
-        .fullScreenCover(isPresented: $showCloneSheet) {
-            DefaultListView(
-                rankoName: rankoName,
-                description: description,
-                isPrivate: isPrivate,
-                category: category,
-                selectedRankoItems: selectedRankoItems
-            ) { updatedItem in
-                // no-op in preview
-            }
-        }
-        .onChange(of: showCloneSheet) { _, isPresented in
-            // when it flips from true → false…
-            if !isPresented {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    dismiss()
-                }
-            }
-        }
-        .animation(.easeInOut(duration: 0.25), value: toastID)
-        .sheet(isPresented: $showTabBar) {
-            VStack {
-                HStack(spacing: 0) {
-                    ForEach(DefaultListVoteTab.visibleCases, id: \.rawValue) { tab in
-                        VStack(spacing: 6) {
-                            Image(systemName: tab.symbolImage)
-                                .font(.title3)
-                                .symbolVariant(.fill)
-                                .frame(height: 28)
-                            
-                            Text(tab.rawValue)
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundStyle(Color(hex: 0x925610))
-                        .frame(maxWidth: .infinity)
-                        .contentShape(.rect)
-                        .onTapGesture {
-                            activeTab = tab
-                            switch tab {
-                            case .vote:
-                                if !userVoted {
-                                    showVoteSheet = true
-                                }
-                            case .save:
-                                if showToast {
-                                    withAnimation {
-                                        showToast = false
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                        showComingSoonToast(for: "Save Rankos")
-                                    }
-                                } else {
-                                    showComingSoonToast(for: "Save Rankos")
-                                }
-                            case .clone:
-                                showCloneSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
-                            case .exit:
-                                let haptic = UIImpactFeedbackGenerator(style: .medium)
-                                haptic.prepare()
-                                haptic.impactOccurred()
-                                dismiss()
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-            .interactiveDismissDisabled(true)
-            .presentationDetents([.height(80)])
-            .presentationBackground((Color(hex: 0xfff9ee)))
-            .presentationBackgroundInteraction(.enabled)
-            .onAppear {
-                tabBarPresent = false      // Start from invisible
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        tabBarPresent = true
-                    }
-                }
-            }
-            .onDisappear {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    tabBarPresent = false
-                }
-            }
-        }
-        .onAppear {
-            fetchCreatorName()
-            loadListFromFirebase()
-            checkUserVoted()
-            
-            print("Page Loaded: DefaultListVote")
-            print("ListID: \(listID)")
-        }
-        .sheet(item: $selectedItem) { item in
-            ItemDetailViewSpectate(
-                items: selectedRankoItems,
-                initialItem: item,
-                listID: listID
-            )
-        }
-        .sheet(isPresented: $spectateProfile) {
-            ProfileSpectateView(userID: creatorID)
-        }
-    }
-    
-    private func sortByVotesThenRank(_ a: RankoItem, _ b: RankoItem) -> Bool {
-        if a.votes != b.votes {
-            return a.votes > b.votes  // More votes first
-        } else {
-            return a.rank < b.rank    // Lower rank wins tie
-        }
-    }
-    
-    private func checkUserVoted() {
-        let db = Database.database().reference()
-        let voterRef = db
-            .child("RankoData")
-            .child(listID)
-            .child("RankoVoters")
-            .child(user_data.userID)
-        
-        voterRef.observeSingleEvent(of: .value) { snap in
-            if snap.exists() {
-                userVoted = true
-            }
-        }
-    }
-
-    private func showComingSoonToast(for feature: String) {
-        switch feature {
-        case "Save Rankos":
-                toastMessage = "Save Community or Friends Rankos Straight To Your Profile - Coming Soon!"
-                toastID = UUID()
-                showToast = true
-                
-            default:
-                toastMessage = "New Feature Coming Soon!"
-                toastID = UUID()
-                showToast = true
-            }
-        
-        // Cancel any previous dismiss
-        toastDismissWorkItem?.cancel()
-        
-        // Schedule dismiss after 4 seconds
-        let newDismissWorkItem = DispatchWorkItem {
-            withAnimation { showToast = false }
-        }
-        toastDismissWorkItem = newDismissWorkItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: newDismissWorkItem)
-    }
-    
-    // MARK: — Fetchers
-    private func loadProfileImage() {
-        let ref = Database.database().reference()
-            .child("UserData")
-            .child(creatorID)
-            .child("UserProfilePicture")
-            .child("UserProfilePicturePath")
-        ref.getData { _, snap in
-            if let path = snap?.value as? String {
-                Storage.storage().reference().child("profilePictures").child(path)
-                    .getData(maxSize: 2*1024*1024) { data, _ in
-                        if let data = data, let ui = UIImage(data: data) {
-                            creatorImage = ui
-                        }
-                }
-            }
-        }
-    }
-    
-    private func fetchCreatorName() {
-        let ref = Database.database().reference()
-            .child("UserData")
-            .child(creatorID)
-            .child("UserDetails")
-            .child("UserName")
-        ref.observeSingleEvent(of: .value) { snap in
-            creatorName = snap.value as? String ?? "Unknown"
-        }
-        loadProfileImage()
-    }
-    
-    private func loadListFromFirebase() {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(listID)
-
-        ref.observeSingleEvent(of: .value, with: { snap in
-            guard let dict = snap.value as? [String: Any] else {
-                return
-            }
-
-            // Core fields
-            guard
-                let name = dict["RankoName"] as? String,
-                let description = dict["RankoDescription"] as? String,
-                let type = dict["RankoType"] as? String,
-                let isPrivate = dict["RankoPrivacy"] as? Bool,
-                let userID = dict["RankoUserID"] as? String,
-                let dateTimeStr = dict["RankoDateTime"] as? String
-            else {
-                return
-            }
-
-            // Category (nested)
-            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
-            let catName  = (cat["name"] as? String) ?? ""
-            let catIcon  = (cat["icon"] as? String) ?? ""
-            let catColour = UInt(cat["colour"] as! String) ?? UInt(0xFFFFFF)  // store as Int; convert to your Color later
-
-            // Items
-            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
-            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
-                guard
-                    let itemName = item["ItemName"] as? String,
-                    let itemDesc = item["ItemDescription"] as? String,
-                    let itemImage = item["ItemImage"] as? String
-                else { return nil }
-
-                let rank  = intFromAny(item["ItemRank"])  ?? 0
-                let votes = intFromAny(item["ItemVotes"]) ?? 0
-
-                let record = RankoRecord(
-                    objectID: itemID,
-                    ItemName: itemName,
-                    ItemDescription: itemDesc,
-                    ItemCategory: "category",  // replace if you store real per-item category
-                    ItemImage: itemImage
-                )
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
-            }
-
-            let list = RankoList(
-                id: listID,
-                listName: name,
-                listDescription: description,
-                type: type,
-                categoryName: catName,
-                categoryIcon: catIcon,
-                categoryColour: catColour,
-                isPrivate: isPrivate ? "Private" : "Public",
-                userCreator: userID,
-                timeCreated: dateTimeStr,
-                timeUpdated: dateTimeStr,
-                items: items
-            )
-        })
-    }
-
-    // Helper to safely coerce Firebase numbers/strings into Int
-    private func intFromAny(_ any: Any?) -> Int? {
-        if let i = any as? Int { return i }
-        if let d = any as? Double { return Int(d) }
-        if let s = any as? String { return Int(s) }
-        if let n = any as? NSNumber { return n.intValue }
-        return nil
-    }
-    
-    
-    
-    private func fetchCategoryByID(_ id: String, completion: @escaping (SampleCategoryChip?) -> Void) {
-        let ref = Database.database().reference()
-            .child("AppData").child("CategoryData").child(id) // <- correct path
-
-        ref.observeSingleEvent(of: .value) { snap in
-            guard let dict = snap.value as? [String: Any] else {
-                completion(nil); return
-            }
-            let cd = SampleCategoryChip(
-                id: id,
-                name: dict["name"] as? String ?? id,
-                icon: (dict["icon"] as? String)!,
-                colour: (dict["colour"] as? String?)!!
-            )
-            completion(cd)
-        }
-    }
-
-    private func fetchCategoryByName(_ name: String, completion: @escaping (SampleCategoryChip?) -> Void) {
-        // scan CategoryData once; if your DB is large, consider caching
-        let ref = Database.database().reference()
-            .child("AppData").child("CategoryData")
-
-        ref.observeSingleEvent(of: .value) { snap in
-            guard let all = snap.value as? [String: [String: Any]] else {
-                completion(nil); return
-            }
-            // case-insensitive match on "name"
-            if let (id, dict) = all.first(where: { (_, v) in
-                (v["name"] as? String)?.caseInsensitiveCompare(name) == .orderedSame
-            }) {
-                let cd = SampleCategoryChip(
-                    id: id,
-                    name: dict["name"] as? String ?? id,
-                    icon: (dict["icon"] as? String)!,
-                    colour: (dict["colour"] as? String?)!!
-                )
-                completion(cd)
-            } else {
-                completion(nil)
-            }
-        }
-    }
-    
-    
-    // Item Helpers
-    private func delete(_ item: RankoItem) {
-        selectedRankoItems.removeAll { $0.id == item.id }
-        normalizeRanks()
-    }
-
-    private func moveToTop(_ item: RankoItem) {
-        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
-        let moved = selectedRankoItems.remove(at: idx)
-        selectedRankoItems.insert(moved, at: 0)
-        normalizeRanks()
-    }
-
-    private func moveToBottom(_ item: RankoItem) {
-        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
-        let moved = selectedRankoItems.remove(at: idx)
-        selectedRankoItems.append(moved)
-        normalizeRanks()
-    }
-
-    private func normalizeRanks() {
-        for index in selectedRankoItems.indices {
-            selectedRankoItems[index].rank = index + 1
-        }
-    }
-}
+//struct DefaultListVote: View {
+//    @Environment(\.dismiss) var dismiss
+//    @StateObject private var user_data = UserInformation.shared
+//
+//    // Required property
+//    let listID: String
+//
+//    // Optional editable properties with defaults
+//    @State private var rankoName: String
+//    @State private var description: String
+//    @State private var isPrivate: Bool
+//    @State private var category: SampleCategoryChip?
+//    @State private var creatorID: String
+//    @State private var creatorName: String
+//    @State private var creatorImage: UIImage?
+//    @State private var categoryID: String = ""
+//    @State private var categoryName: String = ""
+//    @State private var categoryIcon: String? = nil
+//
+//    // Sheets & states
+//    @State private var spectateProfile: Bool = false
+//    @State private var showTabBar = true
+//    @State private var tabBarPresent = false
+//    @State private var userVoted = false
+//    @State var showSaveRankoSheet = false
+//    @State var showVoteSheet = false
+//    @State var showCloneSheet = false
+//    @State var showEditItemSheet = false
+//    @State var showExitSheet = false
+//    
+//    @State private var toastMessage: String = ""
+//    @State private var showToast: Bool = false
+//    @State private var toastDismissWorkItem: DispatchWorkItem?
+//    @State private var toastID = UUID()
+//
+//    @State private var activeTab: DefaultListVoteTab = .clone
+//    @State private var triggerHaptic: Bool = false
+//    @State private var selectedRankoItems: [RankoItem] = []
+//    @State private var selectedItem: RankoItem? = nil
+//    @State private var itemToEdit: RankoItem? = nil
+//    @State private var onSave: ((RankoItem) -> Void)? = nil
+//
+//    // MARK: - Init now only requires listID
+//    init(
+//        listID: String,
+//        creatorID: String = "",
+//        creatorName: String = "",
+//        creatorImage: UIImage? = nil,
+//        rankoName: String = "",
+//        description: String = "",
+//        isPrivate: Bool = false,
+//        category: SampleCategoryChip? = SampleCategoryChip(id: "", name: "Unknown", icon: "questionmark.circle.fill", colour: "0xFFCF00"),
+//        selectedRankoItems: [RankoItem] = []
+//    ) {
+//        self.listID = listID
+//        self.creatorID = creatorID
+//        _creatorName = State(initialValue: creatorName)
+//        _creatorImage = State(initialValue: creatorImage)
+//        _rankoName = State(initialValue: rankoName)
+//        _description = State(initialValue: description)
+//        _isPrivate = State(initialValue: isPrivate)
+//        _category = State(initialValue: category)
+//        _selectedRankoItems = State(initialValue: selectedRankoItems)
+//    }
+//
+//    var body: some View {
+//        ZStack(alignment: .top) {
+//            Color(hex: 0xFFF5E1).ignoresSafeArea()
+//            ScrollView {
+//                VStack(spacing: 7) {
+//                    HStack {
+//                        Text(rankoName)
+//                            .font(.system(size: 28, weight: .black, design: .default))
+//                            .foregroundColor(Color(hex: 0x6D400F))
+//                        Spacer()
+//                    }
+//                    .padding(.top, 20)
+//                    .padding(.leading, 20)
+//                    
+//                    HStack {
+//                        Text(description.isEmpty ? "No description yet…" : description)
+//                            .lineLimit(3)
+//                            .font(.system(size: 12, weight: .bold, design: .default))
+//                            .foregroundColor(Color(hex: 0x925611))
+//                        Spacer()
+//                    }
+//                    .padding(.top, 5)
+//                    .padding(.leading, 20)
+//                    
+//                    ScrollView(.horizontal, showsIndicators: false) {
+//                        HStack(spacing: 8) {
+//                            HStack(spacing: 4) {
+//                                Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
+//                                    .font(.system(size: 12, weight: .bold, design: .default))
+//                                    .foregroundColor(.white)
+//                                    .padding(.leading, 10)
+//                                Text(isPrivate ? "Private" : "Public")
+//                                    .font(.system(size: 12, weight: .bold, design: .default))
+//                                    .foregroundColor(.white)
+//                                    .padding(.trailing, 10)
+//                                    .padding(.vertical, 8)
+//                            }
+//                            .background(
+//                                RoundedRectangle(cornerRadius: 12)
+//                                    .fill(Color(hex: 0xF2AB69))
+//                            )
+//                            
+//                            if let cat = category {
+//                                HStack(spacing: 4) {
+//                                    Image(systemName: cat.icon)
+//                                        .font(.caption)
+//                                        .fontWeight(.bold)
+//                                        .foregroundColor(.white)
+//                                        .padding(.leading, 10)
+//                                    Text(cat.name)
+//                                        .font(.system(size: 12, weight: .bold, design: .default))
+//                                        .foregroundColor(.white)
+//                                        .padding(.trailing, 10)
+//                                        .padding(.vertical, 8)
+//                                    
+//                                }
+//                                .background(
+//                                    RoundedRectangle(cornerRadius: 12)
+//                                        .fill(categoryChipIconColors[cat.name] ?? .gray)
+//                                        .opacity(0.6)
+//                                )
+//                            }
+//                            
+//                            HStack(spacing: 7) {
+//                                Group {
+//                                    if let img = creatorImage {
+//                                        ZStack {
+//                                            RoundedRectangle(cornerRadius: 3)
+//                                                .fill(Color.white)
+//                                                .frame(width: 18, height: 18)
+//                                            Image(uiImage: img)
+//                                                .resizable()
+//                                        }
+//                                        .clipShape(RoundedRectangle(cornerRadius: 3))
+//                                        
+//                                    } else {
+//                                        ZStack {
+//                                            RoundedRectangle(cornerRadius: 3)
+//                                                .fill(Color.white.opacity(0.8))
+//                                                .frame(width: 18, height: 18)
+//                                            HStack {
+//                                                Spacer()
+//                                                ThreeRectanglesAnimation(rectangleWidth: 4, rectangleMaxHeight: 12, rectangleSpacing: 1, rectangleCornerRadius: 1, animationDuration: 0.7)
+//                                                    .frame(height: 18)
+//                                                Spacer()
+//                                            }
+//                                        }
+//                                    }
+//                                }
+//                                .frame(width: 18, height: 18)
+//                                .padding(.leading, 10)
+//                                Text(creatorName)
+//                                    .font(.system(size: 12, weight: .bold, design: .default))
+//                                    .foregroundColor(.white)
+//                                    .padding(.trailing, 10)
+//                                    .padding(.vertical, 8)
+//                            }
+//                            .background(
+//                                RoundedRectangle(cornerRadius: 12)
+//                                    .fill(Color(hex: 0xF2AB69))
+//                            )
+//                            .onTapGesture {
+//                                spectateProfile = true
+//                            }
+//                        }
+//                        .padding(.top, 5)
+//                        .padding(.leading, 20)
+//                    }
+//                }
+//                .padding(.bottom, 5)
+//            
+//                VStack {
+//                    ScrollView {
+//                        let sortedItems = selectedRankoItems.sorted(by: sortByVotesThenRank)
+//                        
+//                        ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
+//                            DefaultListVoteItemRow(item: item, votePosition: index + 1)
+//                                .onTapGesture {
+//                                    selectedItem = item
+//                                }
+//                                .sheet(isPresented: $showEditItemSheet) {
+//                                    // Determine which item is centered
+//                                    EditItemView(
+//                                        item: item,
+//                                        listID: listID
+//                                    ) { newName, newDesc in
+//                                        // build updated record & item
+//                                        let rec = item.record
+//                                        let updatedRecord = RankoRecord(
+//                                            objectID: rec.objectID,
+//                                            ItemName: newName,
+//                                            ItemDescription: newDesc,
+//                                            ItemCategory: "",
+//                                            ItemImage: rec.ItemImage
+//                                        )
+//                                        let updatedItem = RankoItem(
+//                                            id: item.id,
+//                                            rank: item.rank,
+//                                            votes: item.votes,
+//                                            record: updatedRecord
+//                                        )
+//                                        // callback to parent
+//                                        onSave!(updatedItem)
+//                                    }
+//                                }
+//                        }
+//                        .padding(.top, 5)
+//                        .padding(.bottom, 70)
+//                    }
+//                    Spacer()
+//                }
+//            }
+//            
+//            if showToast {
+//                ComingSoonToast(
+//                    isShown: $showToast,
+//                    title: "🚧 Saving Rankos Feature Coming Soon",
+//                    message: toastMessage,
+//                    icon: Image(systemName: "hourglass"),
+//                    alignment: .bottom
+//                )
+//                .transition(.move(edge: .bottom).combined(with: .opacity))
+//                .id(toastID)
+//                .padding(.bottom, 12)
+//                .zIndex(1)
+//            }
+//            
+//            VStack {
+//                Spacer()
+//                Rectangle()
+//                    .frame(height: 90)
+//                    .foregroundColor(tabBarPresent ? Color(hex: 0xFFEBC2) : .white)
+//                    .blur(radius: 23)
+//                    .opacity(tabBarPresent ? 1 : 0)
+//                    .animation(.easeInOut(duration: 0.4), value: tabBarPresent) // ✅ Fast fade animation
+//                    .ignoresSafeArea()
+//            }
+//            .ignoresSafeArea()
+//            
+//        }
+//        .fullScreenCover(isPresented: $showVoteSheet) {
+//            VoteNowView(
+//                hasVoted: userVoted,
+//                listID:      listID,
+//                items:       selectedRankoItems,
+//                onComplete:  {
+//                    showTabBar = false
+//                    tabBarPresent = false
+//                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+//                        showTabBar = true
+//                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+//                            tabBarPresent = true
+//                        }
+//                    }
+//                },
+//                onCancel:  {
+//                    showTabBar = false
+//                    tabBarPresent = false
+//                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+//                        showTabBar = true
+//                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+//                            tabBarPresent = true
+//                        }
+//                    }
+//                }
+//            )
+//        }
+//        .fullScreenCover(isPresented: $showCloneSheet) {
+//            DefaultListView(
+//                rankoName: rankoName,
+//                description: description,
+//                isPrivate: isPrivate,
+//                category: category,
+//                selectedRankoItems: selectedRankoItems
+//            ) { updatedItem in
+//                // no-op in preview
+//            }
+//        }
+//        .onChange(of: showCloneSheet) { _, isPresented in
+//            // when it flips from true → false…
+//            if !isPresented {
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+//                    dismiss()
+//                }
+//            }
+//        }
+//        .animation(.easeInOut(duration: 0.25), value: toastID)
+//        .sheet(isPresented: $showTabBar) {
+//            VStack {
+//                HStack(spacing: 0) {
+//                    ForEach(DefaultListVoteTab.visibleCases, id: \.rawValue) { tab in
+//                        VStack(spacing: 6) {
+//                            Image(systemName: tab.symbolImage)
+//                                .font(.title3)
+//                                .symbolVariant(.fill)
+//                                .frame(height: 28)
+//                            
+//                            Text(tab.rawValue)
+//                                .font(.caption2)
+//                                .fontWeight(.semibold)
+//                        }
+//                        .foregroundStyle(Color(hex: 0x925610))
+//                        .frame(maxWidth: .infinity)
+//                        .contentShape(.rect)
+//                        .onTapGesture {
+//                            activeTab = tab
+//                            switch tab {
+//                            case .vote:
+//                                if !userVoted {
+//                                    showVoteSheet = true
+//                                }
+//                            case .save:
+//                                if showToast {
+//                                    withAnimation {
+//                                        showToast = false
+//                                    }
+//                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+//                                        showComingSoonToast(for: "Save Rankos")
+//                                    }
+//                                } else {
+//                                    showComingSoonToast(for: "Save Rankos")
+//                                }
+//                            case .clone:
+//                                showCloneSheet = true
+//                                withAnimation(.easeInOut(duration: 0.2)) {
+//                                    tabBarPresent = false
+//                                }
+//                            case .exit:
+//                                let haptic = UIImpactFeedbackGenerator(style: .medium)
+//                                haptic.prepare()
+//                                haptic.impactOccurred()
+//                                dismiss()
+//                            }
+//                        }
+//                    }
+//                }
+//                .padding(.horizontal, 20)
+//            }
+//            .interactiveDismissDisabled(true)
+//            .presentationDetents([.height(80)])
+//            .presentationBackground((Color(hex: 0xfff9ee)))
+//            .presentationBackgroundInteraction(.enabled)
+//            .onAppear {
+//                tabBarPresent = false      // Start from invisible
+//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+//                    withAnimation(.easeInOut(duration: 0.2)) {
+//                        tabBarPresent = true
+//                    }
+//                }
+//            }
+//            .onDisappear {
+//                withAnimation(.easeInOut(duration: 0.2)) {
+//                    tabBarPresent = false
+//                }
+//            }
+//        }
+//        .onAppear {
+//            fetchCreatorName()
+//            loadListFromFirebase()
+//            checkUserVoted()
+//            
+//            print("Page Loaded: DefaultListVote")
+//            print("ListID: \(listID)")
+//        }
+//        .sheet(item: $selectedItem) { item in
+//            ItemDetailViewSpectate(
+//                items: selectedRankoItems,
+//                initialItem: item,
+//                listID: listID
+//            )
+//        }
+//        .sheet(isPresented: $spectateProfile) {
+//            ProfileSpectateView(userID: creatorID)
+//        }
+//    }
+//    
+//    private func sortByVotesThenRank(_ a: RankoItem, _ b: RankoItem) -> Bool {
+//        if a.votes != b.votes {
+//            return a.votes > b.votes  // More votes first
+//        } else {
+//            return a.rank < b.rank    // Lower rank wins tie
+//        }
+//    }
+//    
+//    private func checkUserVoted() {
+//        let db = Database.database().reference()
+//        let voterRef = db
+//            .child("RankoData")
+//            .child(listID)
+//            .child("RankoVoters")
+//            .child(user_data.userID)
+//        
+//        voterRef.observeSingleEvent(of: .value) { snap in
+//            if snap.exists() {
+//                userVoted = true
+//            }
+//        }
+//    }
+//
+//    private func showComingSoonToast(for feature: String) {
+//        switch feature {
+//        case "Save Rankos":
+//                toastMessage = "Save Community or Friends Rankos Straight To Your Profile - Coming Soon!"
+//                toastID = UUID()
+//                showToast = true
+//                
+//            default:
+//                toastMessage = "New Feature Coming Soon!"
+//                toastID = UUID()
+//                showToast = true
+//            }
+//        
+//        // Cancel any previous dismiss
+//        toastDismissWorkItem?.cancel()
+//        
+//        // Schedule dismiss after 4 seconds
+//        let newDismissWorkItem = DispatchWorkItem {
+//            withAnimation { showToast = false }
+//        }
+//        toastDismissWorkItem = newDismissWorkItem
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: newDismissWorkItem)
+//    }
+//    
+//    // MARK: — Fetchers
+//    private func loadProfileImage() {
+//        let ref = Database.database().reference()
+//            .child("UserData")
+//            .child(creatorID)
+//            .child("UserProfilePicture")
+//            .child("UserProfilePicturePath")
+//        ref.getData { _, snap in
+//            if let path = snap?.value as? String {
+//                Storage.storage().reference().child("profilePictures").child(path)
+//                    .getData(maxSize: 2*1024*1024) { data, _ in
+//                        if let data = data, let ui = UIImage(data: data) {
+//                            creatorImage = ui
+//                        }
+//                }
+//            }
+//        }
+//    }
+//    
+//    private func fetchCreatorName() {
+//        let ref = Database.database().reference()
+//            .child("UserData")
+//            .child(creatorID)
+//            .child("UserDetails")
+//            .child("UserName")
+//        ref.observeSingleEvent(of: .value) { snap in
+//            creatorName = snap.value as? String ?? "Unknown"
+//        }
+//        loadProfileImage()
+//    }
+//    
+//    private func loadListFromFirebase() {
+//        let ref = Database.database().reference()
+//            .child("RankoData")
+//            .child(listID)
+//
+//        ref.observeSingleEvent(of: .value, with: { snap in
+//            guard let dict = snap.value as? [String: Any] else {
+//                return
+//            }
+//
+//            // Core fields
+//            guard
+//                let name = dict["RankoName"] as? String,
+//                let description = dict["RankoDescription"] as? String,
+//                let type = dict["RankoType"] as? String,
+//                let isPrivate = dict["RankoPrivacy"] as? Bool,
+//                let userID = dict["RankoUserID"] as? String,
+//                let dateTimeStr = dict["RankoDateTime"] as? String
+//            else {
+//                return
+//            }
+//
+//            // Category (nested)
+//            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
+//            let catName  = (cat["name"] as? String) ?? ""
+//            let catIcon  = (cat["icon"] as? String) ?? ""
+//            let catColour = UInt(cat["colour"] as! String) ?? UInt(0xFFFFFF)  // store as Int; convert to your Color later
+//
+//            // Items
+//            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
+//            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
+//                guard
+//                    let itemName = item["ItemName"] as? String,
+//                    let itemDesc = item["ItemDescription"] as? String,
+//                    let itemImage = item["ItemImage"] as? String
+//                else { return nil }
+//
+//                let rank  = intFromAny(item["ItemRank"])  ?? 0
+//                let votes = intFromAny(item["ItemVotes"]) ?? 0
+//
+//                let record = RankoRecord(
+//                    objectID: itemID,
+//                    ItemName: itemName,
+//                    ItemDescription: itemDesc,
+//                    ItemCategory: "category",  // replace if you store real per-item category
+//                    ItemImage: itemImage
+//                )
+//                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
+//            }
+//
+////            let list = RankoList(
+////                id: listID,
+////                listName: name,
+////                listDescription: description,
+////                type: type,
+////                categoryName: catName,
+////                categoryIcon: catIcon,
+////                categoryColour: catColour,
+////                isPrivate: isPrivate ? "Private" : "Public",
+////                userCreator: userID,
+////                timeCreated: dateTimeStr,
+////                timeUpdated: dateTimeStr,
+////                items: items
+////            )
+//        })
+//    }
+//
+//    // Helper to safely coerce Firebase numbers/strings into Int
+//    private func intFromAny(_ any: Any?) -> Int? {
+//        if let i = any as? Int { return i }
+//        if let d = any as? Double { return Int(d) }
+//        if let s = any as? String { return Int(s) }
+//        if let n = any as? NSNumber { return n.intValue }
+//        return nil
+//    }
+//    
+//    
+//    
+//    private func fetchCategoryByID(_ id: String, completion: @escaping (SampleCategoryChip?) -> Void) {
+//        let ref = Database.database().reference()
+//            .child("AppData").child("CategoryData").child(id) // <- correct path
+//
+//        ref.observeSingleEvent(of: .value) { snap in
+//            guard let dict = snap.value as? [String: Any] else {
+//                completion(nil); return
+//            }
+//            let cd = SampleCategoryChip(
+//                id: id,
+//                name: dict["name"] as? String ?? id,
+//                icon: (dict["icon"] as? String)!,
+//                colour: (dict["colour"] as? String?)!!
+//            )
+//            completion(cd)
+//        }
+//    }
+//
+//    private func fetchCategoryByName(_ name: String, completion: @escaping (SampleCategoryChip?) -> Void) {
+//        // scan CategoryData once; if your DB is large, consider caching
+//        let ref = Database.database().reference()
+//            .child("AppData").child("CategoryData")
+//
+//        ref.observeSingleEvent(of: .value) { snap in
+//            guard let all = snap.value as? [String: [String: Any]] else {
+//                completion(nil); return
+//            }
+//            // case-insensitive match on "name"
+//            if let (id, dict) = all.first(where: { (_, v) in
+//                (v["name"] as? String)?.caseInsensitiveCompare(name) == .orderedSame
+//            }) {
+//                let cd = SampleCategoryChip(
+//                    id: id,
+//                    name: dict["name"] as? String ?? id,
+//                    icon: (dict["icon"] as? String)!,
+//                    colour: (dict["colour"] as? String?)!!
+//                )
+//                completion(cd)
+//            } else {
+//                completion(nil)
+//            }
+//        }
+//    }
+//    
+//    
+//    // Item Helpers
+//    private func delete(_ item: RankoItem) {
+//        selectedRankoItems.removeAll { $0.id == item.id }
+//        normalizeRanks()
+//    }
+//
+//    private func moveToTop(_ item: RankoItem) {
+//        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
+//        let moved = selectedRankoItems.remove(at: idx)
+//        selectedRankoItems.insert(moved, at: 0)
+//        normalizeRanks()
+//    }
+//
+//    private func moveToBottom(_ item: RankoItem) {
+//        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
+//        let moved = selectedRankoItems.remove(at: idx)
+//        selectedRankoItems.append(moved)
+//        normalizeRanks()
+//    }
+//
+//    private func normalizeRanks() {
+//        for index in selectedRankoItems.indices {
+//            selectedRankoItems[index].rank = index + 1
+//        }
+//    }
+//}
 
 enum DefaultListVoteTab: String, CaseIterable {
     case vote = "Vote"

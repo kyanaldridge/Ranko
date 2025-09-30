@@ -353,7 +353,7 @@ struct GroupListPersonal: View {
             
         }
         .onAppear {
-            loadListFromFirebase()
+//            loadListFromFirebase()
         }
         .sheet(isPresented: $showAddItemsSheet, onDismiss: {
             // When FilterChipPickerView closes, trigger the embeddedStickyPoolView sheet
@@ -378,38 +378,6 @@ struct GroupListPersonal: View {
         }
         .sheet(isPresented: $showReorderSheet) {
             EmptyView()
-        }
-        .sheet(isPresented: $showExitSheet) {
-            DefaultListPersonalExit(
-                onSave: {
-                    updateListInAlgolia(
-                        listID: listID,
-                        newName: rankoName,
-                        newDescription: description,
-                        newCategory: category!.name,
-                        isPrivate: isPrivate
-                    ) { success in
-                        if success {
-                            print("🎉 Fields updated in Algolia")
-                        } else {
-                            print("⚠️ Failed to update fields")
-                        }
-                    }
-                    updateListInFirebase()
-                    dismiss()
-                },
-                onLeave: {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                        dismiss()   // dismiss DefaultListView without saving
-                    }   // dismiss DefaultListView without saving
-                },
-                onDelete: {
-                    showTabBar = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                        showDeleteAlert = true
-                    }
-                }
-            )
         }
         .alert(isPresented: $showDeleteAlert) {
             CustomDialog(
@@ -595,72 +563,72 @@ struct GroupListPersonal: View {
         )
     }
     
-    private func loadListFromFirebase() {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(listID)
-
-        ref.observeSingleEvent(of: .value, with: { snap in
-            guard let dict = snap.value as? [String: Any] else {
-                return
-            }
-
-            // Core fields
-            guard
-                let name = dict["RankoName"] as? String,
-                let description = dict["RankoDescription"] as? String,
-                let type = dict["RankoType"] as? String,
-                let isPrivate = dict["RankoPrivacy"] as? Bool,
-                let userID = dict["RankoUserID"] as? String,
-                let dateTimeStr = dict["RankoDateTime"] as? String
-            else {
-                return
-            }
-
-            // Category (nested)
-            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
-            let catName  = (cat["name"] as? String) ?? ""
-            let catIcon  = (cat["icon"] as? String) ?? ""
-            let catColour = UInt(cat["colour"] as! String) ?? UInt(0xFFFFFF)  // store as Int; convert to your Color later
-
-            // Items
-            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
-            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
-                guard
-                    let itemName = item["ItemName"] as? String,
-                    let itemDesc = item["ItemDescription"] as? String,
-                    let itemImage = item["ItemImage"] as? String
-                else { return nil }
-
-                let rank  = intFromAny(item["ItemRank"])  ?? 0
-                let votes = intFromAny(item["ItemVotes"]) ?? 0
-
-                let record = RankoRecord(
-                    objectID: itemID,
-                    ItemName: itemName,
-                    ItemDescription: itemDesc,
-                    ItemCategory: "category",  // replace if you store real per-item category
-                    ItemImage: itemImage
-                )
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
-            }
-
-            let list = RankoList(
-                id: listID,
-                listName: name,
-                listDescription: description,
-                type: type,
-                categoryName: catName,
-                categoryIcon: catIcon,
-                categoryColour: catColour,
-                isPrivate: isPrivate ? "Private" : "Public",
-                userCreator: userID,
-                timeCreated: dateTimeStr,
-                timeUpdated: dateTimeStr,
-                items: items
-            )
-        })
-    }
+//    private func loadListFromFirebase() {
+//        let ref = Database.database().reference()
+//            .child("RankoData")
+//            .child(listID)
+//
+//        ref.observeSingleEvent(of: .value, with: { snap in
+//            guard let dict = snap.value as? [String: Any] else {
+//                return
+//            }
+//
+//            // Core fields
+//            guard
+//                let name = dict["RankoName"] as? String,
+//                let description = dict["RankoDescription"] as? String,
+//                let type = dict["RankoType"] as? String,
+//                let isPrivate = dict["RankoPrivacy"] as? Bool,
+//                let userID = dict["RankoUserID"] as? String,
+//                let dateTimeStr = dict["RankoDateTime"] as? String
+//            else {
+//                return
+//            }
+//
+//            // Category (nested)
+//            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
+//            let catName  = (cat["name"] as? String) ?? ""
+//            let catIcon  = (cat["icon"] as? String) ?? ""
+//            let catColour = UInt(cat["colour"] as! String) ?? UInt(0xFFFFFF)  // store as Int; convert to your Color later
+//
+//            // Items
+//            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
+//            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
+//                guard
+//                    let itemName = item["ItemName"] as? String,
+//                    let itemDesc = item["ItemDescription"] as? String,
+//                    let itemImage = item["ItemImage"] as? String
+//                else { return nil }
+//
+//                let rank  = intFromAny(item["ItemRank"])  ?? 0
+//                let votes = intFromAny(item["ItemVotes"]) ?? 0
+//
+//                let record = RankoRecord(
+//                    objectID: itemID,
+//                    ItemName: itemName,
+//                    ItemDescription: itemDesc,
+//                    ItemCategory: "category",  // replace if you store real per-item category
+//                    ItemImage: itemImage
+//                )
+//                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
+//            }
+//
+////            let list = RankoList(
+////                id: listID,
+////                listName: name,
+////                listDescription: description,
+////                type: type,
+////                categoryName: catName,
+////                categoryIcon: catIcon,
+////                categoryColour: catColour,
+////                isPrivate: isPrivate ? "Private" : "Public",
+////                userCreator: userID,
+////                timeCreated: dateTimeStr,
+////                timeUpdated: dateTimeStr,
+////                items: items
+////            )
+//        })
+//    }
 
     // Helper to safely coerce Firebase numbers/strings into Int
     private func intFromAny(_ any: Any?) -> Int? {

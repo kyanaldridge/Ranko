@@ -32,7 +32,7 @@ struct DefaultListItemRow: View {
                     .padding(2)
             }
         }
-        .background(Circle().fill(Color(hex: 0xfff9ee)))
+        .background(Circle().fill(Color(hex: 0xFFFFFF)))
         .offset(x: 7, y: 7)
     }
 

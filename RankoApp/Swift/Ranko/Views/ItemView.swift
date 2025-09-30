@@ -7,6 +7,9 @@
 
 import SwiftUI
 import UIKit
+import FirebaseAuth
+import FirebaseStorage
+import FirebaseDatabase
 
 // MARK: - Detail sheet for a single item
 struct ItemDetailView: View {
@@ -299,18 +302,32 @@ extension Image {
 }
 
 struct EditItemView: View {
-    @Environment(\.presentationMode) private var presentationMode
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var itemNameFocused: Bool
+
+    // inbound
     let item: RankoItem
     let listID: String
-    let onSave: (String, String) -> Void
+    let onSave: (String, String) -> Void   // NOTE: this only returns name/desc; ItemImage is written directly to RTDB here
 
+    // editable fields
     @State private var editedName: String
     @State private var editedDescription: String
-    @State private var activeAction: EditItemAction? = nil
-    
-    // MARK: – Toast
-    @State private var showToast: Bool = false
-    @State private var toastMessage: String = ""
+
+    // image state
+    @State private var localPreview: UIImage? = nil          // cropped preview
+    @State private var imageForCropping: UIImage? = nil
+    @State private var showPicker = false
+    @State private var showCropper = false
+    @State private var newUploadedPath: String? = nil        // "rankoPersonalImages/{listID}/{itemID}.jpg"
+    @State private var newUploadedURL: String? = nil         // deterministic download URL string (no token)
+    @State private var didUploadThisSession = false
+
+    // locks + errors
+    @State private var isUploading = false
+    @State private var isUpdatingDB = false
+    @State private var errorMessage: String? = nil
+    @State private var showConfirmAttach = false
 
     init(item: RankoItem, listID: String, onSave: @escaping (String, String) -> Void) {
         self.item = item
@@ -321,275 +338,471 @@ struct EditItemView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 16) {
+                    // IMAGE
                     VStack {
-                        AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
-                            switch phase {
-                            case .empty:
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color(UIColor.systemGray5))
-                                        .frame(width: 200, height: 200)
-                                    Image(systemName: "photo")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 140, height: 140)
-                                        .foregroundColor(.gray)
-                                }
-                            case .success(let image):
-                                image
+                        
+                        if let img = localPreview {
+                            ZStack(alignment: .bottomTrailing) {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.gray.opacity(0.06))
+                                    .frame(width: 240, height: 240)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                                    )
+                                Image(uiImage: img)
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(width: 200, height: 200)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            case .failure:
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color(UIColor.systemGray5))
-                                        .frame(width: 200, height: 200)
-                                    Image(systemName: "xmark.octagon")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 140, height: 140)
-                                        .foregroundColor(.gray)
+                                    .frame(width: 240, height: 240)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                Button {
+                                    showPicker = true
+                                    print("Replacing Local Image...")
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "pencil")
+                                            .font(.system(size: 20, weight: .black, design: .default))
+                                    }
+                                    .frame(width: 32, height: 38)
                                 }
-                            @unknown default:
-                                EmptyView()
+                                .tint(
+                                    LinearGradient(
+                                        colors: [Color(hex: 0xFFC155), Color(hex: 0xFF924E)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .buttonStyle(.glassProminent)
+                                .padding(.horizontal, 8)
+                                .background(Circle().stroke(Color.white, lineWidth: 14))
+                                .offset(x: 15, y: 15)
+                                .disabled(isUploading || isUpdatingDB)
                             }
+                        } else {
+                            AsyncImage(url: URL(string: item.record.ItemImage)) { phase in
+                                switch phase {
+                                case .empty:
+                                    ZStack(alignment: .bottomTrailing) {
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.gray.opacity(0.06))
+                                            .frame(width: 240, height: 240)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                                            )
+                                        ProgressView().frame(width: 240, height: 240)
+                                        Button {
+                                            showPicker = true
+                                            print("Replacing Empty Image...")
+                                        } label: {
+                                            HStack {
+                                                Image(systemName: "pencil")
+                                                    .font(.system(size: 20, weight: .black, design: .default))
+                                            }
+                                            .frame(width: 32, height: 38)
+                                        }
+                                        .tint(
+                                            LinearGradient(
+                                                colors: [Color(hex: 0xFFC155), Color(hex: 0xFF924E)],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .buttonStyle(.glassProminent)
+                                        .padding(.horizontal, 8)
+                                        .background(Circle().stroke(Color.white, lineWidth: 14))
+                                        .offset(x: 15, y: 15)
+                                        .disabled(isUploading || isUpdatingDB)
+                                    }
+                                case .success(let image):
+                                    ZStack(alignment: .bottomTrailing) {
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.gray.opacity(0.06))
+                                            .frame(width: 240, height: 240)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                                            )
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 240, height: 240)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        Button {
+                                            showPicker = true
+                                            print("Replacing Async Image...")
+                                        } label: {
+                                            HStack {
+                                                Image(systemName: "pencil")
+                                                    .font(.system(size: 20, weight: .black, design: .default))
+                                            }
+                                            .frame(width: 32, height: 38)
+                                        }
+                                        .tint(
+                                            LinearGradient(
+                                                colors: [Color(hex: 0xFFC155), Color(hex: 0xFF924E)],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .buttonStyle(.glassProminent)
+                                        .padding(.horizontal, 8)
+                                        .background(Circle().stroke(Color.white, lineWidth: 14))
+                                        .offset(x: 15, y: 15)
+                                        .disabled(isUploading || isUpdatingDB)
+                                    }
+                                case .failure:
+                                    ZStack(alignment: .bottomTrailing) {
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.gray.opacity(0.06))
+                                            .frame(width: 240, height: 240)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                                            )
+                                        Image(systemName: "photo")
+                                            .font(.system(size: 48, weight: .black))
+                                            .opacity(0.35)
+                                        Button {
+                                            showPicker = true
+                                            print("Replacing Failed Image...")
+                                        } label: {
+                                            HStack {
+                                                Image(systemName: "pencil")
+                                                    .font(.system(size: 20, weight: .black, design: .default))
+                                            }
+                                            .frame(width: 32, height: 38)
+                                        }
+                                        .tint(
+                                            LinearGradient(
+                                                colors: [Color(hex: 0xFFC155), Color(hex: 0xFF924E)],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .buttonStyle(.glassProminent)
+                                        .padding(.horizontal, 8)
+                                        .background(Circle().stroke(Color.white, lineWidth: 14))
+                                        .offset(x: 15, y: 15)
+                                        .disabled(isUploading || isUpdatingDB)
+                                    }
+                                @unknown default:
+                                    EmptyView()
+                                }
+                            }
+                            .frame(width: 240, height: 240)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.bottom, 20)
-                    HStack {
-                        Text("Item Name").foregroundColor(.secondary)
-                        Text("*").foregroundColor(.red)
-                    }
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .padding(.leading, 6)
-                    HStack {
-                        Image(systemName: "textformat.size.larger")
-                            .foregroundColor(.gray)
-                            .padding(.trailing, 1)
-                        TextField("Apple", text: $editedName)
-                            .onChange(of: editedName) { _, newValue in
-                                if newValue.count > 50 {
-                                    editedName = String(newValue.prefix(50))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+
+                    // NAME
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 4) {
+                            Text("Item Name".uppercased())
+                                .foregroundColor(.secondary)
+                                .font(.custom("Nunito-Black", size: 12))
+                            Text("*").foregroundColor(.red).font(.custom("Nunito-Black", size: 12))
+                        }
+                        HStack(spacing: 6) {
+                            Image(systemName: "textformat.size.larger").foregroundColor(.gray)
+                            TextField("Name *", text: $editedName)
+                                .autocorrectionDisabled(true)
+                                .font(.custom("Nunito-Bold", size: 18))
+                                .foregroundStyle(Color.secondary)
+                                .focused($itemNameFocused)
+                                .onChange(of: editedName) { _, v in
+                                    if v.count > 50 { editedName = String(v.prefix(50)) }
                                 }
-                            }
-                            .autocorrectionDisabled(true)
-                            .foregroundStyle(.gray)
-                            .fontWeight(.bold)
-                        Spacer()
-                        Text("\(editedName.count)/50")
-                            .font(.caption2)
-                            .fontWeight(.light)
-                            .padding(.top, 15)
-                            .foregroundColor(.secondary)
+                            Spacer()
+                            Text("\(editedName.count)/50")
+                                .font(.custom("Nunito-Bold", size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .onAppear { itemNameFocused = true }
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.06)))
                     }
-                    .padding(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .foregroundColor(Color.gray.opacity(0.08))
-                            .allowsHitTesting(false)
+
+                    // DESCRIPTION
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Description".uppercased())
+                            .foregroundColor(.secondary)
+                            .font(.custom("Nunito-Black", size: 12))
+                        HStack(spacing: 6) {
+                            Image(systemName: "textformat.size.smaller").foregroundColor(.gray)
+                            TextField("Description (optional)", text: $editedDescription, axis: .vertical)
+                                .autocorrectionDisabled(true)
+                                .font(.custom("Nunito-Bold", size: 18))
+                                .foregroundStyle(Color.secondary)
+                                .lineLimit(1...3)
+                                .onChange(of: editedDescription) { _, v in
+                                    if v.count > 100 { editedDescription = String(v.prefix(100)) }
+                                    let draftDescription = editedDescription
+                                    if draftDescription.range(of: "\n") != nil {
+                                        hideKeyboard()
+                                        editedDescription = draftDescription.replacingOccurrences(of: "\n", with: "")
+                                    }
+                                }
+                            Spacer()
+                            Text("\(editedDescription.count)/100")
+                                .font(.custom("Nunito-Bold", size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.06)))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        Task { await handleCancel() }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                    .disabled(isUploading || isUpdatingDB)
+                }
+                ToolbarItem(placement: .principal) {
+                    Text("Edit Item")
+                        .font(.custom("Nunito-Black", size: 18))
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        // if a new image was uploaded this session, confirm permanent attach
+                        if newUploadedURL != nil {
+                            showConfirmAttach = true
+                        } else {
+                            Task { await commitNameDescOnlyAndDismiss() }
+                        }
+                    } label: {
+                        if isUploading || isUpdatingDB {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 16, weight: .bold))
+                        }
+                    }
+                    .disabled(isUploading || isUpdatingDB || editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .interactiveDismissDisabled(isUploading || isUpdatingDB)
+            .disabled(isUploading || isUpdatingDB)
+            .alert("Upload error", isPresented: .init(
+                get: { errorMessage != nil && isUploading },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "unknown error")
+            }
+            .alert("Update failed", isPresented: .init(
+                get: { errorMessage != nil && isUpdatingDB },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "unknown error")
+            }
+            .confirmationDialog(
+                "Save image to this item?",
+                isPresented: $showConfirmAttach,
+                titleVisibility: .visible
+            ) {
+                Button("Yes, attach image", role: .none) {
+                    Task { await finalizeAttachAndDismiss() }
+                }
+                Button("No, keep old image", role: .cancel) {
+                    Task { await commitNameDescOnlyAndDismiss() }
+                }
+            } message: {
+                Text("this will permanently set the item's photo to the one you just uploaded.")
+            }
+            .sheet(isPresented: $showPicker) {
+                ImagePicker(image: $imageForCropping, isPresented: $showPicker)
+            }
+            .fullScreenCover(isPresented: $showCropper) {
+                if let img = imageForCropping {
+                    SwiftyCropView(
+                        imageToCrop: img,
+                        maskShape: .square,
+                        configuration: SwiftyCropConfiguration(
+                            maxMagnificationScale: 8.0,
+                            maskRadius: 190.0,
+                            cropImageCircular: false,
+                            rotateImage: false,
+                            rotateImageWithButtons: true,
+                            usesLiquidGlassDesign: true,
+                            zoomSensitivity: 3.0
+                        ),
+                        onCancel: {
+                            imageForCropping = nil
+                            showCropper = false
+                        },
+                        onComplete: { cropped in
+                            imageForCropping = nil
+                            showCropper = false
+                            if let c = cropped { Task { await uploadCropped(c) } }
+                        }
                     )
                 }
-                .padding(.bottom, 15)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Description")
-                        .foregroundColor(.secondary)
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .padding(.leading, 6)
-                    HStack {
-                        Image(systemName: "textformat.size.smaller")
-                            .foregroundColor(.gray)
-                            .padding(.trailing, 1)
-                        TextField("a red or green juicy fruit", text: $editedDescription)
-                            .onChange(of: editedDescription) { _, newValue in
-                                if newValue.count > 100 {
-                                    editedDescription = String(newValue.prefix(100))
-                                }
-                            }
-                            .autocorrectionDisabled(true)
-                            .foregroundStyle(.gray)
-                            .fontWeight(.bold)
-                        Spacer()
-                        Text("\(editedDescription.count)/100")
-                            .font(.caption2)
-                            .fontWeight(.light)
-                            .padding(.top, 15)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .foregroundColor(Color.gray.opacity(0.08))
-                            .allowsHitTesting(false)
-                    )
-                }
-                Spacer(minLength: 20)
-                
-                bottomBar
-                    .edgesIgnoringSafeArea(.bottom)
-
-                // MARK: — Toast Overlay
-                if showToast {
-                    VStack {
-                        Spacer()
-                        Text(toastMessage)
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.black.opacity(0.8))
-                            )
-                            .transition(
-                                .move(edge: .bottom)
-                                .combined(with: .opacity)
-                            )
-                            .padding(.bottom, 80)
-                    }
-                    .animation(.easeInOut(duration: 0.25), value: showToast)
-                }
             }
-            .sheet(item: $activeAction, content: sheetContent)
-            .presentationDetents([.fraction(0.75), .large])
-        }
-        .padding(.top, 25)
-        .padding(15)
-    }
-    // MARK: — Bottom Bar Overlay
-    private var bottomBar: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                HStack(spacing: 0) {
-                    ForEach(EditItemAction.allCases) { action in
-                        if action == .save {
-                            pressAndHoldButton(
-                                action: action,
-                                symbolName: buttonSymbols[action.rawValue] ?? "",
-                                onPerform: {
-                                    onSave(editedName, editedDescription)
-                                    presentationMode.wrappedValue.dismiss()
-                                },
-                                onTapToast: {
-                                    // Error haptic when they only tap
-                                    let generator = UINotificationFeedbackGenerator()
-                                    generator.notificationOccurred(.error)
-                                    showTemporaryToast("Hold down button to Save")
-                                }
-                            )
-                        }
-                        else if action == .discard {
-                            pressAndHoldButton(
-                                action: action,
-                                symbolName: buttonSymbols[action.rawValue] ?? "",
-                                onPerform: {
-                                    presentationMode.wrappedValue.dismiss()
-                                },
-                                onTapToast: {
-                                    // Error haptic when they only tap
-                                    let generator = UINotificationFeedbackGenerator()
-                                    generator.notificationOccurred(.error)
-                                    showTemporaryToast("Hold down button to Discard Changes")
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-            .padding(.vertical, 2)
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 17)
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.25), radius: 8)
-            )
-        }
-    }
-    
-    private func showTemporaryToast(_ message: String) {
-        toastMessage = message
-        withAnimation {
-            showToast = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation {
-                showToast = false
+            .onChange(of: imageForCropping) { _, v in
+                if v != nil { showCropper = true }
             }
         }
-    }
-    
-    @ViewBuilder
-    private func sheetContent(for action: EditItemAction) -> some View {
-        switch action {
-        case .save:
-            EmptyView() // never present a sheet for Publish
-        case .discard:
-            EmptyView() // never present a sheet for Delete
-        }
-    }
-    
-    
-    @ViewBuilder
-    private func pressAndHoldButton(
-        action: EditItemAction,
-        symbolName: String,
-        onPerform: @escaping () -> Void,
-        onTapToast: @escaping () -> Void
-    ) -> some View {
-        ZStack {
-            // ─────────
-            // 1) Button Content
-            VStack(spacing: 0) {
-                Image(systemName: symbolName)
-                    .font(.system(size: 13, weight: .black, design: .default))
-                    .frame(height: 20)
-                    .padding(.bottom, 6)
-
-                Text(action.rawValue)
-                    .font(.system(size: 9, weight: .black, design: .rounded))
-            }
-            .foregroundColor(.black)
-            .frame(minWidth: 20)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(Color.white)
-            .cornerRadius(12)
-            // Short tap = show toast + error haptic
-            .onTapGesture {
-                onTapToast()
-            }
-            // Long press (≥1s) = success haptic + perform action
-            .onLongPressGesture(
-                minimumDuration: 1.0,
-                perform: {
-                    onPerform()
-                }
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-    
-    
-    enum EditItemAction: String, Identifiable, CaseIterable {
-        var id: String { self.rawValue }
-        case save     = "Save"
-        case discard  = "Discard"
+        .presentationDetents([.height(560), .large])
+        .presentationBackground(Color(hex: 0xFFFFFF))
     }
 
-    var buttonSymbols: [String: String] {
-        [
-            "Save":      "square.and.arrow.up",
-            "Discard":   "trash"
+    // MARK: - Upload
+
+    private func pathForItem(_ listID: String, _ itemID: String) -> String {
+        "rankoPersonalImages/\(listID)/\(itemID).jpg"
+    }
+
+    private func deterministicURL(for listID: String, _ itemID: String) -> String {
+        "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(listID)%2F\(itemID).jpg?alt=media&token="
+    }
+
+    private func makeJPEGMetadata() -> StorageMetadata {
+        let md = StorageMetadata()
+        md.contentType = "image/jpeg"
+        let now = Date()
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
+        fmt.dateFormat = "yyyyMMddHHmmss"
+        md.customMetadata = [
+            "rankoID": listID,
+            "itemID": item.id,
+            "userID": Auth.auth().currentUser?.uid ?? "",
+            "uploadedAt": fmt.string(from: now)
         ]
+        return md
+    }
+
+    private func uploadCropped(_ image: UIImage) async {
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            errorMessage = "couldn't encode image"
+            return
+        }
+        withAnimation {
+            isUploading = true
+        }
+        errorMessage = nil
+
+        let path = pathForItem(listID, item.id)
+        let ref = Storage.storage().reference().child(path)
+
+        do {
+            _ = try await ref.putDataAsync(data, metadata: makeJPEGMetadata())
+            // success — set preview + remember path/URL
+            await MainActor.run {
+                localPreview = image
+                newUploadedPath = path
+                newUploadedURL = deterministicURL(for: listID, item.id)
+                didUploadThisSession = true
+                withAnimation {
+                    isUploading = false
+                }
+            }
+        } catch {
+            await MainActor.run {
+                withAnimation {
+                    isUploading = false
+                }
+                errorMessage = (error as NSError).localizedDescription
+            }
+        }
+    }
+
+    // MARK: - Save / Cancel flows
+
+    private func handleCancel() async {
+        // if we uploaded a new file in this session but user cancels, try to delete it
+        if didUploadThisSession, let path = newUploadedPath {
+            await deleteStorageObject(at: path)
+        }
+        dismiss()
+    }
+
+    /// Save ONLY name/desc and exit (keeps the old image)
+    private func commitNameDescOnlyAndDismiss() async {
+        await MainActor.run {
+            isUpdatingDB = true
+            errorMessage = nil
+        }
+
+        // non-throwing local update back to parent
+        onSave(editedName, editedDescription)
+
+        await MainActor.run {
+            isUpdatingDB = false
+            dismiss()
+        }
+    }
+
+    /// Save name/desc AND attach new image URL to RTDB, then exit
+    private func finalizeAttachAndDismiss() async {
+        guard let finalURL = newUploadedURL else {
+            await commitNameDescOnlyAndDismiss()
+            return
+        }
+
+        await MainActor.run {
+            isUpdatingDB = true
+            errorMessage = nil
+        }
+        defer {
+            Task { @MainActor in isUpdatingDB = false }
+        }
+
+        do {
+            // 1) write ItemImage directly to RTDB
+            let ref = Database.database().reference()
+                .child("RankoData").child(listID)
+                .child("RankoItems").child(item.id)
+                .child("ItemImage")
+            try await setValueAsync(ref, value: finalURL)
+
+            // 2) hand name/desc back to parent
+            onSave(editedName, editedDescription)
+
+            // 3) done
+            await MainActor.run { dismiss() }
+        } catch {
+            await MainActor.run {
+                errorMessage = (error as NSError).localizedDescription
+            }
+        }
+    }
+
+    // MARK: - Small async helpers
+
+    private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            ref.setValue(value) { err, _ in
+                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
+            }
+        }
+    }
+
+    private func deleteStorageObject(at path: String) async {
+        let ref = Storage.storage().reference().child(path)
+        _ = try? await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            ref.delete { _ in cont.resume() }
+        }
     }
 }
+
 
 // MARK: - Detail sheet for a single item
 struct SpecItemDetailView: View {

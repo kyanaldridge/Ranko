@@ -416,13 +416,23 @@ struct HomeView: View {
                         } else {
                             // ✅ FEED
                             LazyVStack(alignment: .leading, spacing: 16) {
-                                ForEach(feedLists, id: \.id) { list in
+                                ForEach($feedLists, id: \.id) { list in
                                     if list.type == "group" {
-                                        GroupListHomeView(listData: list) { msg in showComingSoonToast(msg) }
-                                            .onTapGesture { /* open spectate if you want */ }
+                                        GroupListHomeView(listData: list, onCommentTap: { msg in
+                                            showComingSoonToast(msg)
+                                        }, onRankoTap: { _ in
+                                            
+                                        }, onProfileTap: { _ in
+                                            
+                                        })
                                     } else {
-                                        DefaultListHomeView(listData: list) { msg in showComingSoonToast(msg) }
-                                            .onTapGesture { /* open vote if you want */ }
+                                        DefaultListHomeView(listData: list, onCommentTap: { msg in
+                                            showComingSoonToast(msg)
+                                        }, onRankoTap: { _ in
+                                            
+                                        }, onProfileTap: { _ in
+                                            
+                                        })
                                     }
                                 }
                                 
@@ -703,6 +713,8 @@ struct DefaultListHomeView: View {
     @State private var spectateProfile: Bool = false
     @State private var openShareView: Bool = false
     var onCommentTap: (String) -> Void
+    var onRankoTap: (String) -> Void
+    var onProfileTap: (String) -> Void
     
     private var sortedItems: [RankoItem] {
         listData.items.sorted { $0.rank < $1.rank }
@@ -751,6 +763,9 @@ struct DefaultListHomeView: View {
                     .frame(width: 42, height: 42)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
+                .onTapGesture {
+                    <#code#>
+                }
                 
                 LazyVStack(alignment: .leading) {
                     HStack(spacing: 4) {
@@ -798,7 +813,11 @@ struct DefaultListHomeView: View {
                     Rectangle()
                         .fill(Color.clear)
                         .frame(width: 42)
-                    HomeCategoryBadge1(text: listData.categoryName)
+                    HomeCategoryBadge1(
+                        name: listData.categoryName,
+                        colour: listData.categoryColour,   // UInt from Firebase
+                        icon: listData.categoryIcon        // SF Symbol name from Firebase
+                    )
                 }
                 
                 HStack(spacing: 4) {
@@ -1220,265 +1239,11 @@ struct DefaultListHomeView: View {
     }
 }
 
-
-struct DefaultListHomeView_Previews: PreviewProvider {
-
-    // Mock items 1…10
-    static let mockItems: [RankoItem] = [
-        .init(id: "1hewhlehwlhcx", rank: 1, votes: 103, record: RankoRecord(objectID: "1hewhlehwlhcx", ItemName: "Love Sick", ItemDescription: "Don Toliver", ItemCategory: "", ItemImage: "https://store.warnermusic.com.au/cdn/shop/files/20221202_DON-T_LP.jpg?v=1683766183&width=800")),
-        .init(id: "h1ewhlehwlhcx", rank: 2, votes: 97, record: RankoRecord(objectID: "h1ewhlehwlhcx", ItemName: "Man On The Moon III: The Chosen", ItemDescription: "Kid Cudi", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/e/e2/Man_on_the_Moon_III.png")),
-        .init(id: "he1whlehwlhcx", rank: 3, votes: 72, record: RankoRecord(objectID: "he1whlehwlhcx", ItemName: "HEROES & VILLAINS", ItemDescription: "Metro Boomin", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/5/5f/Metro_Boomin_-_Heroes_%26_Villains.png")),
-        .init(id: "hew1hlehwlhcx", rank: 4, votes: 56, record: RankoRecord(objectID: "hew1hlehwlhcx", ItemName: "Death Race For Love", ItemDescription: "Juice WRLD", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/0/04/Juice_Wrld_-_Death_Race_for_Love.png")),
-        .init(id: "hewh1lehwlhcx", rank: 5, votes: 53, record: RankoRecord(objectID: "hewh1lehwlhcx", ItemName: "TIMELESS", ItemDescription: "KAYTRANADA", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/1/17/Album_cover_for_Timeless_by_Kaytranada.webp")),
-        .init(id: "hewhl1ehwlhcx", rank: 6, votes: 49, record: RankoRecord(objectID: "hewhl1ehwlhcx", ItemName: "Hurry Up Tomorrow", ItemDescription: "The Weeknd", ItemCategory: "", ItemImage: "https://preview.redd.it/hut-full-album-theory-v0-wxtp9tt4ayie1.jpeg?auto=webp&s=476e8ed57a870940a855525e09bb1f87a5779a81")),
-        .init(id: "hewhle1hwlhcx", rank: 7, votes: 32, record: RankoRecord(objectID: "hewhle1hwlhcx", ItemName: "The Life Of Pablo", ItemDescription: "Kanye West", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/4/4d/The_life_of_pablo_alternate.jpg")),
-        .init(id: "hewhleh1wlhcx", rank: 8, votes: 29, record: RankoRecord(objectID: "hewhleh1wlhcx", ItemName: "beerbongs & bentleys", ItemDescription: "Post Malone", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/634175-Product-0-I_1024x1024.jpg")),
-        .init(id: "hewhlehw1lhcx", rank: 9, votes: 28, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Manic", ItemDescription: "Halsey", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/c/ce/Halsey_-_Manic.png")),
-        .init(id: "hewhlehwl1hcx", rank: 10, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg")),
-        .init(id: "hewhlehwl1hcx", rank: 11, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg"))
-    ]
-    // Mock list that matches your model usage inside the view
-    static let mockList = RankoList(
-        id: "list_123",
-        listName: "Top 10 Albums This Decade",
-        listDescription: "My current fave bangers — argue with your mum 😌",
-        type: "default",
-        categoryName: "Songs",
-        categoryIcon: "music.note",
-        categoryColour: 0xFFFFFF,
-        isPrivate: "Public",
-        userCreator: "2FOqyZfO5TNOdoJ0B3KrX99za1SLJ3",
-        timeCreated: "20250815123045",
-        timeUpdated: "20250815123045",
-        items: mockItems
-    )
-
-    static var previews: some View {
-        // Wrap in a layout you like (card-ish)
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                DefaultListHomeView(
-                    listData: mockList,
-                    onCommentTap: { msg in
-                        print("Comment tapped with message: \(msg)")
-                    }
-                )
-            }
-        }
-        .background(Color.white)
-        .environmentObject(UserInformation.shared) // if your view expects it
-        .previewDisplayName("DefaultListHomeView – Mock")
-    }
-}
-
-struct HomeListsDisplay: View {
-    @Namespace private var transition
-    @State private var lists: [RankoList] = []
-    @State private var allItems: [RankoItem] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
-    @State private var selectedList: RankoList? = nil
-    @State var presentFakeRankos: Bool
-    @Binding var showToast: Bool
-    @Binding var toastMessage: String
-    
-    var showToastHelper: (String) -> Void
-    
-    static let mockItems1: [RankoItem] = [
-        .init(id: "1hewhlehwlhcx", rank: 1, votes: 103, record: RankoRecord(objectID: "1hewhlehwlhcx", ItemName: "Love Sick", ItemDescription: "Don Toliver", ItemCategory: "", ItemImage: "https://store.warnermusic.com.au/cdn/shop/files/20221202_DON-T_LP.jpg?v=1683766183&width=800")),
-        .init(id: "h1ewhlehwlhcx", rank: 2, votes: 97, record: RankoRecord(objectID: "h1ewhlehwlhcx", ItemName: "Man On The Moon III: The Chosen", ItemDescription: "Kid Cudi", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/e/e2/Man_on_the_Moon_III.png")),
-        .init(id: "he1whlehwlhcx", rank: 3, votes: 72, record: RankoRecord(objectID: "he1whlehwlhcx", ItemName: "HEROES & VILLAINS", ItemDescription: "Metro Boomin", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/5/5f/Metro_Boomin_-_Heroes_%26_Villains.png")),
-        .init(id: "hew1hlehwlhcx", rank: 4, votes: 56, record: RankoRecord(objectID: "hew1hlehwlhcx", ItemName: "Death Race For Love", ItemDescription: "Juice WRLD", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/0/04/Juice_Wrld_-_Death_Race_for_Love.png")),
-        .init(id: "hewh1lehwlhcx", rank: 5, votes: 53, record: RankoRecord(objectID: "hewh1lehwlhcx", ItemName: "TIMELESS", ItemDescription: "KAYTRANADA", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/1/17/Album_cover_for_Timeless_by_Kaytranada.webp")),
-        .init(id: "hewhl1ehwlhcx", rank: 6, votes: 49, record: RankoRecord(objectID: "hewhl1ehwlhcx", ItemName: "Hurry Up Tomorrow", ItemDescription: "The Weeknd", ItemCategory: "", ItemImage: "https://preview.redd.it/hut-full-album-theory-v0-wxtp9tt4ayie1.jpeg?auto=webp&s=476e8ed57a870940a855525e09bb1f87a5779a81")),
-        .init(id: "hewhle1hwlhcx", rank: 7, votes: 32, record: RankoRecord(objectID: "hewhle1hwlhcx", ItemName: "The Life Of Pablo", ItemDescription: "Kanye West", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/4/4d/The_life_of_pablo_alternate.jpg")),
-        .init(id: "hewhleh1wlhcx", rank: 8, votes: 29, record: RankoRecord(objectID: "hewhleh1wlhcx", ItemName: "beerbongs & bentleys", ItemDescription: "Post Malone", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/634175-Product-0-I_1024x1024.jpg")),
-        .init(id: "hewhlehw1lhcx", rank: 9, votes: 28, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Manic", ItemDescription: "Halsey", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/c/ce/Halsey_-_Manic.png")),
-        .init(id: "hewhlehwl1hcx", rank: 10, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg")),
-        .init(id: "hewhlehwl1hcx", rank: 11, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg"))
-    ]
-    // Mock list that matches your model usage inside the view
-    static let mockList1 = RankoList(
-        id: "list_123",
-        listName: "Top 10 Albums This Decade",
-        listDescription: "My current fave bangers — argue with your mum 😌",
-        type: "default",
-        categoryName: "Songs",
-        categoryIcon: "music.note",
-        categoryColour: 0xFFFFFF,
-        isPrivate: "Public",
-        userCreator: "user_abc123",
-        timeCreated: "20250815123045",
-        timeUpdated: "20250815123045",
-        items: mockItems1
-    )
-    
-    static let mockItems2: [RankoItem] = [
-        .init(id: "1hewhlehwlhcx", rank: 1, votes: 103, record: RankoRecord(objectID: "1hewhlehwlhcx", ItemName: "Cookies & Cream", ItemDescription: "", ItemCategory: "", ItemImage: "https://image.shutterstock.com/image-photo/isolated-scoop-cream-ice-white-250nw-2498180691.jpg")),
-        .init(id: "h1ewhlehwlhcx", rank: 2, votes: 97, record: RankoRecord(objectID: "h1ewhlehwlhcx", ItemName: "Chocolate", ItemDescription: "", ItemCategory: "", ItemImage: "https://t3.ftcdn.net/jpg/15/54/40/82/360_F_1554408215_prUzouZME3FBK1G4tzGDMkAyiqbc3PZk.jpg")),
-        .init(id: "he1whlehwlhcx", rank: 3, votes: 72, record: RankoRecord(objectID: "he1whlehwlhcx", ItemName: "Strawberry", ItemDescription: "", ItemCategory: "", ItemImage: "https://media.istockphoto.com/id/138087063/photo/strawberry-ice-cream.jpg?s=612x612&w=0&k=20&c=KRwUn679tUQnW7n76ZvDWfI9glRfITaeuqqj5xTasT0=")),
-        .init(id: "hew1hlehwlhcx", rank: 4, votes: 56, record: RankoRecord(objectID: "hew1hlehwlhcx", ItemName: "Mint Choc Chip", ItemDescription: "", ItemCategory: "", ItemImage: "https://thumbs.dreamstime.com/b/flavorful-mint-chocolate-chip-classic-dessert-rich-flavor-perfect-refreshing-your-taste-buds-isolated-white-367177761.jpg")),
-        .init(id: "hewh1lehwlhcx", rank: 5, votes: 53, record: RankoRecord(objectID: "hewh1lehwlhcx", ItemName: "Chocolate Chip", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.shutterstock.com/image-photo/scoop-vanilla-ice-cream-chocolate-600nw-2569287049.jpg")),
-        .init(id: "hewhl1ehwlhcx", rank: 6, votes: 49, record: RankoRecord(objectID: "hewhl1ehwlhcx", ItemName: "Rocky Road", ItemDescription: "", ItemCategory: "", ItemImage: "https://images.getbento.com/accounts/7be06ab46c91545d057b03e4bc16a220/media/images/66456Rocky-Road_4286.png?w=1800&fit=max&auto=compress,format&cs=origin&h=1800")),
-        .init(id: "hewhle1hwlhcx", rank: 7, votes: 32, record: RankoRecord(objectID: "hewhle1hwlhcx", ItemName: "Vanilla", ItemDescription: "", ItemCategory: "", ItemImage: "https://static.vecteezy.com/system/resources/previews/054/709/028/non_2x/close-up-ice-cream-scoop-delicious-vanilla-flavor-ice-cream-isolated-on-white-background-photo.jpg")),
-        .init(id: "hewhleh1wlhcx", rank: 8, votes: 29, record: RankoRecord(objectID: "hewhleh1wlhcx", ItemName: "Coffee", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.shutterstock.com/image-photo/coffee-ice-cream-scoop-isolated-600nw-2636609039.jpg")),
-        .init(id: "hewhlehw1lhcx", rank: 9, votes: 28, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Peanut Butter Cup", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.benjerry.ie/files/live/sites/systemsite/files/EU%20Specific%20Assets/Flavors/Product%20Assets/Peanut%20Butter%20Cup%20Ice%20Cream/web_EU_Tower_PeanutButterCup_RGB_HR2_60M.png")),
-        .init(id: "hewhlehwl1hcx", rank: 10, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Brownie Batter", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.benjerry.com/files/live/sites/systemsite/files/US%20and%20Global%20Assets/Flavors/Product%20Assets/US/Chocolate%20Fudge%20Brownie%20Ice%20Cream/web_Tower_ChocolateFudgeBrownie_RGB_HR2_60M.png")),
-    ]
-    // Mock list that matches your model usage inside the view
-    static let mockList2 = RankoList(
-        id: "list_123",
-        listName: "My Favourite Ice Cream Flavours",
-        listDescription: "My current fave flavours — argue with your mum 😌",
-        type: "default",
-        categoryName: "Ice Cream",
-        categoryIcon: "snowflake",
-        categoryColour: 0xFFFFFF,
-        isPrivate: "Public",
-        userCreator: "user_abc123",
-        timeCreated: "20250822165913",
-        timeUpdated: "20250822165913",
-        items: mockItems2
-    )
-    
-    var body: some View {
-        LazyVStack(alignment: .leading, spacing: 16) {
-            if presentFakeRankos {
-                DefaultListHomeView(
-                    listData: HomeListsDisplay.mockList1,
-                    onCommentTap: { msg in
-                        print("Comment tapped with message: \(msg)")
-                    }
-                )
-                DefaultListHomeView(
-                    listData: HomeListsDisplay.mockList2,
-                    onCommentTap: { msg in
-                        print("Comment tapped with message: \(msg)")
-                    }
-                )
-            }
-            if isLoading {
-                ForEach(0..<4, id: \.self) { _ in
-                    HomeListSkeletonViewRow()
-                }
-            } else if let errorMessage = errorMessage {
-                Text("❌ Error: \(errorMessage)")
-                    .foregroundColor(.red)
-                    .padding()
-            } else {
-                ForEach(lists, id: \.id) { list in
-                    if list.type == "group" {
-                        GroupListHomeView(listData: list, showToastHelper: { msg in
-                            showToastHelper(msg)
-                        })
-                        .onTapGesture {
-                            selectedList = list
-                        }
-                    } else {
-                        DefaultListHomeView(listData: list, onCommentTap: { msg in
-                            showToastHelper(msg)
-                        }
-                        )
-                        .onTapGesture {
-                            selectedList = list
-                        }
-                    }
-                }
-            }
-        }
-        .padding(.top, 10)
-        .padding(.bottom, 60)
-//        .fullScreenCover(item: $selectedList) { list in
-//            if list.type == "default" {
-//                DefaultListVote(listID: list.id, creatorID: list.userCreator)
-//            } else if list.type == "group" {
-//                GroupListSpectate(listID: list.id, creatorID: list.userCreator)
-//            }
-//        }
-        .padding(.leading)
-        .onAppear {
-            loadAllData()
-        }
-    }
-    
-    private func loadAllData(attempt: Int = 1) {
-        isLoading = true
-        errorMessage = nil
-        
-        let rankoDataRef = Database.database().reference().child("RankoData")
-        
-        rankoDataRef.observeSingleEvent(of: .value, with: { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                self.errorMessage = "❌ No data found."
-                self.isLoading = false
-                return
-            }
-            
-            var fetchedLists: [RankoList] = []
-            
-            for (objectID, listData) in value {
-                guard let listDict = listData as? [String: Any],
-                      let name = listDict["RankoName"] as? String,
-                      let description = listDict["RankoDescription"] as? String,
-                      let category = listDict["RankoCategory"] as? String,
-                      let type = listDict["RankoType"] as? String,
-                      let isPrivate = listDict["RankoPrivacy"] as? Bool,
-                      let userID = listDict["RankoUserID"] as? String,
-                      let dateTimeStr = listDict["RankoDateTime"] as? String,
-                      let itemsDict = listDict["RankoItems"] as? [String: [String: Any]] else {
-                    continue
-                }
-                
-                let items: [RankoItem] = itemsDict.compactMap { itemID, item in
-                    guard let itemName = item["ItemName"] as? String,
-                          let itemDesc = item["ItemDescription"] as? String,
-                          let itemImage = item["ItemImage"] as? String else {
-                        return nil
-                    }
-                    
-                    let rank = item["ItemRank"] as? Int ?? 0
-                    let votes = item["ItemVotes"] as? Int ?? 0
-                    
-                    let record = RankoRecord(
-                        objectID: itemID,
-                        ItemName: itemName,
-                        ItemDescription: itemDesc,
-                        ItemCategory: category,
-                        ItemImage: itemImage
-                    )
-                    
-                    return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
-                }
-                
-                let rankoList = RankoList(
-                    id: objectID,
-                    listName: name,
-                    listDescription: description,
-                    type: type,
-                    categoryName: "Albums",
-                    categoryIcon: "circle.circle",
-                    categoryColour: 0xFFFFFF,
-                    isPrivate: isPrivate ? "Private" : "Public",
-                    userCreator: userID,
-                    timeCreated: dateTimeStr,
-                    timeUpdated: dateTimeStr,
-                    items: items
-                )
-                
-                fetchedLists.append(rankoList)
-            }
-            
-            DispatchQueue.main.async {
-                self.lists = fetchedLists
-                self.isLoading = false
-            }
-        })
-    }
-}
-
 struct GroupListHomeView: View {
     let listData: RankoList
     var showToastHelper: (String) -> Void
+    var showRankoHelper: (RankoList) -> Void
+    var showProfileHelper: (String) -> Void
     
     private var adjustedItems: [RankoItem] {
         listData.items.map { item in
@@ -1497,9 +1262,9 @@ struct GroupListHomeView: View {
             listName: listData.listName,
             listDescription: listData.listDescription,
             type: listData.type,
-            categoryName: "Albums",
-            categoryIcon: "circle.circle",
-            categoryColour: 0xFFFFFF,
+            categoryName: listData.categoryName,
+            categoryIcon: listData.categoryIcon,
+            categoryColour: listData.categoryColour,
             isPrivate: listData.isPrivate,
             userCreator: listData.userCreator,
             timeCreated: listData.timeUpdated,
@@ -1507,6 +1272,10 @@ struct GroupListHomeView: View {
             items: adjustedItems
         ), onCommentTap: { msg in
             showToastHelper(msg)
+        }, onRankoTap: { _ in
+            showRankoHelper(listData)
+        }, onProfileTap: { _ in
+            showProfileHelper(listData.userCreator)
         })
     }
 }

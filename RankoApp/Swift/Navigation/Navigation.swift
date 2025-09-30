@@ -1673,6 +1673,7 @@ struct CurvedTabBarView: View {
                                 }
                             }
                         }
+                        .zIndex(3)
                     }
                 }
             }

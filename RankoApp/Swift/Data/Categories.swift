@@ -454,19 +454,28 @@ struct HomeCategoryBadge: View {
 }
 
 struct HomeCategoryBadge1: View {
-    let text: String
+    let name: String
+    let colour: UInt   // 0xRRGGBB (or any UInt); we'll mask it
+    let icon: String
+
+    private var color: Color {
+        // defensively mask to 24-bit just in case
+        let rgb = UInt(colour & 0x00FF_FFFF)
+        return Color(hex: rgb).opacity(0.6)
+    }
+
     var body: some View {
         Circle()
-            .foregroundColor(categoryChipIconColors[text]?.opacity(0.6))
+            .fill(color)
             .frame(width: 32, height: 32)
             .overlay(
-                Image(systemName: FilterChip.icon(named: text, in: defaultFilterChips) ?? "circle.fill")
+                Image(systemName: icon.isEmpty ? "circle.fill" : icon)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: 16, maxHeight: 16)
                     .fontWeight(.black)
                     .foregroundColor(Color(hex: 0xFFFFFF))
             )
-            
+            .accessibilityLabel(Text(name))
     }
 }

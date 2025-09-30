@@ -946,7 +946,11 @@ struct DefaultListExploreView: View {
                     Rectangle()
                         .fill(Color.clear)
                         .frame(width: 42)
-                    HomeCategoryBadge1(text: listData.categoryName)
+                    HomeCategoryBadge1(
+                        name: listData.categoryName,
+                        colour: listData.categoryColour,   // UInt from Firebase
+                        icon: listData.categoryIcon        // SF Symbol name from Firebase
+                    )
                 }
                 
                 HStack(spacing: 4) {
