@@ -70,7 +70,6 @@ struct DefaultListPersonal: View {
     @State var showDeleteAlert = false
     @State var showLeaveAlert = false
     
-    @State private var activeTab: DefaultListPersonalTab = .addItems
     @State private var selectedRankoItems: [RankoItem] = []
     @State private var selectedItem: RankoItem? = nil
     @State private var itemToEdit: RankoItem? = nil
@@ -354,7 +353,7 @@ struct DefaultListPersonal: View {
                                     }
                                     .id(imageReloadToken)
                                     .padding(.top, 25)
-                                    .padding(.bottom, 80)
+                                    .padding(.bottom, 120)
                                     .padding(.horizontal)
                                 }
                             }
@@ -1174,61 +1173,71 @@ struct DefaultListPersonal: View {
         let ref = Database.database().reference()
             .child("RankoData")
             .child(listID)
-        
+
+        func intFromAny(_ any: Any?) -> Int? {
+            if let n = any as? NSNumber { return n.intValue }
+            if let s = any as? String { return Int(s) }
+            return nil
+        }
+
         func parseColour(_ any: Any?) -> Int {
-            // numbers coming from Firebase (Int/Double)
-            if let n = any as? NSNumber {
-                return n.intValue
-            }
-            // strings: "16776960", "#FFCC00", "0xFFCC00", "FFCC00"
+            if let n = any as? NSNumber { return n.intValue }
             if let s = any as? String {
                 let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
                 // try decimal first
                 if let dec = Int(trimmed) { return dec }
-                // strip prefixes for hex
+                // try hex forms: "#FFCC00", "0xFFCC00", "FFCC00"
                 var hex = trimmed.lowercased()
                 if hex.hasPrefix("#") { hex.removeFirst() }
                 if hex.hasPrefix("0x") { hex.removeFirst(2) }
                 if let hx = Int(hex, radix: 16) { return hx }
             }
-            // fallback
             return 0xFFFFFF
         }
 
-        ref.observeSingleEvent(of: .value, with: { snap in
-            guard let dict = snap.value as? [String: Any] else {
-                return
-            }
+        ref.observeSingleEvent(of: .value) { snap in
+            guard let dict = snap.value as? [String: Any] else { return }
 
             // Core fields
             guard
                 let name = dict["RankoName"] as? String,
-                let des = dict["RankoDescription"] as? String,
+                let des  = dict["RankoDescription"] as? String,
                 let type = dict["RankoType"] as? String,
                 let isPriv = dict["RankoPrivacy"] as? Bool,
-                let userID = dict["RankoUserID"] as? String,
-                let dateTimeStr = dict["RankoDateTime"] as? String
-            else {
-                return
-            }
-            
-            var catName = "Unknown"
-            var catIcon = "circle"
-            var catColourInt = 0x446D7A
+                let userID = dict["RankoUserID"] as? String
+            else { return }
 
-            // Category (nested)
+            // RankoDateTime is now an object: { RankoCreated, RankoUpdated }
+            var dateTimeStr: String = ""
+            if let dt = dict["RankoDateTime"] as? [String: Any] {
+                // prefer Updated, fall back to Created
+                let updated = dt["RankoUpdated"] as? String
+                let created = dt["RankoCreated"] as? String
+                dateTimeStr = updated ?? created ?? ""
+            } else if let s = dict["RankoDateTime"] as? String {
+                // backwards-compat (old shape)
+                dateTimeStr = s
+            }
+
+            // Category (nested object)
+            var catName  = "Unknown"
+            var catIcon  = "circle"
+            var catColourInt = 0x446D7A
             if let cat = dict["RankoCategory"] as? [String: Any] {
-                catName  = (cat["name"] as? String) ?? ""
-                catIcon  = (cat["icon"] as? String) ?? ""
+                catName  = (cat["name"] as? String) ?? catName
+                catIcon  = (cat["icon"] as? String) ?? catIcon
                 catColourInt = parseColour(cat["colour"])
+            } else if let catStr = dict["RankoCategory"] as? String {
+                // backwards-compat if old lists stored just a name
+                catName = catStr
             }
 
             // Items
             let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
             let items: [RankoItem] = itemsDict.compactMap { itemID, item in
                 guard
-                    let itemName = item["ItemName"] as? String,
-                    let itemDesc = item["ItemDescription"] as? String,
+                    let itemName  = item["ItemName"] as? String,
+                    let itemDesc  = item["ItemDescription"] as? String,
                     let itemImage = item["ItemImage"] as? String
                 else { return nil }
 
@@ -1239,35 +1248,31 @@ struct DefaultListPersonal: View {
                     objectID: itemID,
                     ItemName: itemName,
                     ItemDescription: itemDesc,
-                    ItemCategory: "category",  // replace if you store real per-item category
+                    ItemCategory: "",          // fill if you ever store per-item category
                     ItemImage: itemImage
                 )
                 return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
             }
 
-            let list = RankoList(
-                id: listID,
-                listName: name,
-                listDescription: des,
-                type: type,
-                categoryName: catName,
-                categoryIcon: catIcon,
-                categoryColour: UInt(catColourInt),
-                isPrivate: isPriv ? "Private" : "Public",
-                userCreator: userID,
-                dateTime: dateTimeStr,
-                items: items
-            )
-            
-            rankoName = list.listName
-            description = list.listDescription
-            isPrivate = list.isPrivate == "Private"
-            categoryName = list.categoryName
-            categoryIcon = list.categoryIcon
-            categoryColour = list.categoryColour
-            selectedRankoItems = items.sorted(by: { $0.rank < $1.rank })
-        })
+            // map to your local state types
+            rankoName = name
+            description = des
+            isPrivate = isPriv
+            categoryName = catName
+            categoryIcon = catIcon
+
+            // clamp colour to 24-bit and convert to UInt safely
+            let masked = catColourInt & 0x00FFFFFF
+            categoryColour = UInt(clamping: masked)
+
+            selectedRankoItems = items.sorted { $0.rank < $1.rank }
+            // if you also store/need type, user, date:
+            // self.type = type
+            // self.userCreator = userID
+            // self.dateTime = dateTimeStr
+        }
     }
+
 
     // Helper to safely coerce Firebase numbers/strings into Int
     private func intFromAny(_ any: Any?) -> Int? {
@@ -1490,850 +1495,6 @@ struct DefaultListPersonal: View {
                 completion(false)
             }
         }
-    }
-}
-
-struct DefaultListPersonal2: View {
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var user_data = UserInformation.shared
-
-    // Required property
-    let listID: String
-
-    // Optional editable properties with defaults
-    @State private var rankoName: String = ""
-    @State private var description: String = ""
-    @State private var isPrivate: Bool = false
-    @State private var category: SampleCategoryChip? = nil
-    @State private var categoryID: String = ""
-    @State private var categoryName: String = ""
-    @State private var categoryIcon: String? = nil
-
-    // Original values (to revert if needed)
-    @State private var originalRankoName: String = ""
-    @State private var originalDescription: String = ""
-    @State private var originalIsPrivate: Bool = false
-    @State private var originalCategory: SampleCategoryChip? = nil
-
-    // Sheets & states
-    @State private var showTabBar = true
-    @State private var tabBarPresent = false
-    @State private var possiblyEdited = false
-    @State var showEditDetailsSheet = false
-    @State var showAddItemsSheet = false
-    @State var showReorderSheet = false
-    @State var showEditItemSheet = false
-    @State var showExitSheet = false
-    @State private var showDeleteAlert = false
-    @State private var showLeaveAlert = false
-
-    @State private var activeTab: DefaultListPersonalTab = .addItems
-    @State private var selectedRankoItems: [RankoItem] = []
-    @State private var selectedItem: RankoItem? = nil
-    @State private var itemToEdit: RankoItem? = nil
-    @State private var onSave: ((RankoItem) -> Void)? = nil
-    private let onDelete: (() -> Void)?
-
-    enum TabType { case edit, add, reorder }
-
-    // MARK: - Init now only requires listID
-    init(
-        listID: String,
-        rankoName: String? = nil,
-        description: String? = nil,
-        isPrivate: Bool? = nil,
-        category: SampleCategoryChip? = nil,
-        selectedRankoItems: [RankoItem] = [],
-        onSave: ((RankoItem) -> Void)? = nil,
-        onDelete: (() -> Void)? = nil
-    ) {
-        self.listID = listID
-        self.onDelete = onDelete
-        _rankoName = State(initialValue: rankoName ?? "")
-        _description = State(initialValue: description ?? "")
-        _isPrivate = State(initialValue: isPrivate ?? false)
-        _category = State(initialValue: category)
-        _selectedRankoItems = State(initialValue: selectedRankoItems)
-        _onSave = State(initialValue: onSave)
-
-        _originalRankoName = State(initialValue: rankoName ?? "")
-        _originalDescription = State(initialValue: description ?? "")
-        _originalIsPrivate = State(initialValue: isPrivate ?? false)
-        _originalCategory = State(initialValue: category)
-    }
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            Color(hex: 0xFFF5E1).ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 7) {
-                    HStack {
-                        VStack(spacing: 7) {
-                            HStack {
-                                Text(rankoName)
-                                    .font(.system(size: 28, weight: .black, design: .default))
-                                    .foregroundColor(Color(hex: 0x6D400F))
-                                Spacer()
-                            }
-                            .padding(.top, 20)
-                            .padding(.leading, 20)
-                            
-                            HStack {
-                                Text(description.isEmpty ? "No description yet…" : description)
-                                    .lineLimit(3)
-                                    .font(.system(size: 12, weight: .bold, design: .default))
-                                    .foregroundColor(Color(hex: 0x925611))
-                                Spacer()
-                            }
-                            .padding(.top, 5)
-                            .padding(.leading, 20)
-                        }
-                        Spacer(minLength: 0)
-                        Button {
-                            if possiblyEdited {
-                                showLeaveAlert = true
-                            } else {
-                                showTabBar = false
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                                    dismiss()
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 28, weight: .heavy, design: .default))
-                                .padding(.vertical, 6)
-                        }
-                        .foregroundColor(Color(hex: 0x6D400F))
-                        .tint(Color(hex: 0xFFF9EE))
-                        .buttonStyle(.glassProminent)
-                        .padding(.trailing, 30)
-                    }
-                    .alert(isPresented: $showLeaveAlert) {
-                        CustomDialog(
-                            title: "Leave Without Saving?",
-                            content: "Are you sure you want to leave your Ranko without saving? All your changes will be lost.",
-                            image: .init(
-                                content: "figure.walk.departure",
-                                background: .orange,
-                                foreground: .white
-                            ),
-                            button1: .init(
-                                content: "Leave",
-                                background: .orange,
-                                foreground: .white,
-                                action: { _ in
-                                    showLeaveAlert = false
-                                    showTabBar = false
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                                        dismiss()
-                                    }
-                                }
-                            ),
-                            button2: .init(
-                                content: "Cancel",
-                                background: .red,
-                                foreground: .white,
-                                action: { _ in
-                                    showLeaveAlert = false
-                                    showTabBar = false
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                                        showTabBar = true
-                                    }
-                                }
-                            )
-                        )
-                        .transition(.blurReplace.combined(with: .push(from: .bottom)))
-                    } background: {
-                        Rectangle()
-                            .fill(.primary.opacity(0.35))
-                    }
-                    
-                    HStack(spacing: 8) {
-                        HStack(spacing: 4) {
-                            Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
-                                .font(.system(size: 12, weight: .bold, design: .default))
-                                .foregroundColor(.white)
-                                .padding(.leading, 10)
-                            Text(isPrivate ? "Private" : "Public")
-                                .font(.system(size: 12, weight: .bold, design: .default))
-                                .foregroundColor(.white)
-                                .padding(.trailing, 10)
-                                .padding(.vertical, 8)
-                        }
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(hex: 0xF2AB69))
-                        )
-                        
-                        if let cat = category {
-                            HStack(spacing: 4) {
-                                Image(systemName: cat.icon)
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                    .padding(.leading, 10)
-                                Text(cat.name)
-                                    .font(.system(size: 12, weight: .bold, design: .default))
-                                    .foregroundColor(.white)
-                                    .padding(.trailing, 10)
-                                    .padding(.vertical, 8)
-                                
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(categoryChipIconColors[cat.name] ?? .gray)
-                                    .opacity(0.6)
-                            )
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding(.top, 5)
-                    .padding(.leading, 20)
-                }
-                .padding(.bottom, 5)
-                
-                VStack {
-                    ScrollView {
-                        ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
-                            DefaultListItemRow(item: item)
-                                .onTapGesture {
-                                    showTabBar = false
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                                        selectedItem = item
-                                    }
-                                }
-                                .contextMenu {
-                                    Button(action: {
-                                        itemToEdit = item
-                                    }) {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
-                                    .foregroundColor(.orange)
-                                    
-                                    Divider()
-                                    
-                                    Button(action: { moveToTop(item) }) {
-                                        Label("Move to Top", systemImage: "arrow.up.to.line.compact")
-                                    }
-                                    
-                                    Button(action: { moveToBottom(item) }) {
-                                        Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
-                                    }
-                                    
-                                    Divider()
-                                    
-                                    Button(role: .destructive) {
-                                        delete(item)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                                .sheet(isPresented: $showEditItemSheet) {
-                                    // Determine which item is centered
-                                    EditItemView(
-                                        item: item,
-                                        listID: listID
-                                    ) { newName, newDesc in
-                                        // build updated record & item
-                                        let rec = item.record
-                                        let updatedRecord = RankoRecord(
-                                            objectID: rec.objectID,
-                                            ItemName: newName,
-                                            ItemDescription: newDesc,
-                                            ItemCategory: "",
-                                            ItemImage: rec.ItemImage
-                                        )
-                                        let updatedItem = RankoItem(
-                                            id: item.id,
-                                            rank: item.rank,
-                                            votes: item.votes,
-                                            record: updatedRecord
-                                        )
-                                        // callback to parent
-                                        onSave!(updatedItem)
-                                    }
-                                }
-                        }
-                        .padding(.top, 5)
-                        .padding(.bottom, 70)
-                    }
-                    Spacer()
-                }
-            }
-            
-            VStack {
-                Spacer()
-                Rectangle()
-                    .frame(height: 90)
-                    .foregroundColor(tabBarPresent ? Color(hex: 0xFFEBC2) : .white)
-                    .blur(radius: 23)
-                    .opacity(tabBarPresent ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.4), value: tabBarPresent) // ✅ Fast fade animation
-                    .ignoresSafeArea()
-            }
-            .ignoresSafeArea()
-            
-        }
-        .onAppear {
-            loadListFromFirebase()
-        }
-        .sheet(isPresented: $showAddItemsSheet) {
-            FilterChipPickerView(
-                selectedRankoItems: $selectedRankoItems
-            )
-        }
-        .sheet(isPresented: $showEditDetailsSheet) {
-            DefaultListEditDetails(
-                rankoName: rankoName,
-                description: description,
-                isPrivate: isPrivate,
-                category: category
-            ) { newName, newDescription, newPrivate, newCategory in
-                possiblyEdited = true
-                rankoName    = newName
-                description  = newDescription
-                isPrivate    = newPrivate
-                category     = newCategory
-            }
-        }
-        .sheet(isPresented: $showReorderSheet) {
-            DefaultListReRank(
-                items: selectedRankoItems,
-                onSave: { newOrder in
-                    selectedRankoItems = newOrder
-                    possiblyEdited = true
-                }
-            )
-        }
-        .sheet(isPresented: $showExitSheet) {
-            DefaultListPersonalExit(
-                onSave: {
-                    updateListInAlgolia(
-                        listID: listID,
-                        newName: rankoName,
-                        newDescription: description,
-                        newCategory: category!.name,
-                        isPrivate: isPrivate
-                    ) { success in
-                        if success {
-                            print("🎉 Fields updated in Algolia")
-                        } else {
-                            print("⚠️ Failed to update fields")
-                        }
-                    }
-                    updateListInFirebase()
-                    dismiss()
-                },
-                onLeave: {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                        dismiss()   // dismiss DefaultListView without saving
-                    }
-                },
-                onDelete: {
-                    showTabBar = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                        showDeleteAlert = true
-                    }
-                }
-            )
-        }
-        .alert(isPresented: $showDeleteAlert) {
-            CustomDialog(
-                title: "Delete Ranko?",
-                content: "Are you sure you want to delete your Ranko.",
-                image: .init(
-                    content: "trash.fill",
-                    background: .red,
-                    foreground: .white
-                ),
-                button1: .init(
-                    content: "Delete",
-                    background: .red,
-                    foreground: .white,
-                    action: { _ in
-                        showDeleteAlert = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                            removeFeaturedRanko(listID: listID) { success in}
-                            deleteRanko() { success in
-                                if success {
-                                    print("🎉 Fields updated in Algolia")
-                                } else {
-                                    print("⚠️ Failed to update fields")
-                                }
-                            }
-                            onDelete!()
-                            dismiss()
-                        }
-                    }
-                ),
-                button2: .init(
-                    content: "Cancel",
-                    background: .orange,
-                    foreground: .white,
-                    action: { _ in
-                        showDeleteAlert = false
-                        showTabBar = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                            showTabBar = true
-                        }
-                    }
-                )
-            )
-            .transition(.blurReplace.combined(with: .push(from: .bottom)))
-        } background: {
-            Rectangle()
-                .fill(.primary.opacity(0.35))
-        }
-        .sheet(item: $selectedItem) { tapped in
-            ItemDetailView(
-                items: selectedRankoItems,
-                initialItem: tapped,
-                listID: listID
-            ) { updated in
-                // replace the old item with the updated one
-                if let idx = selectedRankoItems.firstIndex(where: { $0.id == updated.id }) {
-                    selectedRankoItems[idx] = updated
-                }
-            }
-        }
-        .sheet(isPresented: $showTabBar) {
-            VStack {
-                HStack(spacing: 0) {
-                    ForEach(DefaultListPersonalTab.visibleCases, id: \.rawValue) { tab in
-                        VStack(spacing: 6) {
-                            Image(systemName: tab.symbolImage)
-                                .font(.title3)
-                                .symbolVariant(.fill)
-                                .frame(height: 28)
-                            
-                            Text(tab.rawValue)
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                        }
-                        .foregroundStyle(Color(hex: 0x925610))
-                        .frame(maxWidth: .infinity)
-                        .contentShape(.rect)
-                        .onTapGesture {
-                            activeTab = tab
-                            switch tab {
-                            case .addItems:
-                                showAddItemsSheet = true
-                                possiblyEdited = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
-                            case .editDetails:
-                                showEditDetailsSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
-                            case .reRank:
-                                showReorderSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
-                            case .exit:
-                                showExitSheet = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    tabBarPresent = false
-                                }
-                            case .empty:
-                                dismiss()
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-            .interactiveDismissDisabled(true)
-            .presentationDetents([.height(80)])
-            .presentationBackground((Color(hex: 0xfff9ee)))
-            .presentationBackgroundInteraction(.enabled)
-            .onAppear {
-                tabBarPresent = false      // Start from invisible
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        tabBarPresent = true
-                    }
-                }
-            }
-            .onDisappear {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    tabBarPresent = false
-                }
-            }
-        }
-    }
-    
-    private func loadListFromFirebase() {
-        let db = Database.database().reference()
-        let listRef = db.child("RankoData").child(listID)
-
-        listRef.observeSingleEvent(of: .value, with: { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                print("⚠️ No data at RankoData/\(listID)")
-                return
-            }
-
-            // map top-level
-            let rankoName   = data["RankoName"]        as? String ?? ""
-            let description = data["RankoDescription"] as? String ?? ""
-            let isPrivate   = data["RankoPrivacy"]     as? Bool   ?? false
-
-            // push to UI on main
-            DispatchQueue.main.async {
-                self.rankoName   = rankoName
-                self.description = description
-                self.isPrivate   = isPrivate
-            }
-
-            // --- CATEGORY LOOKUP ---
-            // Prefer an ID if present; otherwise fall back to the old name field.
-            let catID   = (data["RankoCategoryID"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let catName = (data["RankoCategory"]   as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if let id = catID, !id.isEmpty {
-                fetchCategoryByID(id) { cat in
-                    DispatchQueue.main.async {
-                        if let cat {
-                            // adapt to your model:
-                            // if you still have `self.category` (SampleCategoryChip?), construct it here.
-                            // Else store resolved bits:
-                            self.categoryID   = cat.id
-                            self.categoryName = cat.name
-                            self.categoryIcon = cat.icon
-                        } else {
-                            // fallback if id missing in DB
-                            self.categoryID   = id
-                            self.categoryName = catName ?? id
-                            self.categoryIcon = nil
-                        }
-                    }
-                }
-            } else if let name = catName, !name.isEmpty {
-                fetchCategoryByName(name) { cat in
-                    DispatchQueue.main.async {
-                        if let cat {
-                            self.categoryID   = cat.id
-                            self.categoryName = cat.name
-                            self.categoryIcon = cat.icon
-                        } else {
-                            // still show something
-                            self.categoryID   = ""
-                            self.categoryName = name
-                            self.categoryIcon = nil
-                        }
-                    }
-                }
-            } else {
-                print("⚠️ No category field present on RankoData/\(listID)")
-            }
-
-            // --- ITEMS ---
-            if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
-                var loaded: [RankoItem] = []
-
-                for (_, itemData) in itemsDict {
-                    guard
-                        let id    = itemData["ItemID"]          as? String,
-                        let name  = itemData["ItemName"]        as? String,
-                        let desc  = itemData["ItemDescription"] as? String,
-                        let image = itemData["ItemImage"]       as? String,
-                        let rank  = itemData["ItemRank"]        as? Int,
-                        let votes = itemData["ItemVotes"]       as? Int
-                    else { continue }
-
-                    let record = RankoRecord(
-                        objectID: id,
-                        ItemName: name,
-                        ItemDescription: desc,
-                        ItemCategory: "",   // populate if you store per-item cats
-                        ItemImage: image
-                    )
-
-                    loaded.append(RankoItem(id: id, rank: rank, votes: votes, record: record))
-                }
-
-                DispatchQueue.main.async {
-                    self.selectedRankoItems = loaded.sorted { $0.rank < $1.rank }
-                }
-            }
-
-        }, withCancel: { error in
-            print("❌ Firebase load error:", error.localizedDescription)
-        })
-    }
-    
-    
-    
-    private func fetchCategoryByID(_ id: String, completion: @escaping (SampleCategoryChip?) -> Void) {
-        let ref = Database.database().reference()
-            .child("AppData").child("CategoryData").child(id) // <- correct path
-
-        ref.observeSingleEvent(of: .value) { snap in
-            guard let dict = snap.value as? [String: Any] else {
-                completion(nil); return
-            }
-            let cd = SampleCategoryChip(
-                id: id,
-                name: dict["name"] as? String ?? id,
-                icon: (dict["icon"] as? String)!
-            )
-            completion(cd)
-        }
-    }
-
-    private func fetchCategoryByName(_ name: String, completion: @escaping (SampleCategoryChip?) -> Void) {
-        // scan CategoryData once; if your DB is large, consider caching
-        let ref = Database.database().reference()
-            .child("AppData").child("CategoryData")
-
-        ref.observeSingleEvent(of: .value) { snap in
-            guard let all = snap.value as? [String: [String: Any]] else {
-                completion(nil); return
-            }
-            // case-insensitive match on "name"
-            if let (id, dict) = all.first(where: { (_, v) in
-                (v["name"] as? String)?.caseInsensitiveCompare(name) == .orderedSame
-            }) {
-                let cd = SampleCategoryChip(
-                    id: id,
-                    name: (dict["name"] as? String) ?? name,
-                    icon: (dict["icon"] as? String)!
-                )
-                completion(cd)
-            } else {
-                completion(nil)
-            }
-        }
-    }
-    
-    // Item Helpers
-    private func delete(_ item: RankoItem) {
-        selectedRankoItems.removeAll { $0.id == item.id }
-        normalizeRanks()
-        possiblyEdited = true
-    }
-
-    private func moveToTop(_ item: RankoItem) {
-        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
-        let moved = selectedRankoItems.remove(at: idx)
-        selectedRankoItems.insert(moved, at: 0)
-        normalizeRanks()
-        possiblyEdited = true
-    }
-
-    private func moveToBottom(_ item: RankoItem) {
-        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
-        let moved = selectedRankoItems.remove(at: idx)
-        selectedRankoItems.append(moved)
-        normalizeRanks()
-        possiblyEdited = true
-    }
-
-    private func normalizeRanks() {
-        for index in selectedRankoItems.indices {
-            selectedRankoItems[index].rank = index + 1
-        }
-    }
-    
-    private func deleteRanko(completion: @escaping (Bool) -> Void
-    ) {
-        let db = Database.database().reference()
-        
-        let statusUpdate: [String: Any] = [
-            "RankoStatus": "deleted"
-        ]
-        
-        let listRef = db.child("RankoData").child(listID)
-        
-        // ✅ Update list fields
-        listRef.updateChildValues(statusUpdate) { error, _ in
-            if let err = error {
-                print("❌ Failed to update list fields: \(err.localizedDescription)")
-            } else {
-                print("✅ List fields updated successfully")
-            }
-        }
-        
-        let client = SearchClient(
-            appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-            apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
-        )
-        let index = client.index(withName: "RankoLists")
-
-        // ✅ Prepare partial updates
-        let updates: [(ObjectID, PartialUpdate)] = [
-            (ObjectID(rawValue: listID), .update(attribute: "RankoStatus", value: "deleted"))
-        ]
-
-        // ✅ Perform batch update in Algolia
-        index.partialUpdateObjects(updates: updates) { result in
-            switch result {
-            case .success(let response):
-                print("✅ Ranko list status updated successfully:", response)
-                completion(true)
-            case .failure(let error):
-                print("❌ Failed to update Ranko list status:", error.localizedDescription)
-                completion(false)
-            }
-        }
-    }
-    
-    func removeFeaturedRanko(listID: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
-            // No user; nothing to delete
-            completion(.success(()))
-            return
-        }
-
-        let featuredRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserRankos")
-            .child("UserFeaturedRankos")
-
-        // 1) Load all featured slots
-        featuredRef.getData { error, snapshot in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-
-            guard let snap = snapshot, snap.exists() else {
-                // No featured entries at all
-                completion(.success(()))
-                return
-            }
-
-            // 2) Find the slot whose value == listID
-            var didRemove = false
-            for case let child as DataSnapshot in snap.children {
-                if let value = child.value as? String, value == listID {
-                    didRemove = true
-                    // 3) Remove that child entirely
-                    featuredRef.child(child.key).removeValue { removeError, _ in
-                        if let removeError = removeError {
-                            completion(.failure(removeError))
-                        } else {
-                            // Optionally reload your local state here:
-                            // self.tryLoadFeaturedRankos()
-                            completion(.success(()))
-                        }
-                    }
-                    break
-                }
-            }
-
-            // 4) If no match was found, still report success
-            if !didRemove {
-                completion(.success(()))
-            }
-        }
-    }
-    
-    // MARK: - Firebase Update
-    private func updateListInFirebase() {
-        guard let category = category else { return }
-        
-        let db = Database.database().reference()
-        
-        // ✅ Prepare the top-level fields to update
-        let listUpdates: [String: Any] = [
-            "RankoName": rankoName,
-            "RankoDescription": description,
-            "RankoPrivacy": isPrivate,
-            "RankoCategory": category.name
-        ]
-        
-        let listRef = db.child("RankoData").child(listID)
-        
-        // ✅ Update list fields
-        listRef.updateChildValues(listUpdates) { error, _ in
-            if let err = error {
-                print("❌ Failed to update list fields: \(err.localizedDescription)")
-            } else {
-                print("✅ List fields updated successfully")
-            }
-        }
-        
-        // ✅ Prepare all RankoItems
-        var itemsUpdate: [String: Any] = [:]
-        for item in selectedRankoItems {
-            itemsUpdate[item.id] = [
-                "ItemID": item.id,
-                "ItemName": item.record.ItemName,
-                "ItemDescription": item.record.ItemDescription,
-                "ItemImage": item.record.ItemImage,
-                "ItemRank": item.rank,
-                "ItemVotes": item.votes
-            ]
-        }
-    }
-
-        // MARK: - Algolia Update
-    private func updateListInAlgolia(
-        listID: String,
-        newName: String,
-        newDescription: String,
-        newCategory: String,
-        isPrivate: Bool,
-        completion: @escaping (Bool) -> Void
-    ) {
-        let client = SearchClient(
-            appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-            apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
-        )
-        let index = client.index(withName: "RankoLists")
-
-        // ✅ Prepare partial updates
-        let updates: [(ObjectID, PartialUpdate)] = [
-            (ObjectID(rawValue: listID), .update(attribute: "RankoName", value: .string(newName))),
-            (ObjectID(rawValue: listID), .update(attribute: "RankoDescription", value: .string(newDescription))),
-            (ObjectID(rawValue: listID), .update(attribute: "RankoCategory", value: .string(newCategory))),
-            (ObjectID(rawValue: listID), .update(attribute: "RankoPrivacy", value: .bool(isPrivate)))
-        ]
-
-        // ✅ Perform batch update in Algolia
-        index.partialUpdateObjects(updates: updates) { result in
-            switch result {
-            case .success(let response):
-                print("✅ Ranko list fields updated successfully:", response)
-                completion(true)
-            case .failure(let error):
-                print("❌ Failed to update Ranko list fields:", error.localizedDescription)
-                completion(false)
-            }
-        }
-    }
-}
-
-enum DefaultListPersonalTab: String, CaseIterable {
-    case addItems = "Add Items"
-    case editDetails = "Edit Details"
-    case reRank = "Re-Rank"
-    case exit = "Exit"
-    case empty = "Empty"
-    
-    var symbolImage: String {
-        switch self {
-        case .addItems:
-            return "circle.grid.2x2"
-        case .editDetails:
-            return "square.text.square"
-        case .reRank:
-            return "rectangle.stack"
-        case .exit:
-            return "door.left.hand.closed"
-        case .empty:
-            return ""
-        }
-    }
-    
-    static var visibleCases: [DefaultListPersonalTab] {
-        return [.addItems, .editDetails, .reRank, .exit]
     }
 }
 
@@ -2562,7 +1723,7 @@ struct DefaultListPersonal_Previews: PreviewProvider {
             rankoName: "Top 10 Destinations",
             description: "Bucket-list travel spots around the world",
             isPrivate: false,
-            category: SampleCategoryChip(id: "", name: "Countries", icon: "globe.europe.africa.fill"),
+            category: SampleCategoryChip(id: "", name: "Countries", icon: "globe.europe.africa.fill", colour: "0xFFCF00"),
             selectedRankoItems: sampleItems
         ) { updatedItem in
             // no-op in preview

@@ -29,7 +29,7 @@ struct DefaultListIndividualGallery: View {
                     .multilineTextAlignment(.leading)
                 HStack(spacing: 6) {
                     FeaturedCategoryBadge(name: listData.categoryName, icon: listData.categoryIcon, colour: listData.categoryColour)
-                    Text("• \(timeAgo(from: String(listData.dateTime)))")
+                    Text("• \(timeAgo(from: String(listData.timeUpdated)))")
                         .font(.custom("Nunito-Black", size: 9))
                         .foregroundColor(Color(hex: 0x514343))
                 }
@@ -121,7 +121,8 @@ struct DefaultListIndividualGallery: View {
                     categoryColour: 0xFFFFFF,
                     isPrivate: "false",
                     userCreator: "",
-                    dateTime: "20230718094500",
+                    timeCreated: "20230718094500",
+                    timeUpdated: "20230718094500",
                     items: [
                         RankoItem(id: "", rank: 5, votes: 23, record:
                                     RankoRecord(

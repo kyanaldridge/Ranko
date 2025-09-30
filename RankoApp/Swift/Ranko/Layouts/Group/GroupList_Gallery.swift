@@ -131,7 +131,8 @@ struct GroupListGallery: View {
             categoryColour: 0xFFFFFF,
             isPrivate:        privacy ? "Private" : "Public",
             userCreator:      userCreator,
-            dateTime:         dateTime,
+            timeCreated: dateTime,
+            timeUpdated: dateTime,
             items:            sorted
         )
     }
@@ -162,7 +163,7 @@ struct GroupListIndividualGallery: View {
                     .multilineTextAlignment(.leading)
                 HStack(spacing: 6) {
                     FeaturedCategoryBadge(name: listData.categoryName, icon: listData.categoryIcon, colour: listData.categoryColour)
-                    Text("• \(timeAgo(from: String(listData.dateTime)))")
+                    Text("• \(timeAgo(from: String(listData.timeUpdated)))")
                         .font(.custom("Nunito-Black", size: 9))
                         .foregroundColor(Color(hex: 0x514343))
                 }

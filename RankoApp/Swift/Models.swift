@@ -116,8 +116,9 @@ struct RankoList: Identifiable, Codable {
     let categoryIcon: String
     let categoryColour: UInt
     let isPrivate: String          // e.g. "Private" / "Public"
-    let userCreator: String       // from "RankoUserID"
-    let dateTime: String          // from "RankoDateTime" e.g. "2024-04-06-17-42"
+    let userCreator: String          // from "RankoDateTime" e.g. "2024-04-06-17-42"
+    let timeCreated: String       // from "RankoUserID"
+    let timeUpdated: String
     var items: [RankoItem]
 }
 
@@ -164,7 +165,8 @@ struct RankoListAlgolia: Codable {
     let RankoStatus: String
     let RankoCategory: String
     let RankoUserID: String
-    let RankoDateTime: String
+    let RankoCreated: String
+    let RankoUpdated: String
     
     let RankoLikes: Int
     let RankoComments: Int

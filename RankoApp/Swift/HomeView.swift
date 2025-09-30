@@ -178,35 +178,78 @@ struct HomeView: View {
             .child("RankoData")
             .child(objectID)
 
+        func intFromAny(_ any: Any?) -> Int? {
+            if let n = any as? NSNumber { return n.intValue }
+            if let s = any as? String    { return Int(s) }
+            return nil
+        }
+
+        func parseColour(_ any: Any?) -> Int {
+            if let n = any as? NSNumber { return n.intValue }
+            if let s = any as? String {
+                let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                // try decimal first (e.g. "16776960")
+                if let dec = Int(trimmed) { return dec }
+                // try hex: "#FFCC00" / "0xFFCC00" / "FFCC00"
+                var hex = trimmed.lowercased()
+                if hex.hasPrefix("#")  { hex.removeFirst() }
+                if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                if let hx = Int(hex, radix: 16) { return hx }
+            }
+            return 0xFFFFFF
+        }
+
         ref.observeSingleEvent(of: .value, with: { snap in
             guard let dict = snap.value as? [String: Any] else {
-                completion(nil); return
+                DispatchQueue.main.async { completion(nil) }
+                return
             }
 
             // Core fields
             guard
-                let name = dict["RankoName"] as? String,
+                let name        = dict["RankoName"] as? String,
                 let description = dict["RankoDescription"] as? String,
-                let type = dict["RankoType"] as? String,
-                let isPrivate = dict["RankoPrivacy"] as? Bool,
-                let userID = dict["RankoUserID"] as? String,
-                let dateTimeStr = dict["RankoDateTime"] as? String
+                let type        = dict["RankoType"] as? String,
+                let isPrivBool  = dict["RankoPrivacy"] as? Bool,
+                let userID      = dict["RankoUserID"] as? String
             else {
-                completion(nil); return
+                DispatchQueue.main.async { completion(nil) }
+                return
             }
 
-            // Category (nested)
-            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
-            let catName  = (cat["name"] as? String) ?? ""
-            let catIcon  = (cat["icon"] as? String) ?? ""
-            let catColour = UInt(cat["colour"] as! String) ?? UInt(0xFFFFFF)  // store as Int; convert to your Color later
+            // RankoDateTime: { RankoCreated, RankoUpdated }  (fallback: single string)
+            var createdStr = ""
+            var updatedStr = ""
+            if let dt = dict["RankoDateTime"] as? [String: Any] {
+                createdStr = (dt["RankoCreated"] as? String) ?? ""
+                updatedStr = (dt["RankoUpdated"] as? String) ?? createdStr
+            } else if let s = dict["RankoDateTime"] as? String {
+                createdStr = s
+                updatedStr = s
+            }
+
+            // Category (object or legacy string)
+            var catName = "Unknown"
+            var catIcon = "circle"
+            var catColourUInt: UInt = 0x446D7A
+
+            if let cat = dict["RankoCategory"] as? [String: Any] {
+                catName = (cat["name"] as? String) ?? catName
+                catIcon = (cat["icon"] as? String) ?? catIcon
+                let colourInt = parseColour(cat["colour"])
+                let masked = colourInt & 0x00FF_FFFF
+                catColourUInt = UInt(clamping: masked)
+            } else if let catStr = dict["RankoCategory"] as? String {
+                // legacy: only name
+                catName = catStr
+            }
 
             // Items
             let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
             let items: [RankoItem] = itemsDict.compactMap { itemID, item in
                 guard
-                    let itemName = item["ItemName"] as? String,
-                    let itemDesc = item["ItemDescription"] as? String,
+                    let itemName  = item["ItemName"] as? String,
+                    let itemDesc  = item["ItemDescription"] as? String,
                     let itemImage = item["ItemImage"] as? String
                 else { return nil }
 
@@ -217,7 +260,7 @@ struct HomeView: View {
                     objectID: itemID,
                     ItemName: itemName,
                     ItemDescription: itemDesc,
-                    ItemCategory: "category",  // replace if you store real per-item category
+                    ItemCategory: "", // fill if you later store per-item category
                     ItemImage: itemImage
                 )
                 return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
@@ -230,14 +273,14 @@ struct HomeView: View {
                 type: type,
                 categoryName: catName,
                 categoryIcon: catIcon,
-                categoryColour: catColour,
-                isPrivate: isPrivate ? "Private" : "Public",
+                categoryColour: catColourUInt,
+                isPrivate: isPrivBool ? "Private" : "Public",
                 userCreator: userID,
-                dateTime: dateTimeStr,
-                items: items
+                timeCreated: createdStr,
+                timeUpdated: updatedStr,
+                items: items.sorted { $0.rank < $1.rank }
             )
 
-            // If UI code expects main thread:
             DispatchQueue.main.async { completion(list) }
         })
     }
@@ -289,7 +332,7 @@ struct HomeView: View {
 
             group.notify(queue: .main) {
                 // simple order: newest first by RankoDateTime
-                self.feedLists.append(contentsOf: newLists.sorted { $0.dateTime > $1.dateTime })
+                self.feedLists.append(contentsOf: newLists.sorted { $0.timeUpdated > $1.timeUpdated })
                 self.isFetchingBatch = false
                 self.isLoadingLists = false
             }
@@ -717,7 +760,7 @@ struct DefaultListHomeView: View {
                         Text("•")
                             .font(.custom("Nunito-Black", size: 11))
                             .foregroundColor(Color(hex: 0x818181))
-                        Text(timeAgo(from: String(listData.dateTime)))
+                        Text(timeAgo(from: String(listData.timeUpdated)))
                             .font(.custom("Nunito-Black", size: 11))
                             .foregroundColor(Color(hex: 0x818181))
                         Spacer()
@@ -1205,7 +1248,8 @@ struct DefaultListHomeView_Previews: PreviewProvider {
         categoryColour: 0xFFFFFF,
         isPrivate: "Public",
         userCreator: "2FOqyZfO5TNOdoJ0B3KrX99za1SLJ3",
-        dateTime: "20250815123045", // yyyyMMddHHmmss
+        timeCreated: "20250815123045",
+        timeUpdated: "20250815123045",
         items: mockItems
     )
 
@@ -1264,7 +1308,8 @@ struct HomeListsDisplay: View {
         categoryColour: 0xFFFFFF,
         isPrivate: "Public",
         userCreator: "user_abc123",
-        dateTime: "20250815123045", // yyyyMMddHHmmss
+        timeCreated: "20250815123045",
+        timeUpdated: "20250815123045",
         items: mockItems1
     )
     
@@ -1291,7 +1336,8 @@ struct HomeListsDisplay: View {
         categoryColour: 0xFFFFFF,
         isPrivate: "Public",
         userCreator: "user_abc123",
-        dateTime: "20250822165913", // yyyyMMddHHmmss
+        timeCreated: "20250822165913",
+        timeUpdated: "20250822165913",
         items: mockItems2
     )
     
@@ -1342,13 +1388,13 @@ struct HomeListsDisplay: View {
         }
         .padding(.top, 10)
         .padding(.bottom, 60)
-        .fullScreenCover(item: $selectedList) { list in
-            if list.type == "default" {
-                DefaultListVote(listID: list.id, creatorID: list.userCreator)
-            } else if list.type == "group" {
-                GroupListSpectate(listID: list.id, creatorID: list.userCreator)
-            }
-        }
+//        .fullScreenCover(item: $selectedList) { list in
+//            if list.type == "default" {
+//                DefaultListVote(listID: list.id, creatorID: list.userCreator)
+//            } else if list.type == "group" {
+//                GroupListSpectate(listID: list.id, creatorID: list.userCreator)
+//            }
+//        }
         .padding(.leading)
         .onAppear {
             loadAllData()
@@ -1414,7 +1460,8 @@ struct HomeListsDisplay: View {
                     categoryColour: 0xFFFFFF,
                     isPrivate: isPrivate ? "Private" : "Public",
                     userCreator: userID,
-                    dateTime: dateTimeStr,
+                    timeCreated: dateTimeStr,
+                    timeUpdated: dateTimeStr,
                     items: items
                 )
                 
@@ -1455,7 +1502,8 @@ struct GroupListHomeView: View {
             categoryColour: 0xFFFFFF,
             isPrivate: listData.isPrivate,
             userCreator: listData.userCreator,
-            dateTime: listData.dateTime,
+            timeCreated: listData.timeUpdated,
+            timeUpdated: listData.timeUpdated,
             items: adjustedItems
         ), onCommentTap: { msg in
             showToastHelper(msg)

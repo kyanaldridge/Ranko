@@ -1061,67 +1061,89 @@ struct ProfileView: View {
     }
     
     private func parseListData(dict: [String: Any], id: String) -> RankoList? {
+        // tolerant int parser
+        func intFromAny(_ any: Any?) -> Int? {
+            if let n = any as? NSNumber { return n.intValue }
+            if let s = any as? String   { return Int(s) }
+            return nil
+        }
+
+        // Core
         guard
-            let listName      = dict["RankoName"]        as? String,
-            let description   = dict["RankoDescription"] as? String,
-            let type          = dict["RankoType"]        as? String,
-            let privacy       = dict["RankoPrivacy"]     as? Bool,
-            let dateTime      = dict["RankoDateTime"]    as? String,
-            let userCreator   = dict["RankoUserID"]      as? String,
-            let itemsDict     = dict["RankoItems"]       as? [String: Any]
+            let listName    = dict["RankoName"]        as? String,
+            let description = dict["RankoDescription"] as? String,
+            let type        = dict["RankoType"]        as? String,
+            let privacy     = dict["RankoPrivacy"]     as? Bool,
+            let userCreator = dict["RankoUserID"]      as? String
         else { return nil }
 
-        let isPrivateString = privacy ? "Private" : "Public"
-        var rankoItems: [RankoItem] = []
+        // Date/time: new shape { RankoCreated, RankoUpdated } with legacy fallback
+        var timeCreated = ""
+        var timeUpdated = ""
+        if let dt = dict["RankoDateTime"] as? [String: Any] {
+            timeCreated = (dt["RankoCreated"] as? String) ?? ""
+            timeUpdated = (dt["RankoUpdated"] as? String) ?? timeCreated
+        } else if let s = dict["RankoDateTime"] as? String {
+            timeCreated = s
+            timeUpdated = s
+        }
 
-        for (_, value) in itemsDict {
+        // Items
+        let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
+        var rankoItems: [RankoItem] = []
+        for (keyID, itemDict) in itemsDict {
+            let itemID    = (itemDict["ItemID"] as? String) ?? keyID
             guard
-                let itemDict  = value as? [String: Any],
-                let itemID    = itemDict["ItemID"]          as? String,
                 let itemName  = itemDict["ItemName"]        as? String,
                 let itemDesc  = itemDict["ItemDescription"] as? String,
-                let itemImg   = itemDict["ItemImage"]       as? String,
-                let itemVotes = itemDict["ItemVotes"]       as? Int,
-                let itemRank  = itemDict["ItemRank"]        as? Int
+                let itemImg   = itemDict["ItemImage"]       as? String
             else { continue }
+
+            let itemRank  = intFromAny(itemDict["ItemRank"])  ?? 0
+            let itemVotes = intFromAny(itemDict["ItemVotes"]) ?? 0
 
             let record = RankoRecord(
                 objectID:        itemID,
                 ItemName:        itemName,
                 ItemDescription: itemDesc,
-                ItemCategory: "",
+                ItemCategory:    "",
                 ItemImage:       itemImg
             )
-            rankoItems.append(RankoItem(id: itemID,
-                                        rank: itemRank,
-                                        votes: itemVotes,
-                                        record: record))
+            rankoItems.append(
+                RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record)
+            )
         }
-
         rankoItems.sort { $0.rank < $1.rank }
-        
+
+        // Category
         var catName = "Unknown"
         var catIcon = "circle"
         var catColourInt = 0x446D7A
-
         if let cat = dict["RankoCategory"] as? [String: Any] {
-            catName = (cat["name"] as? String) ?? catName
-            catIcon = (cat["icon"] as? String) ?? catIcon
-            catColourInt = parseColour(cat["colour"])
+            catName      = (cat["name"] as? String) ?? catName
+            catIcon      = (cat["icon"] as? String) ?? catIcon
+            catColourInt = parseColour(cat["colour"])  // your existing helper
+        } else if let catStr = dict["RankoCategory"] as? String {
+            // legacy lists that stored just the name
+            catName = catStr
         }
 
+        // safe UInt conversion (mask to 24-bit to avoid sign issues)
+        let maskedColour = UInt(clamping: catColourInt & 0x00FF_FFFF)
+
         return RankoList(
-            id:               id,
-            listName:         listName,
-            listDescription:  description,
-            type:             type,
-            categoryName:     catName,
-            categoryIcon:     catIcon,
-            categoryColour:   UInt(catColourInt),
-            isPrivate:        isPrivateString,
-            userCreator:      userCreator,
-            dateTime:         dateTime,
-            items:            rankoItems
+            id:              id,
+            listName:        listName,
+            listDescription: description,
+            type:            type,
+            categoryName:    catName,
+            categoryIcon:    catIcon,
+            categoryColour:  maskedColour,
+            isPrivate:       privacy ? "Private" : "Public",
+            userCreator:     userCreator,
+            timeCreated:     timeCreated,
+            timeUpdated:     timeUpdated,
+            items:           rankoItems
         )
     }
     
@@ -2180,7 +2202,8 @@ struct ProfileView1: View {
             categoryColour: 0xFFFFFF,
             isPrivate:        isPrivateString,
             userCreator:      userCreator,
-            dateTime:         dateTime,
+            timeCreated: dateTime,
+            timeUpdated: dateTime,
             items:            rankoItems
         )
     }
@@ -2635,7 +2658,7 @@ struct SearchRankosView: View {
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 6) {
                         FeaturedCategoryBadge(name: listData.categoryName, icon: listData.categoryIcon, colour: listData.categoryColour)
-                        Text("• \(timeAgo(from: String(listData.dateTime)))")
+                        Text("• \(timeAgo(from: String(listData.timeUpdated)))")
                             .font(.custom("Nunito-Black", size: 9))
                             .foregroundColor(Color(hex: 0x514343))
                     }
@@ -2784,7 +2807,8 @@ struct SearchRankosView: View {
                         categoryColour: UInt(catColourInt),          // <- Int, consistent with your badge helper
                         isPrivate: isPrivateBool ? "Private" : "Public",
                         userCreator: userID,
-                        dateTime: dateTimeStr,
+                        timeCreated: dateTimeStr,
+                        timeUpdated: dateTimeStr,
                         items: []
                     )
 
@@ -2795,7 +2819,7 @@ struct SearchRankosView: View {
             }
 
             dispatchGroup.notify(queue: .main) {
-                self.allLists = fetchedLists.sorted { Int($0.dateTime) ?? 0 > Int($1.dateTime) ?? 0 }
+                self.allLists = fetchedLists.sorted { Int($0.timeUpdated) ?? 0 > Int($1.timeUpdated) ?? 0 }
                 self.isLoading = false
             }
         }
@@ -3041,7 +3065,34 @@ struct SelectFeaturedRankosView: View {
     
     private func fetchFromFirebase(using objectIDs: [String]) {
         let rankoDataRef = Database.database().reference().child("RankoData")
-        rankoDataRef.observeSingleEvent(of: .value) { snapshot, _ in
+
+        func intFromAny(_ any: Any?) -> Int? {
+            if let n = any as? NSNumber { return n.intValue }
+            if let s = any as? String    { return Int(s) }
+            return nil
+        }
+        func parseColour(_ any: Any?) -> UInt {
+            // supports: Int/Double/NSNumber and strings: "16776960", "#FFCC00", "0xFFCC00", "FFCC00"
+            if let n = any as? NSNumber {
+                return UInt(clamping: n.intValue & 0x00FF_FFFF)
+            }
+            if let s = any as? String {
+                let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(trimmed) {
+                    return UInt(clamping: dec & 0x00FF_FFFF)
+                }
+                var hex = trimmed
+                if hex.hasPrefix("#")  { hex.removeFirst() }
+                if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                if let hx = Int(hex, radix: 16) {
+                    return UInt(clamping: hx & 0x00FF_FFFF)
+                }
+            }
+            return 0x446D7A // sensible default
+        }
+
+        // ✅ use the 1-parameter closure; the 2-parameter variant causes compile issues in newer SDKs
+        rankoDataRef.observeSingleEvent(of: .value) { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
                 self.errorMessage = "❌ No data found in Firebase."
                 self.isLoading = false
@@ -3054,33 +3105,51 @@ struct SelectFeaturedRankosView: View {
                 guard let listData = value[objectID] as? [String: Any],
                       let name = listData["RankoName"] as? String,
                       let description = listData["RankoDescription"] as? String,
-                      let category = listData["RankoCategory"] as? String,
                       let type = listData["RankoType"] as? String,
                       let isPrivate = listData["RankoPrivacy"] as? Bool,
-                      let userID = listData["RankoUserID"] as? String,
-                      let dateTimeStr = listData["RankoDateTime"] as? String,
-                      let itemsDict = listData["RankoItems"] as? [String: [String: Any]] else {
-                    continue
+                      let userID = listData["RankoUserID"] as? String
+                else { continue }
+
+                // RankoDateTime { RankoCreated, RankoUpdated } with fallback
+                var timeCreated = ""
+                var timeUpdated = ""
+                if let dt = listData["RankoDateTime"] as? [String: Any] {
+                    timeCreated = (dt["RankoCreated"] as? String) ?? ""
+                    timeUpdated = (dt["RankoUpdated"] as? String) ?? timeCreated
+                } else if let s = listData["RankoDateTime"] as? String {
+                    timeCreated = s; timeUpdated = s
                 }
 
+                // Category object with fallback to legacy string
+                var catName = "Unknown"
+                var catIcon = "circle"
+                var catColour: UInt = 0x446D7A
+                if let cat = listData["RankoCategory"] as? [String: Any] {
+                    catName   = (cat["name"] as? String) ?? catName
+                    catIcon   = (cat["icon"] as? String) ?? catIcon
+                    catColour = parseColour(cat["colour"])
+                } else if let catStr = listData["RankoCategory"] as? String {
+                    catName = catStr
+                }
+
+                // Items
+                let itemsDict = listData["RankoItems"] as? [String: [String: Any]] ?? [:]
                 let items: [RankoItem] = itemsDict.compactMap { itemID, item in
-                    guard let itemName = item["ItemName"] as? String,
-                          let itemDesc = item["ItemDescription"] as? String,
+                    guard let itemName  = item["ItemName"] as? String,
+                          let itemDesc  = item["ItemDescription"] as? String,
                           let itemImage = item["ItemImage"] as? String else {
                         return nil
                     }
-
-                    let rank = item["ItemRank"] as? Int ?? 0
-                    let votes = item["ItemVotes"] as? Int ?? 0
+                    let rank  = intFromAny(item["ItemRank"])  ?? 0
+                    let votes = intFromAny(item["ItemVotes"]) ?? 0
 
                     let record = RankoRecord(
                         objectID: itemID,
                         ItemName: itemName,
                         ItemDescription: itemDesc,
-                        ItemCategory: category,
+                        ItemCategory: "", // or catName if you want to mirror the list's category
                         ItemImage: itemImage
                     )
-
                     return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
                 }
 
@@ -3089,13 +3158,14 @@ struct SelectFeaturedRankosView: View {
                     listName: name,
                     listDescription: description,
                     type: type,
-                    categoryName: "Albums",
-                    categoryIcon: "circle.circle",
-                    categoryColour: 0xFFFFFF,
+                    categoryName: catName,
+                    categoryIcon: catIcon,
+                    categoryColour: catColour,
                     isPrivate: isPrivate ? "Private" : "Public",
                     userCreator: userID,
-                    dateTime: dateTimeStr,
-                    items: items
+                    timeCreated: timeCreated,
+                    timeUpdated: timeUpdated,
+                    items: items.sorted { $0.rank < $1.rank }
                 )
 
                 fetchedLists.append(rankoList)
@@ -3107,6 +3177,7 @@ struct SelectFeaturedRankosView: View {
             }
         }
     }
+
 }
 
 struct SearchUsersView: View {
@@ -4193,21 +4264,6 @@ struct ProfileSpectateView: View {
                         }
                     }
                 }
-                .fullScreenCover(item: $selectedFeaturedList) { list in
-                    if list.type == "default" {
-                        DefaultListSpectate(
-                            listID: list.id,
-                            creatorID: list.userCreator,
-                            onClone: { cloned in
-                                // 1) store the clone payload
-                                pendingClone = cloned
-                                // 2) child will dismiss itself; we wait for dismissal to complete below
-                            }
-                        )
-                    } else if list.type == "group" {
-                        GroupListSpectate(listID: list.id, creatorID: list.userCreator)
-                    }
-                }
 //                .fullScreenCover(isPresented: $showClonedEditor, onDismiss: { pendingClone = nil }) {
 //                    if let clone = pendingClone {
 //                        DefaultListView(
@@ -4607,7 +4663,8 @@ struct ProfileSpectateView: View {
             categoryColour: 0xFFFFFF,
             isPrivate:        isPrivateString,
             userCreator:      userCreator,
-            dateTime:         dateTime,
+            timeCreated: dateTime,
+            timeUpdated: dateTime,
             items:            rankoItems
         )
     }

@@ -152,577 +152,586 @@ struct DefaultListView: View {
         _originalIsPrivate = State(initialValue: isPrivate)
         _originalCategory = State(initialValue: category)
     }
+    
+    private struct RankoToolbarTitleStack: View {
+        let name: String
+        let description: String
+        @Binding var isPrivate: Bool
+        let category: SampleCategoryChip?
+        let categoryColor: Color
+        @Binding var showEditDetailsSheet: Bool
+        var onTapPrivacy: (() -> Void)?
+        var onTapCategory: (() -> Void)?
 
-    var body: some View {
-        ZStack(alignment: .top) {
-            LinearGradient(colors: [Color(hex: 0x514343), Color(hex: 0x000000)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Color(hex: 0xFFFFFF)
-                .ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 6) {
-                    VStack(spacing: 6) {
-                        HStack {
-                            Text(rankoName)
-                                .font(.custom("Nunito-Black", size: 24))
-                                .foregroundStyle(Color(hex: 0x514343))
-                                .kerning(-0.4)
-                            Spacer()
-                        }
-                        .padding(.top, 20)
-                        .padding(.leading, 20)
-                        
-                        HStack {
-                            Text(description.isEmpty ? "No description yet…" : description)
-                                .lineLimit(3)
-                                .font(.custom("Nunito-Black", size: 13))
-                                .foregroundStyle(Color(hex: 0x514343))
-                            Spacer()
-                        }
-                        .padding(.top, 5)
-                        .padding(.leading, 20)
-                        
-                        HStack(spacing: 8) {
-                            HStack(spacing: 4) {
-                                Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
-                                    .font(.system(size: 12, weight: .bold, design: .default))
-                                    .foregroundColor(.white)
-                                    .padding(.leading, 10)
-                                Text(isPrivate ? "Private" : "Public")
-                                    .font(.custom("Nunito-Black", size: 12))
-                                    .foregroundColor(.white)
-                                    .padding(.trailing, 10)
-                                    .padding(.vertical, 8)
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(hex: 0xF2AB69))
-                            )
-                            
-                            if let cat = category {
-                                HStack(spacing: 4) {
-                                    Image(systemName: cat.icon)
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                        .padding(.leading, 10)
-                                    Text(cat.name)
-                                        .font(.custom("Nunito-Black", size: 12))
-                                        .foregroundColor(.white)
-                                        .padding(.trailing, 10)
-                                        .padding(.vertical, 8)
-                                    
-                                }
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(categoryChipIconColors[cat.name] ?? .gray)
-                                        .opacity(0.6)
-                                )
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding(.top, 5)
-                        .padding(.leading, 20)
-                    }
+        var body: some View {
+            VStack(spacing: 6) {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(height: 50)
+                // ranko name (top)
+                Text(name.isEmpty ? "untitled ranko" : name)
+                    .font(.custom("Nunito-Black", size: 18))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .contextMenu {
                         Button {
-                            
+                            showEditDetailsSheet = true
                         } label: {
                             Label("Edit Details", systemImage: "pencil")
                         }
-                        
-                        Divider()
-                        
-                        Button {
-                            
-                        } label: {
-                            Label("Re-Rank Items", systemImage: "chevron.up.chevron.down")
-                        }
-                        
-                        Divider()
-                        
-                        Button(role: .destructive) {
-                                Task {
-                                    // 1) best-effort: delete all personal images for this ranko
-                                    await deleteRankoPersonalFolderAsync(rankoID: listUUID)
-
-                                    // 2) TODO: remove from Realtime DB + Algolia if you also want that here
-                                    //    try? await deleteRankoFromFirebase(listUUID)
-                                    //    try? await deleteRankoFromAlgolia(listUUID)
-
-                                    // 3) dismiss view (or pop one level)
-                                    dismiss()
-                                }
-                            } label: {
-                                Label("Delete Ranko", systemImage: "trash")
-                            }
                     }
-                    
-                    ZStack(alignment: .bottom) {
-                        
-                        ScrollView {
-                            VStack {
-                                ScrollView {
-                                    Group {
-                                        ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
-                                            DefaultListItemRow(item: item)
-                                                .onTapGesture {
-                                                    selectedItem = item
-                                                }
-                                                .contextMenu {
-                                                    Button(action: {
-                                                        itemToEdit = item
-                                                    }) {
-                                                        Label("Edit", systemImage: "pencil")
-                                                    }
-                                                    .foregroundColor(.orange)
-                                                    
-                                                    Divider()
-                                                    
-                                                    Button(action: { moveToTop(item) }) {
-                                                        Label("Move to Top", systemImage: "arrow.up.to.line.compact")
-                                                    }
-                                                    
-                                                    Button(action: { moveToBottom(item) }) {
-                                                        Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
-                                                    }
-                                                    
-                                                    Divider()
-                                                    
-                                                    Button(role: .destructive) {
-                                                        delete(item)
-                                                    } label: {
-                                                        Label("Delete", systemImage: "trash")
-                                                    }
-                                                }
-                                                .sheet(isPresented: $showEditItemSheet) {
-                                                    // Determine which item is centered
-                                                    EditItemView(
-                                                        item: item,
-                                                        listID: listUUID
-                                                    ) { newName, newDesc in
-                                                        // build updated record & item
-                                                        let rec = item.record
-                                                        let updatedRecord = RankoRecord(
-                                                            objectID: rec.objectID,
-                                                            ItemName: newName,
-                                                            ItemDescription: newDesc,
-                                                            ItemCategory: "",
-                                                            ItemImage: rec.ItemImage
-                                                        )
-                                                        let updatedItem = RankoItem(
-                                                            id: item.id,
-                                                            rank: item.rank,
-                                                            votes: item.votes,
-                                                            record: updatedRecord
-                                                        )
-                                                        // callback to parent
-                                                        onSave(updatedItem)
-                                                    }
-                                                }
-                                        }
-                                    }
-                                    .id(imageReloadToken)
-                                    .padding(.top, 25)
-                                    .padding(.bottom, 80)
-                                    .padding(.horizontal)
-                                }
+
+                // description (middle)
+                Text(description.isEmpty ? "no description yet..." : description)
+                    .font(.custom("Nunito-Black", size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .transition(.opacity)
+                    .contextMenu {
+                        Button {
+                            showEditDetailsSheet = true
+                        } label: {
+                            Label("Edit Details", systemImage: "pencil")
+                        }
+                    }
+
+                // privacy + category (bottom)
+                HStack(spacing: 8) {
+                    Button {
+                        // prefer explicit callback; fallback to opening the sheet
+                        if let onTapPrivacy { onTapPrivacy() } else { showEditDetailsSheet = true }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
+                                .font(.system(size: 11, weight: .black))
+                            Text(isPrivate ? "Private" : "Public")
+                                .font(.custom("Nunito-Black", size: 11))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(hex: 0xF2AB69), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundStyle(.white)
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            showEditDetailsSheet = true
+                        } label: {
+                            Label("Edit Details", systemImage: "pencil")
+                        }
+                        Button {
+                            isPrivate.toggle()
+                        } label: {
+                            Label(isPrivate ? "Make Public" : "Make Private",
+                                  systemImage: isPrivate ? "globe.americas.fill" : "lock.fill")
+                        }
+                    }
+
+                    if let cat = category {
+                        Button {
+                            if let onTapCategory { onTapCategory() } else { showEditDetailsSheet = true }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: cat.icon)
+                                    .font(.system(size: 11, weight: .black))
+                                Text(cat.name)
+                                    .font(.custom("Nunito-Black", size: 11))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(categoryColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .foregroundStyle(.white)
+                            .contentShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                showEditDetailsSheet = true
+                            } label: {
+                                Label("Edit Details", systemImage: "pencil")
                             }
                         }
                     }
                 }
             }
-            VStack {
-                Spacer()
-                HStack {
-                    
-                    GlassEffectContainer(spacing: 45) {
-                        HStack(alignment: .bottom, spacing: 10) {
-                            VStack(spacing: -5) {
+            .multilineTextAlignment(.center)
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack(alignment: .top) {
+                LinearGradient(colors: [Color(hex: 0x514343), Color(hex: 0x000000)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Color(hex: 0xFFFFFF)
+                    .ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ZStack(alignment: .bottom) {
+                            ScrollView {
                                 VStack {
-                                    VStack(spacing: 5) {
-                                        if addButtonTapped {
-                                            ZStack {
-                                                Image(systemName: "xmark")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.black)
-                                                    .foregroundStyle(Color.clear)
-                                                    .offset(addButtonTranslation)
-                                                Image(systemName: "xmark")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.black)
-                                                    .foregroundStyle(Color(hex: 0x000000))
+                                    ScrollView {
+                                        Group {
+                                            ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
+                                                DefaultListItemRow(item: item)
+                                                    .onTapGesture {
+                                                        selectedItem = item
+                                                    }
+                                                    .contextMenu {
+                                                        Button(action: {
+                                                            itemToEdit = item
+                                                        }) {
+                                                            Label("Edit", systemImage: "pencil")
+                                                        }
+                                                        .foregroundColor(.orange)
+                                                        
+                                                        Divider()
+                                                        
+                                                        Button(action: { moveToTop(item) }) {
+                                                            Label("Move to Top", systemImage: "arrow.up.to.line.compact")
+                                                        }
+                                                        
+                                                        Button(action: { moveToBottom(item) }) {
+                                                            Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
+                                                        }
+                                                        
+                                                        Divider()
+                                                        
+                                                        Button(role: .destructive) {
+                                                            delete(item)
+                                                        } label: {
+                                                            Label("Delete", systemImage: "trash")
+                                                        }
+                                                    }
+                                                    .sheet(isPresented: $showEditItemSheet) {
+                                                        // Determine which item is centered
+                                                        EditItemView(
+                                                            item: item,
+                                                            listID: listUUID
+                                                        ) { newName, newDesc in
+                                                            // build updated record & item
+                                                            let rec = item.record
+                                                            let updatedRecord = RankoRecord(
+                                                                objectID: rec.objectID,
+                                                                ItemName: newName,
+                                                                ItemDescription: newDesc,
+                                                                ItemCategory: "",
+                                                                ItemImage: rec.ItemImage
+                                                            )
+                                                            let updatedItem = RankoItem(
+                                                                id: item.id,
+                                                                rank: item.rank,
+                                                                votes: item.votes,
+                                                                record: updatedRecord
+                                                            )
+                                                            // callback to parent
+                                                            onSave(updatedItem)
+                                                        }
+                                                    }
                                             }
-                                        } else {
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "plus.square.dashed")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.bold)
-                                                    .foregroundStyle(Color(hex: 0x000000))
+                                        }
+                                        .id(imageReloadToken)
+                                        .padding(.top, 25)
+                                        .padding(.bottom, 120)
+                                        .padding(.horizontal)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                VStack {
+                    Spacer()
+                    HStack {
+                        
+                        GlassEffectContainer(spacing: 45) {
+                            HStack(alignment: .bottom, spacing: 10) {
+                                VStack(spacing: -5) {
+                                    VStack {
+                                        VStack(spacing: 5) {
+                                            if addButtonTapped {
+                                                ZStack {
+                                                    Image(systemName: "xmark")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                        .fontWeight(.black)
+                                                        .foregroundStyle(Color.clear)
+                                                        .offset(addButtonTranslation)
+                                                    Image(systemName: "xmark")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                        .fontWeight(.black)
+                                                        .foregroundStyle(Color(hex: 0x000000))
+                                                }
+                                            } else {
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "plus.square.dashed")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                        .fontWeight(.bold)
+                                                        .foregroundStyle(Color(hex: 0x000000))
+                                                    
+                                                    Text("Add")
+                                                        .font(.custom("Nunito-Black", size: 11))
+                                                        .lineLimit(1)
+                                                        .minimumScaleFactor(0.7)
+                                                        .allowsTightening(true)
+                                                }
+                                            }
+                                        }
+                                        .frame(width: 60, height: 60)
+                                        .background(Color.black.opacity(0.001))
+                                        .contentShape(Circle())
+                                        // capture exit button frame
+                                        .background(
+                                            GeometryReader { gp in
+                                                Color.clear
+                                                    .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
+                                                    .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
+                                            }
+                                        )
+                                        .gesture(
+                                            LongPressGesture(minimumDuration: 0.01)
+                                                .onEnded { _ in
+                                                    if addButtonTapped {
+                                                        withAnimation { addButtonTapped = false }
+                                                    } else {
+                                                        withAnimation { addButtonTapped = true }
+                                                        addHoldButton = true
+                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { addHoldButton = false }
+                                                    }
+                                                }
+                                                .sequenced(before:
+                                                            DragGesture()
+                                                    .onChanged { value in
+                                                        guard addButtonTapped else { return }
+                                                        
+                                                        // ensure we have frames
+                                                        let hasFrames = addFrame != .zero && sampleFrame != .zero && blankFrame != .zero
+                                                        guard hasFrames else { return }
+                                                        
+                                                        // define origin/targets in the same space
+                                                        let origin = addFrame.center
+                                                        let sampleVec = sampleFrame.center - origin
+                                                        let blankVec  = blankFrame.center - origin
+                                                        let sampleLen = sampleVec.length
+                                                        let blankLen  = blankVec.length
+                                                        guard sampleLen > 1, blankLen > 1 else { return }
+                                                        
+                                                        // unit directions
+                                                        let uSample = sampleVec.normalized
+                                                        let uBlank  = blankVec.normalized
+                                                        
+                                                        // current drag as a vector
+                                                        let v = CGPoint(x: value.translation.width, y: value.translation.height)
+                                                        
+                                                        // projections onto each ray
+                                                        let pSample = v.dot(uSample)
+                                                        let pBlank  = v.dot(uBlank)
+                                                        
+                                                        // choose which ray we're moving along (favor positive progress)
+                                                        let chooseSample: Bool
+                                                        if pSample <= 0 && pBlank <= 0 {
+                                                            chooseSample = pSample >= pBlank // both negative: pick the "less negative"
+                                                        } else if pSample > 0 && pBlank <= 0 {
+                                                            chooseSample = true
+                                                        } else if pBlank > 0 && pSample <= 0 {
+                                                            chooseSample = false
+                                                        } else {
+                                                            chooseSample = pSample >= pBlank
+                                                        }
+                                                        
+                                                        // clamp progress along the chosen ray
+                                                        let rayU  = chooseSample ? uSample : uBlank
+                                                        let rayL  = chooseSample ? sampleLen : blankLen
+                                                        let proj  = (chooseSample ? pSample : pBlank).clamped(0, rayL)
+                                                        let snapped = rayU * proj
+                                                        
+                                                        // apply as translation
+                                                        addButtonTranslation = CGSize(width: snapped.x, height: snapped.y)
+                                                        
+                                                        // hover highlight near the end (70%+)
+                                                        let nearEnd = proj > (rayL * 0.7)
+                                                        sampleButtonHovered   = chooseSample && nearEnd
+                                                        blankButtonHovered = !chooseSample && nearEnd
+                                                    }
+                                                    .onEnded { _ in
+                                                        guard addButtonTapped else { return }
+                                                        
+                                                        // compute final progress to decide commit
+                                                        let origin = addFrame.center
+                                                        let sampleVec = sampleFrame.center - origin
+                                                        let blankVec  = blankFrame.center - origin
+                                                        let sampleLen = sampleVec.length
+                                                        let blankLen  = blankVec.length
+                                                        guard sampleLen > 1, blankLen > 1 else {
+                                                            withAnimation {
+                                                                addButtonTranslation = .zero
+                                                                sampleButtonHovered = false
+                                                                blankButtonHovered = false
+                                                                addButtonTapped = false
+                                                            }
+                                                            return
+                                                        }
+                                                        
+                                                        let current = CGPoint(x: addButtonTranslation.width, y: addButtonTranslation.height)
+                                                        let progressOnSample = current.dot(sampleVec.normalized) / sampleLen
+                                                        let progressOnBlank  = current.dot(blankVec.normalized)  / blankLen
+                                                        
+                                                        // commit threshold
+                                                        let threshold: CGFloat = 0.7
+                                                        
+                                                        if progressOnSample >= threshold {
+                                                            // commit Save
+                                                            showAddItemsSheet = true
+                                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                                                                addButtonTranslation = .zero
+                                                                sampleButtonHovered = false
+                                                                blankButtonHovered = false
+                                                                addButtonTapped = false
+                                                            }
+                                                        } else if progressOnBlank >= threshold {
+                                                            // commit Delete (your current action = dismiss)
+                                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                                                                addButtonTranslation = .zero
+                                                                sampleButtonHovered = false
+                                                                blankButtonHovered = false
+                                                                addButtonTapped = false
+                                                            }
+                                                            print("Blank would open")
+                                                        } else {
+                                                            // snap back
+                                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                                                addButtonTranslation = .zero
+                                                                sampleButtonHovered = false
+                                                                blankButtonHovered = false
+                                                                addButtonTapped = false
+                                                            }
+                                                        }
+                                                    }
+                                                          )
+                                        )
+                                    }
+                                    .onChange(of: sampleButtonHovered) { old, new in
+                                        if new == true {
+                                            let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                            impact.prepare()
+                                            impact.impactOccurred(intensity: 1.0)
+                                        }
+                                        if new == false {
+                                            let impact = UIImpactFeedbackGenerator(style: .soft)
+                                            impact.prepare()
+                                            impact.impactOccurred(intensity: 0.6)
+                                        }
+                                    }
+                                    .onChange(of: blankButtonHovered) { old, new in
+                                        if new == true {
+                                            let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                            impact.prepare()
+                                            impact.impactOccurred(intensity: 1.0)
+                                        }
+                                        if new == false {
+                                            let impact = UIImpactFeedbackGenerator(style: .soft)
+                                            impact.prepare()
+                                            impact.impactOccurred(intensity: 0.6)
+                                        }
+                                    }
+                                    .frame(width: 70, height: 70)
+                                    .background(Color.black.opacity(0.001))
+                                    .contentShape(Rectangle())
+                                    .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                    .overlay(alignment: .top) {
+                                        if addButtonTapped {
+                                            HStack {
+                                                // Delete
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "square.dashed")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: blankButtonHovered ? 35 : 20, height: blankButtonHovered ? 35 : 20)
+                                                    Text("Blank")
+                                                        .font(.custom("Nunito-Black", size: blankButtonHovered ? 15 : 11))
+                                                }
+                                                .frame(width: 65, height: 65)
+                                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                                .background(
+                                                    GeometryReader { gp in
+                                                        Color.clear
+                                                            .onAppear { blankFrame = gp.frame(in: .named("exitbar")) }
+                                                            .onChange(of: gp.size) { _, _ in blankFrame = gp.frame(in: .named("exitbar")) }
+                                                    }
+                                                )
+                                                .simultaneousGesture(
+                                                    LongPressGesture(minimumDuration: 0.0).onEnded { _ in
+                                                        withAnimation { addButtonTapped = false }
+                                                        showBlankItemsFS = true
+                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                        impact.prepare()
+                                                        impact.impactOccurred(intensity: 1.0)
+                                                    }
+                                                )
                                                 
-                                                Text("Add")
+                                                // Save
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "square.dashed.inset.filled")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: sampleButtonHovered ? 35 : 20, height: sampleButtonHovered ? 35 : 20)
+                                                    Text("Sample")
+                                                        .font(.custom("Nunito-Black", size: sampleButtonHovered ? 15 : 11))
+                                                        .matchedTransitionSource(
+                                                            id: "sampleButton", in: transition
+                                                        )
+                                                }
+                                                .frame(width: 65, height: 65)
+                                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                                .background(
+                                                    GeometryReader { gp in
+                                                        Color.clear
+                                                            .onAppear { sampleFrame = gp.frame(in: .named("exitbar")) }
+                                                            .onChange(of: gp.size) { _, _ in sampleFrame = gp.frame(in: .named("exitbar")) }
+                                                    }
+                                                )
+                                                .simultaneousGesture(
+                                                    LongPressGesture(minimumDuration: 0.0).onEnded { _ in
+                                                        showAddItemsSheet = true
+                                                        withAnimation { addButtonTapped = false }
+                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                        impact.prepare()
+                                                        impact.impactOccurred(intensity: 1.0)
+                                                    }
+                                                )
+                                            }
+                                            .offset(y: -55)
+                                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                                            .zIndex(50)
+                                            .allowsHitTesting(true)
+                                        }
+                                    }
+                                }
+                                VStack(spacing: 5) {
+                                    Image(systemName: "switch.2")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                        .fontWeight(.bold)
+                                    
+                                    Text("Edit")
+                                        .font(.custom("Nunito-Black", size: 11))
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                        .minimumScaleFactor(0.7)
+                                        .allowsTightening(true)
+                                        .matchedTransitionSource(
+                                            id: "editButton", in: transition
+                                        )
+                                }
+                                .frame(width: 70, height: 70)
+                                .background(Color.black.opacity(0.001))
+                                .contentShape(Circle())
+                                .gesture(
+                                    LongPressGesture(minimumDuration: 0.01)
+                                        .onEnded { _ in
+                                            withAnimation { editButtonTapped = true }
+                                        }
+                                )
+                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                VStack(spacing: 5) {
+                                    Image(systemName: "arrow.up.arrow.down")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                        .fontWeight(.bold)
+                                    
+                                    Text("Rank")
+                                        .font(.custom("Nunito-Black", size: 11))
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                        .minimumScaleFactor(0.7)
+                                        .allowsTightening(true)
+                                        .matchedTransitionSource(
+                                            id: "rankButton", in: transition
+                                        )
+                                }
+                                .frame(width: 70, height: 70)
+                                .background(Color.black.opacity(0.001))
+                                .contentShape(Circle())
+                                .gesture(
+                                    LongPressGesture(minimumDuration: 0.01)
+                                        .onEnded { _ in
+                                            withAnimation { rankButtonTapped = true }
+                                        }
+                                )
+                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                VStack(spacing: -5) {
+                                    VStack {
+                                        VStack(spacing: 5) {
+                                            if exitButtonTapped {
+                                                ZStack {
+                                                    Image(systemName: "xmark")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                        .fontWeight(.black)
+                                                        .foregroundStyle(Color.clear)
+                                                        .offset(exitButtonTranslation)
+                                                    Image(systemName: "xmark")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                        .fontWeight(.black)
+                                                        .foregroundStyle(Color(hex: 0x000000))
+                                                }
+                                            } else {
+                                                ZStack(alignment: .bottomLeading) {
+                                                    Image(systemName: "rectangle.portrait.fill")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                        .fontWeight(.bold)
+                                                        .foregroundStyle(Color(hex: 0x000000))
+                                                    Image(systemName: "figure.walk")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 15, height: 15)
+                                                        .fontWeight(.bold)
+                                                        .foregroundStyle(Color(hex: 0xFFFFFF))
+                                                        .offset(x: 2, y: -2)
+                                                }
+                                                
+                                                Text("Exit")
                                                     .font(.custom("Nunito-Black", size: 11))
                                                     .lineLimit(1)
                                                     .minimumScaleFactor(0.7)
                                                     .allowsTightening(true)
                                             }
                                         }
-                                    }
-                                    .frame(width: 60, height: 60)
-                                    .background(Color.black.opacity(0.001))
-                                    .contentShape(Circle())
-                                    // capture exit button frame
-                                    .background(
-                                        GeometryReader { gp in
-                                            Color.clear
-                                                .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
-                                                .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
-                                        }
-                                    )
-                                    .gesture(
-                                        LongPressGesture(minimumDuration: 0.01)
-                                            .onEnded { _ in
-                                                if addButtonTapped {
-                                                    withAnimation { addButtonTapped = false }
-                                                } else {
-                                                    withAnimation { addButtonTapped = true }
-                                                    addHoldButton = true
-                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { addHoldButton = false }
-                                                }
+                                        .frame(width: 60, height: 60)
+                                        .background(Color.black.opacity(0.001))
+                                        .contentShape(Circle())
+                                        // capture exit button frame
+                                        .background(
+                                            GeometryReader { gp in
+                                                Color.clear
+                                                    .onAppear { exitFrame = gp.frame(in: .named("exitbar")) }
+                                                    .onChange(of: gp.size) { _, _ in exitFrame = gp.frame(in: .named("exitbar")) }
                                             }
-                                            .sequenced(before:
-                                                        DragGesture()
-                                                .onChanged { value in
-                                                    guard addButtonTapped else { return }
-                                                    
-                                                    // ensure we have frames
-                                                    let hasFrames = addFrame != .zero && sampleFrame != .zero && blankFrame != .zero
-                                                    guard hasFrames else { return }
-                                                    
-                                                    // define origin/targets in the same space
-                                                    let origin = addFrame.center
-                                                    let sampleVec = sampleFrame.center - origin
-                                                    let blankVec  = blankFrame.center - origin
-                                                    let sampleLen = sampleVec.length
-                                                    let blankLen  = blankVec.length
-                                                    guard sampleLen > 1, blankLen > 1 else { return }
-                                                    
-                                                    // unit directions
-                                                    let uSample = sampleVec.normalized
-                                                    let uBlank  = blankVec.normalized
-                                                    
-                                                    // current drag as a vector
-                                                    let v = CGPoint(x: value.translation.width, y: value.translation.height)
-                                                    
-                                                    // projections onto each ray
-                                                    let pSample = v.dot(uSample)
-                                                    let pBlank  = v.dot(uBlank)
-                                                    
-                                                    // choose which ray we're moving along (favor positive progress)
-                                                    let chooseSample: Bool
-                                                    if pSample <= 0 && pBlank <= 0 {
-                                                        chooseSample = pSample >= pBlank // both negative: pick the "less negative"
-                                                    } else if pSample > 0 && pBlank <= 0 {
-                                                        chooseSample = true
-                                                    } else if pBlank > 0 && pSample <= 0 {
-                                                        chooseSample = false
-                                                    } else {
-                                                        chooseSample = pSample >= pBlank
-                                                    }
-                                                    
-                                                    // clamp progress along the chosen ray
-                                                    let rayU  = chooseSample ? uSample : uBlank
-                                                    let rayL  = chooseSample ? sampleLen : blankLen
-                                                    let proj  = (chooseSample ? pSample : pBlank).clamped(0, rayL)
-                                                    let snapped = rayU * proj
-                                                    
-                                                    // apply as translation
-                                                    addButtonTranslation = CGSize(width: snapped.x, height: snapped.y)
-                                                    
-                                                    // hover highlight near the end (70%+)
-                                                    let nearEnd = proj > (rayL * 0.7)
-                                                    sampleButtonHovered   = chooseSample && nearEnd
-                                                    blankButtonHovered = !chooseSample && nearEnd
-                                                }
+                                        )
+                                        .gesture(
+                                            LongPressGesture(minimumDuration: 0.01)
                                                 .onEnded { _ in
-                                                    guard addButtonTapped else { return }
-                                                    
-                                                    // compute final progress to decide commit
-                                                    let origin = addFrame.center
-                                                    let sampleVec = sampleFrame.center - origin
-                                                    let blankVec  = blankFrame.center - origin
-                                                    let sampleLen = sampleVec.length
-                                                    let blankLen  = blankVec.length
-                                                    guard sampleLen > 1, blankLen > 1 else {
-                                                        withAnimation {
-                                                            addButtonTranslation = .zero
-                                                            sampleButtonHovered = false
-                                                            blankButtonHovered = false
-                                                            addButtonTapped = false
-                                                        }
-                                                        return
-                                                    }
-                                                    
-                                                    let current = CGPoint(x: addButtonTranslation.width, y: addButtonTranslation.height)
-                                                    let progressOnSample = current.dot(sampleVec.normalized) / sampleLen
-                                                    let progressOnBlank  = current.dot(blankVec.normalized)  / blankLen
-                                                    
-                                                    // commit threshold
-                                                    let threshold: CGFloat = 0.7
-                                                    
-                                                    if progressOnSample >= threshold {
-                                                        // commit Save
-                                                        showAddItemsSheet = true
-                                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                            addButtonTranslation = .zero
-                                                            sampleButtonHovered = false
-                                                            blankButtonHovered = false
-                                                            addButtonTapped = false
-                                                        }
-                                                    } else if progressOnBlank >= threshold {
-                                                        // commit Delete (your current action = dismiss)
-                                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                            addButtonTranslation = .zero
-                                                            sampleButtonHovered = false
-                                                            blankButtonHovered = false
-                                                            addButtonTapped = false
-                                                        }
-                                                        print("Blank would open")
+                                                    if exitButtonTapped {
+                                                        withAnimation { exitButtonTapped = false }
                                                     } else {
-                                                        // snap back
-                                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                                            addButtonTranslation = .zero
-                                                            sampleButtonHovered = false
-                                                            blankButtonHovered = false
-                                                            addButtonTapped = false
-                                                        }
+                                                        withAnimation { exitButtonTapped = true }
+                                                        exitHoldButton = true
+                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { exitHoldButton = false }
                                                     }
                                                 }
-                                                      )
-                                    )
-                                }
-                                .onChange(of: sampleButtonHovered) { old, new in
-                                    if new == true {
-                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 1.0)
-                                    }
-                                    if new == false {
-                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 0.6)
-                                    }
-                                }
-                                .onChange(of: blankButtonHovered) { old, new in
-                                    if new == true {
-                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 1.0)
-                                    }
-                                    if new == false {
-                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 0.6)
-                                    }
-                                }
-                                .frame(width: 70, height: 70)
-                                .background(Color.black.opacity(0.001))
-                                .contentShape(Rectangle())
-                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                .overlay(alignment: .top) {
-                                    if addButtonTapped {
-                                        HStack {
-                                            // Delete
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "square.dashed")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: blankButtonHovered ? 35 : 20, height: blankButtonHovered ? 35 : 20)
-                                                Text("Blank")
-                                                    .font(.custom("Nunito-Black", size: blankButtonHovered ? 15 : 11))
-                                            }
-                                            .frame(width: 65, height: 65)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear
-                                                        .onAppear { blankFrame = gp.frame(in: .named("exitbar")) }
-                                                        .onChange(of: gp.size) { _, _ in blankFrame = gp.frame(in: .named("exitbar")) }
-                                                }
-                                            )
-                                            .simultaneousGesture(
-                                                LongPressGesture(minimumDuration: 0.0).onEnded { _ in
-                                                    withAnimation { addButtonTapped = false }
-                                                    showBlankItemsFS = true
-                                                    let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                    impact.prepare()
-                                                    impact.impactOccurred(intensity: 1.0)
-                                                }
-                                            )
-                                            
-                                            // Save
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "square.dashed.inset.filled")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: sampleButtonHovered ? 35 : 20, height: sampleButtonHovered ? 35 : 20)
-                                                Text("Sample")
-                                                    .font(.custom("Nunito-Black", size: sampleButtonHovered ? 15 : 11))
-                                                    .matchedTransitionSource(
-                                                        id: "sampleButton", in: transition
-                                                    )
-                                            }
-                                            .frame(width: 65, height: 65)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear
-                                                        .onAppear { sampleFrame = gp.frame(in: .named("exitbar")) }
-                                                        .onChange(of: gp.size) { _, _ in sampleFrame = gp.frame(in: .named("exitbar")) }
-                                                }
-                                            )
-                                            .simultaneousGesture(
-                                                LongPressGesture(minimumDuration: 0.0).onEnded { _ in
-                                                    showAddItemsSheet = true
-                                                    withAnimation { addButtonTapped = false }
-                                                    let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                    impact.prepare()
-                                                    impact.impactOccurred(intensity: 1.0)
-                                                }
-                                            )
-                                        }
-                                        .offset(y: -55)
-                                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                                        .zIndex(50)
-                                        .allowsHitTesting(true)
-                                    }
-                                }
-                            }
-                            VStack(spacing: 5) {
-                                Image(systemName: "switch.2")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 20, height: 20)
-                                    .fontWeight(.bold)
-                                
-                                Text("Edit")
-                                    .font(.custom("Nunito-Black", size: 11))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .minimumScaleFactor(0.7)
-                                    .allowsTightening(true)
-                                    .matchedTransitionSource(
-                                        id: "editButton", in: transition
-                                    )
-                            }
-                            .frame(width: 70, height: 70)
-                            .background(Color.black.opacity(0.001))
-                            .contentShape(Circle())
-                            .gesture(
-                                LongPressGesture(minimumDuration: 0.01)
-                                    .onEnded { _ in
-                                        withAnimation { editButtonTapped = true }
-                                    }
-                            )
-                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                            VStack(spacing: 5) {
-                                Image(systemName: "arrow.up.arrow.down")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 20, height: 20)
-                                    .fontWeight(.bold)
-                                
-                                Text("Rank")
-                                    .font(.custom("Nunito-Black", size: 11))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .minimumScaleFactor(0.7)
-                                    .allowsTightening(true)
-                                    .matchedTransitionSource(
-                                        id: "rankButton", in: transition
-                                    )
-                            }
-                            .frame(width: 70, height: 70)
-                            .background(Color.black.opacity(0.001))
-                            .contentShape(Circle())
-                            .gesture(
-                                LongPressGesture(minimumDuration: 0.01)
-                                    .onEnded { _ in
-                                        withAnimation { rankButtonTapped = true }
-                                    }
-                            )
-                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                            VStack(spacing: -5) {
-                                VStack {
-                                    VStack(spacing: 5) {
-                                        if exitButtonTapped {
-                                            ZStack {
-                                                Image(systemName: "xmark")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.black)
-                                                    .foregroundStyle(Color.clear)
-                                                    .offset(exitButtonTranslation)
-                                                Image(systemName: "xmark")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.black)
-                                                    .foregroundStyle(Color(hex: 0x000000))
-                                            }
-                                        } else {
-                                            ZStack(alignment: .bottomLeading) {
-                                                Image(systemName: "rectangle.portrait.fill")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.bold)
-                                                    .foregroundStyle(Color(hex: 0x000000))
-                                                Image(systemName: "figure.walk")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 15, height: 15)
-                                                    .fontWeight(.bold)
-                                                    .foregroundStyle(Color(hex: 0xFFFFFF))
-                                                    .offset(x: 2, y: -2)
-                                            }
-                                            
-                                            Text("Exit")
-                                                .font(.custom("Nunito-Black", size: 11))
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.7)
-                                                .allowsTightening(true)
-                                        }
-                                    }
-                                    .frame(width: 60, height: 60)
-                                    .background(Color.black.opacity(0.001))
-                                    .contentShape(Circle())
-                                    // capture exit button frame
-                                    .background(
-                                        GeometryReader { gp in
-                                            Color.clear
-                                                .onAppear { exitFrame = gp.frame(in: .named("exitbar")) }
-                                                .onChange(of: gp.size) { _, _ in exitFrame = gp.frame(in: .named("exitbar")) }
-                                        }
-                                    )
-                                    .gesture(
-                                        LongPressGesture(minimumDuration: 0.01)
-                                            .onEnded { _ in
-                                                if exitButtonTapped {
-                                                    withAnimation { exitButtonTapped = false }
-                                                } else {
-                                                    withAnimation { exitButtonTapped = true }
-                                                    exitHoldButton = true
-                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { exitHoldButton = false }
-                                                }
-                                            }
-                                            .sequenced(before:
-                                                DragGesture()
+                                                .sequenced(before:
+                                                            DragGesture()
                                                     .onChanged { value in
                                                         guard exitButtonTapped else { return }
-
+                                                        
                                                         // ensure we have frames
                                                         let hasFrames = exitFrame != .zero && saveFrame != .zero && deleteFrame != .zero
                                                         guard hasFrames else { return }
-
+                                                        
                                                         // define origin/targets in the same space
                                                         let origin = exitFrame.center
                                                         let saveVec = saveFrame.center - origin
@@ -730,18 +739,18 @@ struct DefaultListView: View {
                                                         let saveLen = saveVec.length
                                                         let delLen  = delVec.length
                                                         guard saveLen > 1, delLen > 1 else { return }
-
+                                                        
                                                         // unit directions
                                                         let uSave = saveVec.normalized
                                                         let uDel  = delVec.normalized
-
+                                                        
                                                         // current drag as a vector
                                                         let v = CGPoint(x: value.translation.width, y: value.translation.height)
-
+                                                        
                                                         // projections onto each ray
                                                         let pSave = v.dot(uSave)
                                                         let pDel  = v.dot(uDel)
-
+                                                        
                                                         // choose which ray we're moving along (favor positive progress)
                                                         let chooseSave: Bool
                                                         if pSave <= 0 && pDel <= 0 {
@@ -753,16 +762,16 @@ struct DefaultListView: View {
                                                         } else {
                                                             chooseSave = pSave >= pDel
                                                         }
-
+                                                        
                                                         // clamp progress along the chosen ray
                                                         let rayU  = chooseSave ? uSave : uDel
                                                         let rayL  = chooseSave ? saveLen : delLen
                                                         let proj  = (chooseSave ? pSave : pDel).clamped(0, rayL)
                                                         let snapped = rayU * proj
-
+                                                        
                                                         // apply as translation
                                                         exitButtonTranslation = CGSize(width: snapped.x, height: snapped.y)
-
+                                                        
                                                         // hover highlight near the end (70%+)
                                                         let nearEnd = proj > (rayL * 0.7)
                                                         saveButtonHovered   = chooseSave && nearEnd
@@ -770,7 +779,7 @@ struct DefaultListView: View {
                                                     }
                                                     .onEnded { _ in
                                                         guard exitButtonTapped else { return }
-
+                                                        
                                                         // compute final progress to decide commit
                                                         let origin = exitFrame.center
                                                         let saveVec = saveFrame.center - origin
@@ -786,14 +795,14 @@ struct DefaultListView: View {
                                                             }
                                                             return
                                                         }
-
+                                                        
                                                         let current = CGPoint(x: exitButtonTranslation.width, y: exitButtonTranslation.height)
                                                         let progressOnSave = current.dot(saveVec.normalized) / saveLen
                                                         let progressOnDel  = current.dot(delVec.normalized)  / delLen
-
+                                                        
                                                         // commit threshold
                                                         let threshold: CGFloat = 0.7
-
+                                                        
                                                         if progressOnSave >= threshold {
                                                             // commit Save
                                                             withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
@@ -831,126 +840,146 @@ struct DefaultListView: View {
                                                             }
                                                         }
                                                     }
-                                            )
-                                    )
-                                }
-                                .onChange(of: saveButtonHovered) { old, new in
-                                    if new == true {
-                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 1.0)
+                                                          )
+                                        )
                                     }
-                                    if new == false {
-                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 0.6)
-                                    }
-                                }
-                                .onChange(of: deleteButtonHovered) { old, new in
-                                    if new == true {
-                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 1.0)
-                                    }
-                                    if new == false {
-                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 0.6)
-                                    }
-                                }
-                                .frame(width: 70, height: 70)
-                                .background(Color.black.opacity(0.001))
-                                .contentShape(Rectangle())
-                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                .overlay(alignment: .top) {
-                                    if exitButtonTapped {
-                                        HStack {
-                                            // Delete
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "trash.fill")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: deleteButtonHovered ? 35 : 20, height: deleteButtonHovered ? 35 : 20)
-                                                Text("Delete")
-                                                    .font(.custom("Nunito-Black", size: deleteButtonHovered ? 15 : 11))
-                                            }
-                                            .frame(width: 65, height: 65)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear
-                                                        .onAppear { deleteFrame = gp.frame(in: .named("exitbar")) }
-                                                        .onChange(of: gp.size) { _, _ in deleteFrame = gp.frame(in: .named("exitbar")) }
-                                                }
-                                            )
-                                            .simultaneousGesture(
-                                                LongPressGesture(minimumDuration: 0.0).onEnded { _ in
-                                                    withAnimation { DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { dismiss() } }
-                                                    let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                    impact.prepare()
-                                                    impact.impactOccurred(intensity: 1.0)
-                                                }
-                                            )
-
-                                            // Save
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "square.and.arrow.down.fill")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: saveButtonHovered ? 35 : 20, height: saveButtonHovered ? 35 : 20)
-                                                Text("Save")
-                                                    .font(.custom("Nunito-Black", size: saveButtonHovered ? 15 : 11))
-                                            }
-                                            .frame(width: 65, height: 65)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear
-                                                        .onAppear { saveFrame = gp.frame(in: .named("exitbar")) }
-                                                        .onChange(of: gp.size) { _, _ in saveFrame = gp.frame(in: .named("exitbar")) }
-                                                }
-                                            )
-                                            .simultaneousGesture(
-                                                LongPressGesture(minimumDuration: 0.0).onEnded { _ in
-                                                    withAnimation { exitButtonTapped = false }
-                                                    let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                    impact.prepare()
-                                                    impact.impactOccurred(intensity: 1.0)
-                                                    startPublishAndDismiss()  // ← NEW
-                                                }
-                                            )
+                                    .onChange(of: saveButtonHovered) { old, new in
+                                        if new == true {
+                                            let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                            impact.prepare()
+                                            impact.impactOccurred(intensity: 1.0)
                                         }
-                                        .offset(y: -55)
-                                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                                        .zIndex(50)
-                                        .allowsHitTesting(true)
+                                        if new == false {
+                                            let impact = UIImpactFeedbackGenerator(style: .soft)
+                                            impact.prepare()
+                                            impact.impactOccurred(intensity: 0.6)
+                                        }
+                                    }
+                                    .onChange(of: deleteButtonHovered) { old, new in
+                                        if new == true {
+                                            let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                            impact.prepare()
+                                            impact.impactOccurred(intensity: 1.0)
+                                        }
+                                        if new == false {
+                                            let impact = UIImpactFeedbackGenerator(style: .soft)
+                                            impact.prepare()
+                                            impact.impactOccurred(intensity: 0.6)
+                                        }
+                                    }
+                                    .frame(width: 70, height: 70)
+                                    .background(Color.black.opacity(0.001))
+                                    .contentShape(Rectangle())
+                                    .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                    .overlay(alignment: .top) {
+                                        if exitButtonTapped {
+                                            HStack {
+                                                // Delete
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "trash.fill")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: deleteButtonHovered ? 35 : 20, height: deleteButtonHovered ? 35 : 20)
+                                                    Text("Delete")
+                                                        .font(.custom("Nunito-Black", size: deleteButtonHovered ? 15 : 11))
+                                                }
+                                                .frame(width: 65, height: 65)
+                                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                                .background(
+                                                    GeometryReader { gp in
+                                                        Color.clear
+                                                            .onAppear { deleteFrame = gp.frame(in: .named("exitbar")) }
+                                                            .onChange(of: gp.size) { _, _ in deleteFrame = gp.frame(in: .named("exitbar")) }
+                                                    }
+                                                )
+                                                .simultaneousGesture(
+                                                    LongPressGesture(minimumDuration: 0.0).onEnded { _ in
+                                                        withAnimation { DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { dismiss() } }
+                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                        impact.prepare()
+                                                        impact.impactOccurred(intensity: 1.0)
+                                                    }
+                                                )
+                                                
+                                                // Save
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "square.and.arrow.down.fill")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: saveButtonHovered ? 35 : 20, height: saveButtonHovered ? 35 : 20)
+                                                    Text("Save")
+                                                        .font(.custom("Nunito-Black", size: saveButtonHovered ? 15 : 11))
+                                                }
+                                                .frame(width: 65, height: 65)
+                                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                                .background(
+                                                    GeometryReader { gp in
+                                                        Color.clear
+                                                            .onAppear { saveFrame = gp.frame(in: .named("exitbar")) }
+                                                            .onChange(of: gp.size) { _, _ in saveFrame = gp.frame(in: .named("exitbar")) }
+                                                    }
+                                                )
+                                                .simultaneousGesture(
+                                                    LongPressGesture(minimumDuration: 0.0).onEnded { _ in
+                                                        withAnimation { exitButtonTapped = false }
+                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                        impact.prepare()
+                                                        impact.impactOccurred(intensity: 1.0)
+                                                        startPublishAndDismiss()  // ← NEW
+                                                    }
+                                                )
+                                            }
+                                            .offset(y: -55)
+                                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                                            .zIndex(50)
+                                            .allowsHitTesting(true)
+                                        }
                                     }
                                 }
                             }
                         }
+                        .shadow(color: Color(hex: 0x000000).opacity(0.15), radius: 4)
                     }
-                    .shadow(color: Color(hex: 0x000000).opacity(0.15), radius: 4)
+                }
+                .coordinateSpace(name: "exitbar")   // ← add this
+                .padding(.bottom, 10)
+            }
+            .overlay {
+                if progressLoading {
+                    ZStack {
+                        Color.black.opacity(0.35).ignoresSafeArea()
+                        VStack(spacing: 10) {
+                            ProgressView("Saving your Ranko…")
+                                .padding(.vertical, 8)
+                            Text("Saving to Firebase + Algolia")
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+                        .padding(18)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .transition(.opacity)
+                    .zIndex(999)
                 }
             }
-            .coordinateSpace(name: "exitbar")   // ← add this
-            .padding(.bottom, 10)
-        }
-        .overlay {
-            if progressLoading {
-                ZStack {
-                    Color.black.opacity(0.35).ignoresSafeArea()
-                    VStack(spacing: 10) {
-                        ProgressView("Saving your Ranko…")
-                            .padding(.vertical, 8)
-                        Text("Saving to Firebase + Algolia")
-                            .font(.custom("Nunito-Black", size: 12))
-                            .foregroundStyle(.white.opacity(0.9))
-                    }
-                    .padding(18)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    RankoToolbarTitleStack(
+                        name: rankoName,
+                        description: description,
+                        isPrivate: $isPrivate,
+                        category: category,
+                        categoryColor: category.flatMap { categoryChipIconColors[$0.name] } ?? .gray.opacity(0.7),
+                        showEditDetailsSheet: $showEditDetailsSheet,
+                        onTapPrivacy: { showEditDetailsSheet = true },   // or: { isPrivate.toggle() }
+                        onTapCategory: { showEditDetailsSheet = true }
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(rankoName). \(description). \(isPrivate ? "Private" : "Public"). \(category?.name ?? "")")
                 }
-                .transition(.opacity)
-                .zIndex(999)
             }
         }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(Color.white.opacity(0.92), for: .navigationBar)
         .interactiveDismissDisabled(progressLoading) // block pull-to-dismiss on sheets while saving
         .disabled(progressLoading)                   // block interactions while saving
         .alert("Couldn't publish", isPresented: .init(
@@ -1118,7 +1147,8 @@ struct DefaultListView: View {
             RankoStatus:      "active",
             RankoCategory:    category.name,
             RankoUserID:      safeUID,
-            RankoDateTime:    rankoDateTime,
+            RankoCreated:     rankoDateTime,
+            RankoUpdated:     rankoDateTime,
             RankoLikes:       0,
             RankoComments:    0,
             RankoVotes:       0
@@ -1147,29 +1177,37 @@ struct DefaultListView: View {
         let safeUID = rawUID.components(separatedBy: invalidSet).joined()
         guard !safeUID.isEmpty else { throw PublishErr.invalidUserID }
 
-        // Items payload
+        // Items payload — use each item's existing ID as both the key and ItemID
         var rankoItemsDict: [String: Any] = [:]
         for item in selectedRankoItems {
-            let itemID = UUID().uuidString
+            let itemID = item.id // ✅ keep the original ID
             rankoItemsDict[itemID] = [
                 "ItemID":          itemID,
                 "ItemRank":        item.rank,
                 "ItemName":        item.itemName,
                 "ItemDescription": item.itemDescription,
                 "ItemImage":       item.itemImage,
-                "ItemVotes":       0
+                "ItemVotes":       item.votes  // keep known votes (or 0 if you prefer)
             ]
         }
 
-        // timestamps
+        // timestamps (AEDT/AEST) → yyyymmddHHMMSS
         let now = Date()
         let aedtFormatter = DateFormatter()
         aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
         aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
         aedtFormatter.dateFormat = "yyyyMMddHHmmss"
-        let rankoDateTime = aedtFormatter.string(from: now)
+        let ts = aedtFormatter.string(from: now)
 
-        // list node
+        // Build the category object exactly like RTDB expects
+        // If you have a hex/brand colour on the chip, use it; otherwise fall back to a neutral.
+        let categoryDict: [String: Any] = [
+            "colour": category.colour ?? "0x000000", // add `colourHex` on your model if needed
+            "icon":   category.icon,
+            "name":   category.name
+        ]
+
+        // list node payload — RankoDateTime is an object with Created & Updated
         let listDataForFirebase: [String: Any] = [
             "RankoID":          listUUID,
             "RankoName":        rankoName,
@@ -1177,10 +1215,10 @@ struct DefaultListView: View {
             "RankoType":        "default",
             "RankoPrivacy":     isPrivate,
             "RankoStatus":      "active",
-            "RankoCategory":    category.name,
+            "RankoCategory":    categoryDict,                           // ✅ object, not string
             "RankoUserID":      safeUID,
             "RankoItems":       rankoItemsDict,
-            "RankoDateTime":    rankoDateTime,
+            "RankoDateTime":    ["RankoUpdated": ts, "RankoCreated": ts] // ✅ object with both fields
         ]
 
         // write both nodes concurrently
@@ -1192,6 +1230,8 @@ struct DefaultListView: View {
                 )
             }
             group.addTask {
+                // If you want to mirror rich data here later, go for it.
+                // Keeping your original write (category name) for now.
                 try await setValueAsync(
                     db.child("UserData").child(safeUID)
                       .child("UserRankos").child("UserActiveRankos").child(listUUID),
@@ -1201,6 +1241,7 @@ struct DefaultListView: View {
             try await group.waitForAll()
         }
     }
+
 
     // Wrap Firebase setValue into async/await
     private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
@@ -2164,666 +2205,6 @@ struct RankoCoachAccessory: View {
     }
 }
 
-
-struct DefaultListView4: View {
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var user_data = UserInformation.shared
-    @Environment(\.tabViewBottomAccessoryPlacement) var placement
-
-    // Init properties
-    @State private var listUUID: String = UUID().uuidString
-    @State private var rankoName: String
-    @State private var description: String
-    @State private var isPrivate: Bool
-    @State private var category: SampleCategoryChip?
-    
-    // to revert to old values
-    @State private var originalRankoName: String
-    @State private var originalDescription: String
-    @State private var originalIsPrivate: Bool
-    @State private var originalCategory: SampleCategoryChip?
-
-    // Sheet states
-    @State var showEditItemSheet = false
-    @State var showAddItemsSheet = false
-    @State var showEditDetailsSheet = false
-    @State var showReorderSheet = false
-    @State var showExitSheet = false
-    
-    // Item states
-    @State private var selectedRankoItems: [RankoItem]
-    @State private var selectedItem: RankoItem? = nil
-    @State private var itemToEdit: RankoItem? = nil
-    @State private var onSave: (RankoItem) -> Void
-    
-    @State private var imageReloadToken = UUID()
-    
-    @State private var selectedTab: TabType = .empty
-    @State private var isPresentingSheet = false
-    @State private var shouldShowTutorial: Bool = false
-    
-    enum TabType: Hashable {
-        case addItems, editDetails, reRank, exit, empty
-    }
-
-    init(
-        rankoName: String,
-        description: String,
-        isPrivate: Bool,
-        category: SampleCategoryChip?,
-        selectedRankoItems: [RankoItem] = [],
-        onSave: @escaping (RankoItem) -> Void
-    ) {
-        _rankoName   = State(initialValue: rankoName)
-        _description = State(initialValue: description)
-        _isPrivate   = State(initialValue: isPrivate)
-        _category    = State(initialValue: category)
-        _selectedRankoItems = State(initialValue: selectedRankoItems)
-        _onSave = State(initialValue: onSave)
-
-        _originalRankoName = State(initialValue: rankoName)
-        _originalDescription = State(initialValue: description)
-        _originalIsPrivate = State(initialValue: isPrivate)
-        _originalCategory = State(initialValue: category)
-    }
-
-    var body: some View {
-        TabView(selection: $selectedTab) {
-            // all tabs reuse the SAME content view
-            rankoView
-                .tabItem { Label("", systemImage: "plus.square.fill.on.square.fill") }
-                .tabItem {
-                    Image(systemName: "plus.square.fill.on.square.fill")
-                }
-                .tag(TabType.addItems)
-            
-            rankoView
-                .tabItem { Label("", systemImage: "pencil") }
-                .tabItem {
-                    Image(systemName: "pencil")
-                }
-                .tag(TabType.editDetails)
-            
-            rankoView
-                .tag(TabType.empty)
-            
-            rankoView
-                .tabItem { Label("", systemImage: "rectangle.arrowtriangle.2.outward") }
-                .tabItem {
-                    Image(systemName: "rectangle.arrowtriangle.2.outward")
-                }
-                .tag(TabType.reRank)
-            
-            rankoView
-                .tabItem { Label("", systemImage: "trash") }
-                .tabItem {
-                    Image(systemName: "square.and.arrow.down.on.square.fill")
-                }
-                .tag(TabType.exit)
-        }
-//        .tabViewBottomAccessory {
-//            if shouldShowTutorial {
-//                RankoCoachAccessory {
-//                    withAnimation { shouldShowTutorial = false }
-//                }
-//                .transition(.move(edge: .bottom).combined(with: .opacity))
-//            } else {
-//                HStack {
-//                    Button {
-//                        
-//                    } label: {
-//                        HStack {
-//                            Text("Save Ranko")
-//                                .font(.custom("Nunito-Black", size: 17))
-//                                .foregroundStyle(Color(hex: 0xFFFFFF))
-//                                .padding(.horizontal, 20)
-//                                .padding(.vertical, 7)
-//                        }
-//                        .background(Color(hex: 0xC34F01))
-//                        .mask(Capsule())
-//                    }
-//                    .buttonStyle(.glassProminent)
-//                    
-//                    Button {} label: {
-//                        HStack {
-//                            Image(systemName: "questionmark")
-//                                .font(.system(size: 12, weight: .black, design: .default))
-//                                .foregroundStyle(Color(hex: 0xFFFFFF))
-//                                .padding(.horizontal, 12)
-//                                .padding(.vertical, 9)
-//                        }
-//                        .background(Color(hex: 0xC34F01))
-//                        .mask(Circle())
-//                    }
-//                    .buttonStyle(.glassProminent)
-//                }
-//            }
-//        }
-//        
-        .tabViewBottomAccessory(content: DefaultListAccessory.init)
-        .tabBarMinimizeBehavior(.onScrollDown)
-        // ensure we start from a neutral tab that is NOT shown in the bar
-        .onAppear {
-            selectedTab = .empty
-            if selectedRankoItems.count == 0 {
-                shouldShowTutorial = true
-            } else {
-                shouldShowTutorial = false
-            }
-        }
-        .onChange(of: selectedRankoItems.count) {
-            if selectedRankoItems.count == 0 {
-                shouldShowTutorial = true
-            } else {
-                shouldShowTutorial = false
-            }
-        }
-        // when the user switches tabs, pop the matching sheet, then reset back to .empty
-        .onChange(of: selectedTab) { oldValue, newValue in
-            guard !isPresentingSheet else { return }
-            switch newValue {
-            case .addItems:
-                present { showAddItemsSheet = true }
-            case .editDetails:
-                present { showEditDetailsSheet = true }
-            case .reRank:
-                present { showReorderSheet = true }
-            case .exit:
-                present { showExitSheet = true }
-            case .empty:
-                break
-            }
-        }
-        .sheet(isPresented: $showAddItemsSheet, onDismiss: resetTrigger) {
-            FilterChipPickerView(selectedRankoItems: $selectedRankoItems)
-                .presentationDetents([.height(480)])
-                .interactiveDismissDisabled(true)
-        }
-        .sheet(isPresented: $showEditDetailsSheet, onDismiss: resetTrigger) {
-            DefaultListEditDetails(
-                rankoName: rankoName,
-                description: description,
-                isPrivate: isPrivate,
-                category: category
-            ) { newName, newDescription, newPrivate, newCategory in
-                rankoName   = newName
-                description = newDescription
-                isPrivate   = newPrivate
-                category    = newCategory
-            }
-        }
-        .fullScreenCover(isPresented: $showReorderSheet, onDismiss: resetTrigger) {
-            DefaultListReRank(items: selectedRankoItems) { newOrder in
-                selectedRankoItems = newOrder
-            }
-        }
-        .sheet(isPresented: $showExitSheet, onDismiss: resetTrigger) {
-            DefaultListExit(
-                onSave: {
-                    saveRankedListToAlgolia()
-                    saveRankedListToFirebase()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { dismiss() }
-                },
-                onDelete: {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { dismiss() }
-                }
-            )
-        }
-        
-        // SINGLE edit sheet bound to the selected item (no per-row sheets)
-        .sheet(item: $itemToEdit, onDismiss: resetTrigger) { item in
-            EditItemView(item: item, listID: listUUID) { newName, newDesc in
-                let rec = item.record
-                let updatedRecord = RankoRecord(
-                    objectID: rec.objectID,
-                    ItemName: newName,
-                    ItemDescription: newDesc,
-                    ItemCategory: "",
-                    ItemImage: rec.ItemImage
-                )
-                let updatedItem = RankoItem(
-                    id: item.id,
-                    rank: item.rank,
-                    votes: item.votes,
-                    record: updatedRecord
-                )
-                onSave(updatedItem)
-            }
-        }
-        .onAppear {
-            refreshItemImages()
-        }
-    }
-    
-    @ViewBuilder
-    var rankoView: some View {
-        ZStack(alignment: .top) {
-            LinearGradient(colors: [Color(hex: 0x514343), Color(hex: 0x000000)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Color(hex: 0xFFFFFF)
-                .ignoresSafeArea()
-            VStack(spacing: 6) {
-                HStack {
-                    Text(rankoName)
-                        .font(.custom("Nunito-Black", size: 24))
-                        .foregroundStyle(Color(hex: 0x514343))
-                        .kerning(-0.4)
-                    Spacer()
-                }
-                .padding(.top, 20)
-                .padding(.leading, 20)
-                
-                HStack {
-                    Text(description.isEmpty ? "No description yet…" : description)
-                        .lineLimit(3)
-                        .font(.custom("Nunito-Black", size: 13))
-                        .foregroundStyle(Color(hex: 0x514343))
-                    Spacer()
-                }
-                .padding(.top, 5)
-                .padding(.leading, 20)
-                
-                HStack(spacing: 8) {
-                    HStack(spacing: 4) {
-                        Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
-                            .font(.system(size: 12, weight: .bold, design: .default))
-                            .foregroundColor(.white)
-                            .padding(.leading, 10)
-                        Text(isPrivate ? "Private" : "Public")
-                            .font(.system(size: 12, weight: .bold, design: .default))
-                            .foregroundColor(.white)
-                            .padding(.trailing, 10)
-                            .padding(.vertical, 8)
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(hex: 0xF2AB69))
-                    )
-                    
-                    if let cat = category {
-                        HStack(spacing: 4) {
-                            Image(systemName: cat.icon)
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .padding(.leading, 10)
-                            Text(cat.name)
-                                .font(.system(size: 12, weight: .bold, design: .default))
-                                .foregroundColor(.white)
-                                .padding(.trailing, 10)
-                                .padding(.vertical, 8)
-                            
-                        }
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(categoryChipIconColors[cat.name] ?? .gray)
-                                .opacity(0.6)
-                        )
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.top, 5)
-                .padding(.leading, 20)
-                
-                ZStack(alignment: .bottom) {
-                    
-                    ScrollView {
-                        VStack {
-                            ScrollView {
-                                Group {
-                                    ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
-                                        DefaultListItemRow(item: item)
-                                            .onTapGesture {
-                                                selectedItem = item
-                                            }
-                                            .contextMenu {
-                                                Button(action: {
-                                                    itemToEdit = item
-                                                }) {
-                                                    Label("Edit", systemImage: "pencil")
-                                                }
-                                                .foregroundColor(.orange)
-                                                
-                                                Divider()
-                                                
-                                                Button(action: { moveToTop(item) }) {
-                                                    Label("Move to Top", systemImage: "arrow.up.to.line.compact")
-                                                }
-                                                
-                                                Button(action: { moveToBottom(item) }) {
-                                                    Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
-                                                }
-                                                
-                                                Divider()
-                                                
-                                                Button(role: .destructive) {
-                                                    delete(item)
-                                                } label: {
-                                                    Label("Delete", systemImage: "trash")
-                                                }
-                                            }
-                                            .sheet(isPresented: $showEditItemSheet) {
-                                                // Determine which item is centered
-                                                EditItemView(
-                                                    item: item,
-                                                    listID: listUUID
-                                                ) { newName, newDesc in
-                                                    // build updated record & item
-                                                    let rec = item.record
-                                                    let updatedRecord = RankoRecord(
-                                                        objectID: rec.objectID,
-                                                        ItemName: newName,
-                                                        ItemDescription: newDesc,
-                                                        ItemCategory: "",
-                                                        ItemImage: rec.ItemImage
-                                                    )
-                                                    let updatedItem = RankoItem(
-                                                        id: item.id,
-                                                        rank: item.rank,
-                                                        votes: item.votes,
-                                                        record: updatedRecord
-                                                    )
-                                                    // callback to parent
-                                                    onSave(updatedItem)
-                                                }
-                                            }
-                                    }
-                                }
-                                .id(imageReloadToken)
-                                .padding(.top, 25)
-                                .padding(.bottom, 100)
-                            }
-                        }
-                    }
-                }
-                .ignoresSafeArea()
-            }
-            
-        }
-        .refreshable {
-            refreshItemImages()
-        }
-//        .sheet(isPresented: $showTabBar) {
-//            VStack {
-//                HStack(spacing: 0) {
-//                    ForEach(DefaultListTab.visibleCases, id: \.rawValue) { tab in
-//                        VStack(spacing: 6) {
-//                            Image(systemName: tab.symbolImage)
-//                                .font(.title3)
-//                                .symbolVariant(.fill)
-//                                .frame(height: 28)
-//
-//                            Text(tab.rawValue)
-//                                .font(.caption2)
-//                                .fontWeight(.semibold)
-//                        }
-//                        .foregroundStyle(Color(hex: 0x925610))
-//                        .frame(maxWidth: .infinity)
-//                        .contentShape(.rect)
-//                        .onTapGesture {
-//                            activeTab = tab
-//                            switch tab {
-//                            case .addItems:
-//                                showAddItemsSheet = true
-//                                withAnimation(.easeInOut(duration: 0.2)) {
-//                                    tabBarPresent = false
-//                                }
-//                            case .editDetails:
-//                                showEditDetailsSheet = true
-//                                withAnimation(.easeInOut(duration: 0.2)) {
-//                                    tabBarPresent = false
-//                                }
-//                            case .reRank:
-//                                showReorderSheet = true
-//                                withAnimation(.easeInOut(duration: 0.2)) {
-//                                    tabBarPresent = false
-//                                }
-//                            case .exit:
-//                                showExitSheet = true
-//                                withAnimation(.easeInOut(duration: 0.2)) {
-//                                    tabBarPresent = false
-//                                }
-//                            case .empty:
-//                                dismiss()
-//                            }
-//                        }
-//                    }
-//                }
-//                .padding(.horizontal, 20)
-//            }
-//            .interactiveDismissDisabled(true)
-//            .presentationDetents([.height(80)])
-//            .presentationBackground((Color(hex: 0xfff9ee)))
-//            .presentationBackgroundInteraction(.enabled)
-//            .onAppear {
-//                tabBarPresent = false      // Start from invisible
-//                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-//                    withAnimation(.easeInOut(duration: 0.2)) {
-//                        tabBarPresent = true
-//                    }
-//                }
-//            }
-//            .onDisappear {
-//                withAnimation(.easeInOut(duration: 0.2)) {
-//                    tabBarPresent = false
-//                }
-//            }
-//        }
-    }
-    // MARK: - Sheet trigger helpers
-    private func present(_ action: @escaping () -> Void) {
-        isPresentingSheet = true
-        // perform on next runloop to avoid selection race with TabView
-        DispatchQueue.main.async {
-            action()
-            // reset selection so no tab stays highlighted
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                selectedTab = .empty
-            }
-        }
-    }
-
-    private func resetTrigger() {
-        // allow new triggers after a sheet closes
-        isPresentingSheet = false
-        selectedTab = .empty
-    }
-    private func refreshItemImages() {
-        guard !selectedRankoItems.isEmpty else { return }
-        imageReloadToken = UUID() // change identity → rows/images rebuild
-    }
-    
-    // Item Helpers
-    private func delete(_ item: RankoItem) {
-        selectedRankoItems.removeAll { $0.id == item.id }
-        normalizeRanks()
-    }
-
-    private func moveToTop(_ item: RankoItem) {
-        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
-        let moved = selectedRankoItems.remove(at: idx)
-        selectedRankoItems.insert(moved, at: 0)
-        normalizeRanks()
-    }
-
-    private func moveToBottom(_ item: RankoItem) {
-        guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
-        let moved = selectedRankoItems.remove(at: idx)
-        selectedRankoItems.append(moved)
-        normalizeRanks()
-    }
-
-    private func normalizeRanks() {
-        for index in selectedRankoItems.indices {
-            selectedRankoItems[index].rank = index + 1
-        }
-    }
-    
-    func saveRankedListToAlgolia() {
-        guard let category = category else {
-            print("❌ Cannot save: no category selected")
-            return
-        }
-
-        let rawUID = Auth.auth().currentUser?.uid ?? user_data.userID
-        let invalidSet = CharacterSet(charactersIn: ".#$[]")
-        let safeUID = rawUID.components(separatedBy: invalidSet).joined()
-        guard !safeUID.isEmpty else {
-            print("❌ Cannot save: invalid user ID")
-            return
-        }
-
-        let now = Date()
-        let aedtFormatter = DateFormatter()
-        aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
-        aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
-        aedtFormatter.dateFormat = "yyyyMMddHHmmss"
-        let rankoDateTime = aedtFormatter.string(from: now)
-
-        // 1) Build Group List Codable Struct
-        let listRecord = RankoListAlgolia(
-            objectID:         listUUID,
-            RankoName:        rankoName,
-            RankoDescription: description,
-            RankoType:        "default",
-            RankoPrivacy:     isPrivate,
-            RankoStatus:      "active",
-            RankoCategory:    category.name,
-            RankoUserID:      safeUID,
-            RankoDateTime:    rankoDateTime,
-            RankoLikes:       0,
-            RankoComments:    0,
-            RankoVotes:       0
-        )
-
-        // 3) Upload to Algolia
-        let group = DispatchGroup()
-
-        group.enter()
-        listsIndex.saveObject(listRecord) { result in
-            switch result {
-            case .success:
-                print("✅ List uploaded to Algolia")
-            case .failure(let error):
-                print("❌ Error uploading list: \(error)")
-            }
-            group.leave()
-        }
-
-        group.notify(queue: .main) {
-            print("🎉 Upload to Algolia completed")
-        }
-    }
-
-    func saveRankedListToFirebase() {
-        // 1) Make sure we actually have a category
-        guard let category = category else {
-            print("❌ Cannot save: no category selected")
-            return
-        }
-        
-        let db = Database.database().reference()
-        let rawUID = Auth.auth().currentUser?.uid ?? user_data.userID
-        let invalidSet = CharacterSet(charactersIn: ".#$[]")
-        let safeUID = rawUID.components(separatedBy: invalidSet).joined()
-        guard !safeUID.isEmpty else {
-            print("❌ Cannot save: invalid user ID")
-            return
-        }
-        
-        // 2) Build your items payload
-        var rankoItemsDict: [String: Any] = [:]
-        for item in selectedRankoItems {
-            let itemID = UUID().uuidString
-            rankoItemsDict[itemID] = [
-                "ItemID":          itemID,
-                "ItemRank":        item.rank,
-                "ItemName":        item.itemName,
-                "ItemDescription": item.itemDescription,
-                "ItemImage":       item.itemImage,
-                "ItemVotes":       0
-            ]
-        }
-        
-        // 3) Prepare both AEDT and local timestamps
-        let now = Date()
-        
-        let aedtFormatter = DateFormatter()
-        aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
-        aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
-        aedtFormatter.dateFormat = "yyyyMMddHHmmss"
-        let rankoDateTime = aedtFormatter.string(from: now)
-        
-        // 4) Top-level list payload with both fields
-        let listDataForFirebase: [String: Any] = [
-            "RankoID":              listUUID,
-            "RankoName":            rankoName,
-            "RankoDescription":     description,
-            "RankoType":            "default",
-            "RankoPrivacy":         isPrivate,
-            "RankoStatus":          "active",
-            "RankoCategory":        category.name,
-            "RankoUserID":          safeUID,
-            "RankoItems":           rankoItemsDict,
-            "RankoDateTime":        rankoDateTime,
-        ]
-        
-        // 5) Write the main list node
-        db.child("RankoData")
-            .child(listUUID)
-            .setValue(listDataForFirebase) { error, _ in
-                if let err = error {
-                    print("❌ Error saving list: \(err.localizedDescription)")
-                } else {
-                    print("✅ List saved successfully")
-                }
-            }
-        
-        // 6) Write the user’s index of lists
-        db.child("UserData")
-            .child(user_data.userID)
-            .child("UserRankos")
-            .child("UserActiveRankos")
-            .child(listUUID)
-            .setValue(category.name) { error, _ in
-                if let err = error {
-                    print("❌ Error saving list to user: \(err.localizedDescription)")
-                } else {
-                    print("✅ List saved successfully to user")
-                }
-            }
-    }
-}
-
-
-/// Tab Enum
-enum DefaultListTab: String, CaseIterable {
-    case addItems = "Add Items"
-    case editDetails = "Edit Details"
-    case reRank = "Re-Rank"
-    case exit = "Exit"
-    case empty = "Empty"
-    
-    var symbolImage: String {
-        switch self {
-        case .addItems:
-            return "circle.grid.2x2"
-        case .editDetails:
-            return "square.text.square"
-        case .reRank:
-            return "rectangle.stack"
-        case .exit:
-            return "door.left.hand.closed"
-        case .empty:
-            return ""
-        }
-    }
-    
-    static var visibleCases: [DefaultListTab] {
-        return [.addItems, .editDetails, .reRank, .exit]
-    }
-}
-
 struct DefaultListEditDetails: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -2832,6 +2213,7 @@ struct DefaultListEditDetails: View {
     @State private var description: String
     @State private var isPrivate: Bool
     @State private var selectedCategoryChip: SampleCategoryChip?
+    @State private var initialCategoryChip: SampleCategoryChip?
 
     // MARK: – UI state
     @FocusState private var nameFocused: Bool
@@ -2847,8 +2229,7 @@ struct DefaultListEditDetails: View {
 
     // MARK: – Validation & shake
     @State private var rankoNameShake: CGFloat = 0
-    @State private var categoryShake: CGFloat = 0
-    private var isValid: Bool { !rankoName.isEmpty && (selectedCategoryChip != nil) }
+    private var isValid: Bool { !rankoName.isEmpty }
 
     private let onSave: (String, String, Bool, SampleCategoryChip?) -> Void
 
@@ -2878,9 +2259,15 @@ struct DefaultListEditDetails: View {
 
                         // Name
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("ranko name")
-                                .font(.custom("Nunito-Black", size: 12))
-                                .foregroundColor(.secondary)
+                            HStack {
+                                Text("ranko name")
+                                    .font(.custom("Nunito-Black", size: 12))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("\(rankoName.count)/50")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
                             TextField("e.g. Top 20 Countries I Want To Visit", text: $rankoName)
                                 .font(.custom("Nunito-Black", size: 16))
                                 .foregroundColor(.black)
@@ -2888,7 +2275,7 @@ struct DefaultListEditDetails: View {
                                 .autocorrectionDisabled(true)
                                 .focused($nameFocused)
                                 .onChange(of: rankoName) { _, new in
-                                    if new.count > 30 { rankoName = String(new.prefix(30)) }
+                                    if new.count > 50 { rankoName = String(new.prefix(50)) }
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 10)
@@ -2901,7 +2288,7 @@ struct DefaultListEditDetails: View {
 
                         // Privacy
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("privacy")
+                            Text("private")
                                 .font(.custom("Nunito-Black", size: 12))
                                 .foregroundColor(.secondary)
 
@@ -2917,13 +2304,8 @@ struct DefaultListEditDetails: View {
                             .toggleStyle(.switch)
                             .labelsHidden()
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.black.opacity(0.08))
-                            )
+                            .padding(.vertical, 5)
                         }
-                        .frame(width: 140) // tweak if you want more/less room
                     }
 
                     // MARK: Description
@@ -2953,6 +2335,13 @@ struct DefaultListEditDetails: View {
                                     .stroke(Color.black.opacity(0.08))
                             )
                     }
+                    .onChange(of: description) {
+                        let draftDescription = description
+                        if draftDescription.range(of: "\n") != nil {
+                            hideKeyboard()
+                            description = draftDescription.replacingOccurrences(of: "\n", with: "")
+                        }
+                    }
 
                     // MARK: Category (CreateSheet-style chips with expand/collapse)
                     VStack(alignment: .leading, spacing: 10) {
@@ -2963,14 +2352,36 @@ struct DefaultListEditDetails: View {
                             Text("*")
                                 .font(.custom("Nunito-Black", size: 12))
                                 .foregroundColor(.red.opacity(0.85))
+                            // Selected tag (small helper)
+                            if let sel = selectedCategoryChip {
+                                HStack(spacing: 6) {
+                                    Image(systemName: sel.icon)
+                                    Text(sel.name).font(.custom("Nunito-Black", size: 13))
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule().fill(Color.black.opacity(0.05))
+                                )
+                                .foregroundColor(.black)
+                            } else if let initCat = initialCategoryChip {
+                                HStack(spacing: 6) {
+                                    Image(systemName: initCat.icon)
+                                    Text(initCat.name).font(.custom("Nunito-Black", size: 13))
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(Color.black.opacity(0.05)))
+                                .foregroundColor(.black)
+                            }
                         }
 
                         // Your same chip UI
-                        ScrollView {
+                        VStack {
                             FlowLayout(spacing: 8) {
                                 ForEach(displayedChips) { chip in
                                     let isSelected = selectedPath.contains(chip.id)
-                                    SampleCategoryChipButtonView(
+                                    EditCategoryChipButtonView(
                                         categoryChip: chip,
                                         isSelected: isSelected,
                                         color: .accentColor
@@ -2983,8 +2394,8 @@ struct DefaultListEditDetails: View {
                                         impact.impactOccurred(intensity: 1.0)
 
                                         // persist final leaf as selectedCategoryChip
-                                        if let leaf = selectedPath.last,
-                                           let finalChip = repo.chip(for: leaf, level: max(0, selectedPath.count - 1)) {
+                                        if let leaf = selectedPath.last {
+                                            let finalChip = repo.chip(for: leaf, level: max(0, selectedPath.count - 1))
                                             selectedCategoryChip = finalChip
                                         } else {
                                             selectedCategoryChip = nil
@@ -2994,26 +2405,13 @@ struct DefaultListEditDetails: View {
                             }
                             .padding(.horizontal, 2)
                         }
-                        .frame(maxHeight: 240)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.black.opacity(0.06))
-                        )
-                        .modifier(ShakeEffect(travelDistance: 8, shakesPerUnit: 3, animatableData: categoryShake))
-
-                        // Selected tag (small helper)
-                        if let sel = selectedCategoryChip {
-                            HStack(spacing: 6) {
-                                Image(systemName: sel.icon)
-                                Text(sel.name).font(.custom("Nunito-Black", size: 13))
+                        .onChange(of: selectedCategoryChip) {
+                            if selectedCategoryChip == nil {
+                                selectedCategoryChip = initialCategoryChip
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule().fill(Color.black.opacity(0.05))
-                            )
-                            .foregroundColor(.black)
                         }
+
+                        
                     }
                     .task {
                         repo.loadOnce()
@@ -3028,6 +2426,9 @@ struct DefaultListEditDetails: View {
                     }
                 }
                 .padding(22)
+            }
+            .onAppear {
+                initialCategoryChip = selectedCategoryChip
             }
             .background(Color.white)                // full white
             .scrollContentBackground(.hidden)       // just in case this is used inside a Form somewhere
@@ -3063,7 +2464,7 @@ struct DefaultListEditDetails: View {
             }
         }
         .interactiveDismissDisabled(true)
-        .presentationDetents([.height(420)])       // tweak if needed
+        .presentationDetents([.height(550)])       // tweak if needed
         .presentationDragIndicator(.hidden)
     }
 }
@@ -3098,10 +2499,7 @@ private extension DefaultListEditDetails {
             nameFocused = true
             return
         }
-        guard selectedCategoryChip != nil else {
-            withAnimation { categoryShake += 1 }
-            return
-        }
+        
         onSave(rankoName, description, isPrivate, selectedCategoryChip)
         dismiss()
     }
@@ -3163,6 +2561,40 @@ private extension DefaultListEditDetails {
                 }
             }
         }
+    }
+}
+
+struct EditCategoryChipButtonView: View {
+    let categoryChip: SampleCategoryChip
+    let isSelected: Bool
+    let color: Color
+    let action: () -> Void
+
+    private func bgOpacity(_ level: Int) -> Double {
+        switch level { case 0: return 0.10; case 1: return 0.22; default: return 0.34 }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: categoryChip.icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 18, height: 18)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isSelected ? Color(hex: 0xFFFFFF) : Color(hex: 0x1B2024))
+                Text(categoryChip.name)
+                    .font(.custom("Nunito-Black", size: 16))
+                    .foregroundStyle(isSelected ? Color(hex: 0xFFFFFF) : Color(hex: 0x1B2024))
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.black.opacity(isSelected ? 1 : bgOpacity(categoryChip.level)))
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -3564,7 +2996,7 @@ struct DefaultListView_Previews: PreviewProvider {
             rankoName: "Top 10 Destinations",
             description: "Bucket-list travel spots around the world",
             isPrivate: false,
-            category: SampleCategoryChip(id: "", name: "Countries", icon: "globe.europe.africa.fill"),
+            category: SampleCategoryChip(id: "", name: "Countries", icon: "globe.europe.africa.fill", colour: "0xFFCF00"),
             selectedRankoItems: sampleItems
         ) { updatedItem in }
             // no-op in preview

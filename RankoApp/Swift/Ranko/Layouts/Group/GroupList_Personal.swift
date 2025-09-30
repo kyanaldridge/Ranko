@@ -68,7 +68,8 @@ struct GroupListPersonal: View {
         category: SampleCategoryChip? = SampleCategoryChip(
             id: "",
             name: "Unknown",
-            icon: "questionmark.circle.fill"
+            icon: "questionmark.circle.fill",
+            colour: "0xFFCF00"
         ),
         groupedItems: [RankoItem] = [],
         onSave: ((RankoItem) -> Void)? = nil,
@@ -654,7 +655,8 @@ struct GroupListPersonal: View {
                 categoryColour: catColour,
                 isPrivate: isPrivate ? "Private" : "Public",
                 userCreator: userID,
-                dateTime: dateTimeStr,
+                timeCreated: dateTimeStr,
+                timeUpdated: dateTimeStr,
                 items: items
             )
         })
@@ -680,7 +682,8 @@ struct GroupListPersonal: View {
             let cd = SampleCategoryChip(
                 id: id,
                 name: dict["name"] as? String ?? id,
-                icon: (dict["icon"] as? String)!
+                icon: (dict["icon"] as? String)!,
+                colour: (dict["colour"] as? String?)!!
             )
             completion(cd)
         }
@@ -702,7 +705,8 @@ struct GroupListPersonal: View {
                 let cd = SampleCategoryChip(
                     id: id,
                     name: (dict["name"] as? String) ?? name,
-                    icon: (dict["icon"] as? String)!
+                    icon: (dict["icon"] as? String)!,
+                    colour: (dict["colour"] as? String?)!!
                 )
                 completion(cd)
             } else {
@@ -1393,7 +1397,7 @@ struct GroupListPersonalView_Previews: PreviewProvider {
             rankoName: "Top 10 Destinations",
             description: "Bucket-list travel spots around the world",
             isPrivate: false,
-            category: SampleCategoryChip(id: "", name: "Countries", icon: "globe.europe.africa.fill"),
+            category: SampleCategoryChip(id: "", name: "Countries", icon: "globe.europe.africa.fill", colour: "0xFFCF00"),
             groupedItems: sampleItems
         )
         .previewLayout(.sizeThatFits)

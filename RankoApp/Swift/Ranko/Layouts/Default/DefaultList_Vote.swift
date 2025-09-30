@@ -64,7 +64,7 @@ struct DefaultListVote: View {
         rankoName: String = "",
         description: String = "",
         isPrivate: Bool = false,
-        category: SampleCategoryChip? = SampleCategoryChip(id: "", name: "Unknown", icon: "questionmark.circle.fill"),
+        category: SampleCategoryChip? = SampleCategoryChip(id: "", name: "Unknown", icon: "questionmark.circle.fill", colour: "0xFFCF00"),
         selectedRankoItems: [RankoItem] = []
     ) {
         self.listID = listID
@@ -532,7 +532,8 @@ struct DefaultListVote: View {
                 categoryColour: catColour,
                 isPrivate: isPrivate ? "Private" : "Public",
                 userCreator: userID,
-                dateTime: dateTimeStr,
+                timeCreated: dateTimeStr,
+                timeUpdated: dateTimeStr,
                 items: items
             )
         })
@@ -560,7 +561,8 @@ struct DefaultListVote: View {
             let cd = SampleCategoryChip(
                 id: id,
                 name: dict["name"] as? String ?? id,
-                icon: (dict["icon"] as? String)!
+                icon: (dict["icon"] as? String)!,
+                colour: (dict["colour"] as? String?)!!
             )
             completion(cd)
         }
@@ -581,8 +583,9 @@ struct DefaultListVote: View {
             }) {
                 let cd = SampleCategoryChip(
                     id: id,
-                    name: (dict["name"] as? String) ?? name,
-                    icon: (dict["icon"] as? String)!
+                    name: dict["name"] as? String ?? id,
+                    icon: (dict["icon"] as? String)!,
+                    colour: (dict["colour"] as? String?)!!
                 )
                 completion(cd)
             } else {
