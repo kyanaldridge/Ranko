@@ -324,7 +324,7 @@ struct DefaultListView: View {
                                     }
                                     .id(imageReloadToken)
                                     .padding(.top, 25)
-                                    .padding(.bottom, 30)
+                                    .padding(.bottom, 80)
                                     .padding(.horizontal)
                                 }
                             }
@@ -1821,7 +1821,7 @@ struct DefaultListView: View {
                 }
                 try await group.waitForAll()
             }
-            // Folders aren't real objects; deleting `ref` is typically a no-op, ignore errors.
+            // Folders aren't real objects; deleting ref is typically a no-op, ignore errors.
             _ = try? await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
                 ref.delete { _ in cont.resume() }
             }
@@ -2826,23 +2826,32 @@ enum DefaultListTab: String, CaseIterable {
 
 struct DefaultListEditDetails: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     // MARK: – Editable state
     @State private var rankoName: String
     @State private var description: String
     @State private var isPrivate: Bool
     @State private var selectedCategoryChip: SampleCategoryChip?
-    @State private var showCategoryPicker: Bool = false
-    
-    // MARK: – Validation & shake effects
+
+    // MARK: – UI state
+    @FocusState private var nameFocused: Bool
+    @FocusState private var descriptionFocused: Bool
+    @State private var showCategoryPicker: Bool = false   // (kept if you later want a modal)
+
+    // Category tree state (mirrors CreateSheet)
+    @StateObject private var repo = CategoryRepo()
+    @State private var localSelection: SampleCategoryChip? = nil
+    @State private var expandedParentID: String? = nil
+    @State private var expandedSubID: String? = nil
+    @State private var selectedPath: [String] = []
+
+    // MARK: – Validation & shake
     @State private var rankoNameShake: CGFloat = 0
     @State private var categoryShake: CGFloat = 0
-    private var isValid: Bool {
-        !rankoName.isEmpty && selectedCategoryChip != nil
-    }
-    
+    private var isValid: Bool { !rankoName.isEmpty && (selectedCategoryChip != nil) }
+
     private let onSave: (String, String, Bool, SampleCategoryChip?) -> Void
-    
+
     init(
         rankoName: String,
         description: String = "",
@@ -2850,224 +2859,310 @@ struct DefaultListEditDetails: View {
         category: SampleCategoryChip?,
         onSave: @escaping (String, String, Bool, SampleCategoryChip?) -> Void
     ) {
-        self.onSave              = onSave
-        
-        _rankoName    = State(initialValue: rankoName)
-        _description  = State(initialValue: description)
-        _isPrivate    = State(initialValue: isPrivate)
+        self.onSave = onSave
+        _rankoName  = State(initialValue: rankoName)
+        _description = State(initialValue: description)
+        _isPrivate  = State(initialValue: isPrivate)
         _selectedCategoryChip = State(initialValue: category)
+        _localSelection = State(initialValue: category)
+        // if you pass a category, pre-expand its path on appear
     }
-    
+
     var body: some View {
-        NavigationView {
-            VStack(spacing: 16) {
-                // Ranko Name Field
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 3) {
-                        Text("Ranko Name")
-                            .font(.system(size: 14, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x857467))
-                            .padding(.leading, 6)
-                        Text("*")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(Color(hex: 0x4C2C33))
-                    }
-                    HStack {
-                        Image(systemName: "trophy.fill")
-                            .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x857467))
-                            .padding(.trailing, 1)
-                        TextField("Enter name", text: $rankoName, axis: .vertical)
-                            .lineLimit(1...2)
-                            .autocorrectionDisabled(true)
-                            .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x857467))
-                            .onChange(of: rankoName) { _, newValue in
-                                if newValue.count > 30 {
-                                    rankoName = String(newValue.prefix(30))
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 18) {
+
+                    // MARK: Row 1 — Ranko Name + Privacy Toggle
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+
+                        // Name
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("ranko name")
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(.secondary)
+                            TextField("e.g. Top 20 Countries I Want To Visit", text: $rankoName)
+                                .font(.custom("Nunito-Black", size: 16))
+                                .foregroundColor(.black)
+                                .textInputAutocapitalization(.words)
+                                .autocorrectionDisabled(true)
+                                .focused($nameFocused)
+                                .onChange(of: rankoName) { _, new in
+                                    if new.count > 30 { rankoName = String(new.prefix(30)) }
                                 }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.black.opacity(0.08))
+                                )
+                        }
+                        .modifier(ShakeEffect(travelDistance: 8, shakesPerUnit: 3, animatableData: rankoNameShake))
+
+                        // Privacy
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("privacy")
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(.secondary)
+
+                            Toggle(isOn: $isPrivate) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: isPrivate ? "lock.fill" : "globe")
+                                        .font(.system(size: 13, weight: .black))
+                                    Text(isPrivate ? "Private" : "Public")
+                                        .font(.custom("Nunito-Black", size: 14))
+                                }
+                                .foregroundColor(.black)
                             }
-                        Spacer()
-                        Text("\(rankoName.count)/30")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .padding(.top, 6)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.black.opacity(0.08))
+                            )
+                        }
+                        .frame(width: 140) // tweak if you want more/less room
                     }
-                    .padding(10)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .foregroundColor(Color.gray.opacity(0.08))
-                            .allowsHitTesting(false)
-                    )
-                }
-                .padding(.top, 30)
-                .modifier(ShakeEffect(travelDistance: 10, shakesPerUnit: 3, animatableData: rankoNameShake))
-                
-                // Description Field
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Description")
-                        .font(.system(size: 14, weight: .heavy))
-                        .foregroundColor(Color(hex: 0x857467))
-                        .padding(.leading, 6)
-                    HStack(alignment: .top) {
-                        Image(systemName: "pencil.line")
-                            .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x857467))
-                            .padding(.trailing, 1)
-                        TextField("Enter Description", text: $description, axis: .vertical)
+
+                    // MARK: Description
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("description")
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("\(description.count)/250")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        TextField("add a short description… (optional)", text: $description, axis: .vertical)
                             .lineLimit(3...5)
                             .autocorrectionDisabled(true)
-                            .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x857467))
-                            .onChange(of: description) { _, newValue in
-                                if newValue.count > 250 {
-                                    description = String(newValue.prefix(250))
-                                }
+                            .font(.custom("Nunito-Black", size: 15))
+                            .foregroundColor(.black)
+                            .focused($descriptionFocused)
+                            .onChange(of: description) { _, new in
+                                if new.count > 250 { description = String(new.prefix(250)) }
                             }
-                        Spacer()
-                        Text("\(description.count)/250")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .padding(.top, 6)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.black.opacity(0.08))
+                            )
                     }
-                    .padding(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .foregroundColor(Color.gray.opacity(0.08))
-                            .allowsHitTesting(false)
-                    )
-                }
-                .padding(.top, 10)
-                
-                // Category & Privacy Toggle
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 3) {
-                            Text("Category")
-                                .font(.system(size: 14, weight: .heavy))
-                                .foregroundColor(Color(hex: 0x857467))
+
+                    // MARK: Category (CreateSheet-style chips with expand/collapse)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("category")
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(.secondary)
                             Text("*")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(Color(hex: 0x4C2C33))
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(.red.opacity(0.85))
                         }
-                        .padding(.leading, 6)
-                        Button {
-                            showCategoryPicker = true
-                        } label: {
-                            HStack {
-                                if let chip = selectedCategoryChip {
-                                    Image(systemName: chip.icon)
-                                    Text(chip.name).bold()
-                                } else {
-                                    Image(systemName: "square.grid.2x2.fill")
-                                    Text("Select Category")
-                                        .bold()
-                                        .foregroundColor(.gray)
+
+                        // Your same chip UI
+                        ScrollView {
+                            FlowLayout(spacing: 8) {
+                                ForEach(displayedChips) { chip in
+                                    let isSelected = selectedPath.contains(chip.id)
+                                    SampleCategoryChipButtonView(
+                                        categoryChip: chip,
+                                        isSelected: isSelected,
+                                        color: .accentColor
+                                    ) {
+                                        handleChipTap(chip)
+
+                                        // haptic
+                                        let impact = UIImpactFeedbackGenerator(style: .soft)
+                                        impact.prepare()
+                                        impact.impactOccurred(intensity: 1.0)
+
+                                        // persist final leaf as selectedCategoryChip
+                                        if let leaf = selectedPath.last,
+                                           let finalChip = repo.chip(for: leaf, level: max(0, selectedPath.count - 1)) {
+                                            selectedCategoryChip = finalChip
+                                        } else {
+                                            selectedCategoryChip = nil
+                                        }
+                                    }
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.down")
                             }
-                            .padding(8)
-                            .foregroundColor(.white)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(
-                                        (categoryChipIconColors[selectedCategoryChip?.name ?? ""] ?? .gray)
-                                    )
-                            )
+                            .padding(.horizontal, 2)
                         }
-                        .modifier(ShakeEffect(travelDistance: 10, shakesPerUnit: 3, animatableData: categoryShake))
+                        .frame(maxHeight: 240)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.black.opacity(0.06))
+                        )
+                        .modifier(ShakeEffect(travelDistance: 8, shakesPerUnit: 3, animatableData: categoryShake))
+
+                        // Selected tag (small helper)
+                        if let sel = selectedCategoryChip {
+                            HStack(spacing: 6) {
+                                Image(systemName: sel.icon)
+                                Text(sel.name).font(.custom("Nunito-Black", size: 13))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule().fill(Color.black.opacity(0.05))
+                            )
+                            .foregroundColor(.black)
+                        }
                     }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Privacy")
-                            .font(.system(size: 14, weight: .heavy))
-                            .foregroundColor(Color(hex: 0x857467))
-                            .padding(.leading, 6)
-                        Button {
-                            withAnimation {
-                                isPrivate.toggle()
-                            }
-                        } label: {
-                            HStack {
-                                Image(systemName: isPrivate ? "lock.fill" : "globe")
-                                Text(isPrivate ? "Private" : "Public").bold()
-                            }
-                            .padding(8)
-                            .foregroundColor(Color(hex: 0xFFFFFF))
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(isPrivate ? Color(hex: 0xFE8C34) : Color(hex: 0x42ADFF))
-                            )
+                    .task {
+                        repo.loadOnce()
+                        if let pre = selectedCategoryChip {
+                            // expand to preselected category path
+                            let path = ancestorsPath(to: pre.id)
+                            selectedPath = path
+                            localSelection = repo.chip(for: pre.id, level: max(0, path.count - 1))
+                            expandedParentID = path.first
+                            expandedSubID = path.count >= 2 ? path[1] : nil
                         }
-                        .contentTransition(.symbolEffect(.replace))
                     }
                 }
-                .padding(.bottom, 10)
-                
-                // Action Buttons
-                HStack(spacing: 12) {
+                .padding(22)
+            }
+            .background(Color.white)                // full white
+            .scrollContentBackground(.hidden)       // just in case this is used inside a Form somewhere
+
+            // MARK: Toolbar
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Edit Details")
+                        .font(.custom("Nunito-Black", size: 18))
+                        .foregroundColor(.black)
+                }
+                ToolbarItem(placement: .topBarLeading) {
                     Button {
                         dismiss()
                     } label: {
-                        Text("Cancel")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundColor(.black)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .foregroundColor(.white)
-                    .background(Color(hex: 0xA26A2A), in: RoundedRectangle(cornerRadius: 8))
-                    
+                    .accessibilityLabel("Cancel")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        if isValid {
-                            onSave(rankoName, description, isPrivate, selectedCategoryChip)
-                            dismiss()
-                        } else {
-                            if rankoName.isEmpty {
-                                withAnimation { rankoNameShake += 1 }
-                            }
-                            if selectedCategoryChip == nil {
-                                withAnimation { categoryShake += 1 }
-                            }
-                        }
+                        saveTapped()
                     } label: {
-                        Text("Save Changes")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Color(hex: 0xFFFFFF))
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundColor(.black)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color(hex: 0x6D400F), in: RoundedRectangle(cornerRadius: 8))
-                    .opacity(isValid ? 1 : 0.6)
-                }
-                
-                Spacer(minLength: 0)
-            }
-            .toolbar {
-                ToolbarItemGroup(placement: .principal) {
-                    Text("Edit Ranko Details")
-                        .font(.system(size: 20, weight: .black, design: .rounded))
-                        .foregroundColor(Color(hex: 0x857467))
+                    .accessibilityLabel("Save Changes")
                 }
             }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
         }
-        .padding(.horizontal, 22)
-        // Category picker sheet
-//        .sheet(isPresented: $showCategoryPicker) {
-//            CategoryPickerView(
-//                categoryChipsByCategory: categoryChipsByCategory,
-//                selectedCategoryChip: $selectedCategoryChip,
-//                isPresented: $showCategoryPicker
-//            )
-//        }
-        // Use exact height (clamped to a minimum) for our sheet
-        .presentationDetents([.height(400)])
-        .presentationDragIndicator(.hidden)
-        .presentationBackground(Color(hex: 0xFFF5E1))
         .interactiveDismissDisabled(true)
+        .presentationDetents([.height(420)])       // tweak if needed
+        .presentationDragIndicator(.hidden)
+    }
+}
+
+// MARK: - Helpers (mirrors your CreateSheet logic)
+
+private extension DefaultListEditDetails {
+
+    var displayedChips: [SampleCategoryChip] {
+        var flat = repo.topLevelChips
+        guard let pid = expandedParentID,
+              let pIdx = flat.firstIndex(where: { $0.id == pid })
+        else { return flat }
+
+        // insert level-1 after parent
+        let level1 = repo.subChips(for: pid, parentLevel: 0)
+        flat.insert(contentsOf: level1, at: pIdx + 1)
+
+        // insert level-2 after the expanded sub
+        if let sid = expandedSubID,
+           let sIdx = flat.firstIndex(where: { $0.id == sid }),
+           repo.hasSubs(sid) {
+            let level2 = repo.subChips(for: sid, parentLevel: 1)
+            flat.insert(contentsOf: level2, at: sIdx + 1)
+        }
+        return flat
+    }
+
+    func saveTapped() {
+        guard !rankoName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            withAnimation { rankoNameShake += 1 }
+            nameFocused = true
+            return
+        }
+        guard selectedCategoryChip != nil else {
+            withAnimation { categoryShake += 1 }
+            return
+        }
+        onSave(rankoName, description, isPrivate, selectedCategoryChip)
+        dismiss()
+    }
+
+    func ancestorsPath(to id: String) -> [String] {
+        var path: [String] = [id]
+        var cur = id
+        while let p = repo.parentByChild[cur] {
+            path.append(p)
+            cur = p
+        }
+        return path.reversed()
+    }
+
+    func handleChipTap(_ chip: SampleCategoryChip) {
+        let path = ancestorsPath(to: chip.id)
+        let lvl  = max(0, path.count - 1)
+
+        if let idx = selectedPath.firstIndex(of: chip.id) {
+            // deselect from this node down
+            selectedPath.removeSubrange(idx..<selectedPath.count)
+            if let last = selectedPath.last {
+                localSelection = repo.chip(for: last, level: max(0, selectedPath.count - 1))
+            } else {
+                localSelection = nil
+            }
+            withAnimation(.easeInOut(duration: 0.22)) {
+                switch lvl {
+                case 0:
+                    expandedParentID = nil
+                    expandedSubID = nil
+                case 1:
+                    if expandedSubID == chip.id { expandedSubID = nil }
+                default: break
+                }
+            }
+            return
+        }
+
+        // select full chain
+        selectedPath = path
+        localSelection = repo.chip(for: chip.id, level: lvl)
+
+        withAnimation(.easeInOut(duration: 0.22)) {
+            if lvl == 0 {
+                expandedParentID = (expandedParentID == chip.id) ? nil : chip.id
+                if expandedParentID == nil { expandedSubID = nil }
+            } else if lvl == 1 {
+                if let parent = path.first, expandedParentID != parent {
+                    expandedParentID = parent
+                }
+                expandedSubID = (expandedSubID == chip.id) ? nil : chip.id
+            } else {
+                if path.count >= 2 {
+                    let parent0 = path[0]
+                    let parent1 = path[1]
+                    if expandedParentID != parent0 { expandedParentID = parent0 }
+                    if expandedSubID != parent1   { expandedSubID = parent1 }
+                }
+            }
+        }
     }
 }
 
@@ -3471,9 +3566,8 @@ struct DefaultListView_Previews: PreviewProvider {
             isPrivate: false,
             category: SampleCategoryChip(id: "", name: "Countries", icon: "globe.europe.africa.fill"),
             selectedRankoItems: sampleItems
-        ) { updatedItem in
+        ) { updatedItem in }
             // no-op in preview
-        }
          // Optional: wrap in a NavigationView or set a fixed frame for better preview layout
         .colorScheme(.light)
         .accentColor(Color(hex: 0xC34F01))

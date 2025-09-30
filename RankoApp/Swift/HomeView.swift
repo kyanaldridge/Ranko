@@ -178,7 +178,7 @@ struct HomeView: View {
             .child("RankoData")
             .child(objectID)
 
-        ref.observeSingleEvent(of: .value) { snap in
+        ref.observeSingleEvent(of: .value, with: { snap in
             guard let dict = snap.value as? [String: Any] else {
                 completion(nil); return
             }
@@ -199,7 +199,7 @@ struct HomeView: View {
             let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
             let catName  = (cat["name"] as? String) ?? ""
             let catIcon  = (cat["icon"] as? String) ?? ""
-            let catColour = intFromAny(cat["colour"]) ?? 0  // store as Int; convert to your Color later
+            let catColour = UInt(cat["colour"] as! String) ?? UInt(0xFFFFFF)  // store as Int; convert to your Color later
 
             // Items
             let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
@@ -239,7 +239,7 @@ struct HomeView: View {
 
             // If UI code expects main thread:
             DispatchQueue.main.async { completion(list) }
-        }
+        })
     }
 
     // Helper to safely coerce Firebase numbers/strings into Int
@@ -522,7 +522,7 @@ struct HomeView: View {
         print("UserID: \(uid)")
         print("🤔 Checking If Introduction Survey Should Open...")
         
-        userDetails.observeSingleEvent(of: .value) { snapshot in
+        userDetails.observeSingleEvent(of: .value, with: { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
                 print("❌ Failed To Fetch User Data From Firebase.")
                 checkIfTrayShouldOpen()
@@ -541,9 +541,9 @@ struct HomeView: View {
             
             print("✅ Successfully Loaded User Details.")
             
-        }
+        })
         
-        userProfilePicture.observe(.value) { snapshot in
+        userProfilePicture.observe(.value, with: { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
                 print("❌ Failed To Fetch User Data From Firebase.")
                 return
@@ -565,9 +565,9 @@ struct HomeView: View {
                 print("✅ Using Cached Profile Image From Disk.")
                 imageService.reloadFromDisk()
             }
-        }
+        })
         
-        userStats.observeSingleEvent(of: .value) { snapshot in
+        userStats.observeSingleEvent(of: .value, with: { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
                 print("❌ Failed To Fetch User Data From Firebase.")
                 return
@@ -579,7 +579,7 @@ struct HomeView: View {
             
             print("✅ Successfully Loaded Statistics Details.")
             print("✅ Successfully Loaded All User Data.")
-        }
+        })
     }
     
     private func checkIfTrayShouldOpen() {
@@ -980,7 +980,7 @@ struct DefaultListHomeView: View {
         }
 
         // 2) Read once to confirm server state
-        likeRef.observeSingleEvent(of: .value) { snapshot in
+        likeRef.observeSingleEvent(of: .value, with: { snapshot in
             if snapshot.exists() {
                 // 👎 Unlike on server
                 likeRef.removeValue { error, _ in
@@ -1004,7 +1004,7 @@ struct DefaultListHomeView: View {
                     isLikeDisabled = false
                 }
             }
-        } withCancel: { error in
+        }) { error in
             // Handle read error
             print("Read error:", error)
             // Roll back optimistic change
@@ -1030,14 +1030,14 @@ struct DefaultListHomeView: View {
     private func fetchCreatorName() {
         let userDetails = Database.database().reference().child("UserData").child(listData.userCreator).child("UserDetails")
 
-        userDetails.observeSingleEvent(of: .value) { snapshot in
+        userDetails.observeSingleEvent(of: .value, with: { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
                 print("❌ Could Not Load User Data for HomeView Rankos with UserID: \(listData.userCreator)")
                 return
             }
 
             self.creatorName = value["UserName"] as? String ?? ""
-        }
+        })
     }
     
     // MARK: — Fetch likes
@@ -1048,13 +1048,13 @@ struct DefaultListHomeView: View {
             .child(listData.id)
             .child("RankoLikes")
         
-        ref.observe(.value) { snap in
+        ref.observe(.value, with: { snap in
             if let dict = snap.value as? [String: String] {
                 likes = dict
             } else {
                 likes = [:]
             }
-        }
+        })
         
         // ✅ Algolia update
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
@@ -1081,13 +1081,13 @@ struct DefaultListHomeView: View {
             .child(listData.id)
             .child("RankoComments")
 
-        ref.observe(.value) { snap in
+        ref.observe(.value, with: { snap in
             if let dict = snap.value as? [String: Any] {
                 commentsCount = dict.count
             } else {
                 commentsCount = 0
             }
-        }
+        })
         
         // ✅ Algolia update
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
@@ -1361,7 +1361,7 @@ struct HomeListsDisplay: View {
         
         let rankoDataRef = Database.database().reference().child("RankoData")
         
-        rankoDataRef.observeSingleEvent(of: .value) { snapshot,anything  in
+        rankoDataRef.observeSingleEvent(of: .value, with: { snapshot in
             guard let value = snapshot.value as? [String: Any] else {
                 self.errorMessage = "❌ No data found."
                 self.isLoading = false
@@ -1425,7 +1425,7 @@ struct HomeListsDisplay: View {
                 self.lists = fetchedLists
                 self.isLoading = false
             }
-        }
+        })
     }
 }
 

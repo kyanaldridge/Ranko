@@ -50,9 +50,9 @@ struct DefaultListPersonal: View {
     @State private var description: String = ""
     @State private var isPrivate: Bool = false
     @State private var category: SampleCategoryChip? = nil
-    @State private var categoryID: String = ""
     @State private var categoryName: String = ""
     @State private var categoryIcon: String? = nil
+    @State private var categoryColour: UInt = 0x000000
     
     // Original values (to revert if needed)
     @State private var originalRankoName: String = ""
@@ -186,27 +186,24 @@ struct DefaultListPersonal: View {
                                     RoundedRectangle(cornerRadius: 12)
                                         .fill(Color(hex: 0xF2AB69))
                                 )
-                                
-                                if let cat = category {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: cat.icon)
-                                            .font(.caption)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.white)
-                                            .padding(.leading, 10)
-                                        Text(cat.name)
-                                            .font(.system(size: 12, weight: .bold, design: .default))
-                                            .foregroundColor(.white)
-                                            .padding(.trailing, 10)
-                                            .padding(.vertical, 8)
-                                        
-                                    }
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(categoryChipIconColors[cat.name] ?? .gray)
-                                            .opacity(0.6)
-                                    )
+                                HStack(spacing: 4) {
+                                    Image(systemName: categoryIcon ?? "circle")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                        .padding(.leading, 10)
+                                    Text(categoryName)
+                                        .font(.system(size: 12, weight: .bold, design: .default))
+                                        .foregroundColor(.white)
+                                        .padding(.trailing, 10)
+                                        .padding(.vertical, 8)
+                                    
                                 }
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(hex: categoryColour))
+                                        .opacity(0.6)
+                                )
                                 
                                 Spacer()
                             }
@@ -357,7 +354,7 @@ struct DefaultListPersonal: View {
                                     }
                                     .id(imageReloadToken)
                                     .padding(.top, 25)
-                                    .padding(.bottom, 30)
+                                    .padding(.bottom, 80)
                                     .padding(.horizontal)
                                 }
                             }
@@ -1174,60 +1171,111 @@ struct DefaultListPersonal: View {
     }
     
     private func loadListFromFirebase() {
-        let db = Database.database().reference()
-        let listRef = db.child("RankoData").child(listID)
+        let ref = Database.database().reference()
+            .child("RankoData")
+            .child(listID)
+        
+        func parseColour(_ any: Any?) -> Int {
+            // numbers coming from Firebase (Int/Double)
+            if let n = any as? NSNumber {
+                return n.intValue
+            }
+            // strings: "16776960", "#FFCC00", "0xFFCC00", "FFCC00"
+            if let s = any as? String {
+                let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                // try decimal first
+                if let dec = Int(trimmed) { return dec }
+                // strip prefixes for hex
+                var hex = trimmed.lowercased()
+                if hex.hasPrefix("#") { hex.removeFirst() }
+                if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                if let hx = Int(hex, radix: 16) { return hx }
+            }
+            // fallback
+            return 0xFFFFFF
+        }
 
-        listRef.observeSingleEvent(of: .value, with: { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                print("⚠️ No data at RankoData/\(listID)")
+        ref.observeSingleEvent(of: .value, with: { snap in
+            guard let dict = snap.value as? [String: Any] else {
                 return
             }
 
-            // map top-level
-            let rankoName   = data["RankoName"]        as? String ?? ""
-            let description = data["RankoDescription"] as? String ?? ""
-            let isPrivate   = data["RankoPrivacy"]     as? Bool   ?? false
+            // Core fields
+            guard
+                let name = dict["RankoName"] as? String,
+                let des = dict["RankoDescription"] as? String,
+                let type = dict["RankoType"] as? String,
+                let isPriv = dict["RankoPrivacy"] as? Bool,
+                let userID = dict["RankoUserID"] as? String,
+                let dateTimeStr = dict["RankoDateTime"] as? String
+            else {
+                return
+            }
+            
+            var catName = "Unknown"
+            var catIcon = "circle"
+            var catColourInt = 0x446D7A
 
-            // push to UI on main
-            DispatchQueue.main.async {
-                self.rankoName   = rankoName
-                self.description = description
-                self.isPrivate   = isPrivate
+            // Category (nested)
+            if let cat = dict["RankoCategory"] as? [String: Any] {
+                catName  = (cat["name"] as? String) ?? ""
+                catIcon  = (cat["icon"] as? String) ?? ""
+                catColourInt = parseColour(cat["colour"])
             }
 
-            // --- ITEMS ---
-            if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
-                var loaded: [RankoItem] = []
+            // Items
+            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
+            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
+                guard
+                    let itemName = item["ItemName"] as? String,
+                    let itemDesc = item["ItemDescription"] as? String,
+                    let itemImage = item["ItemImage"] as? String
+                else { return nil }
 
-                for (_, itemData) in itemsDict {
-                    guard
-                        let id    = itemData["ItemID"]          as? String,
-                        let name  = itemData["ItemName"]        as? String,
-                        let desc  = itemData["ItemDescription"] as? String,
-                        let image = itemData["ItemImage"]       as? String,
-                        let rank  = itemData["ItemRank"]        as? Int,
-                        let votes = itemData["ItemVotes"]       as? Int
-                    else { continue }
+                let rank  = intFromAny(item["ItemRank"])  ?? 0
+                let votes = intFromAny(item["ItemVotes"]) ?? 0
 
-                    let record = RankoRecord(
-                        objectID: id,
-                        ItemName: name,
-                        ItemDescription: desc,
-                        ItemCategory: "",   // populate if you store per-item cats
-                        ItemImage: image
-                    )
-
-                    loaded.append(RankoItem(id: id, rank: rank, votes: votes, record: record))
-                }
-
-                DispatchQueue.main.async {
-                    self.selectedRankoItems = loaded.sorted { $0.rank < $1.rank }
-                }
+                let record = RankoRecord(
+                    objectID: itemID,
+                    ItemName: itemName,
+                    ItemDescription: itemDesc,
+                    ItemCategory: "category",  // replace if you store real per-item category
+                    ItemImage: itemImage
+                )
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
             }
 
-        }, withCancel: { error in
-            print("❌ Firebase load error:", error.localizedDescription)
+            let list = RankoList(
+                id: listID,
+                listName: name,
+                listDescription: des,
+                type: type,
+                categoryName: catName,
+                categoryIcon: catIcon,
+                categoryColour: UInt(catColourInt),
+                isPrivate: isPriv ? "Private" : "Public",
+                userCreator: userID,
+                dateTime: dateTimeStr,
+                items: items
+            )
+            
+            rankoName = list.listName
+            description = list.listDescription
+            isPrivate = list.isPrivate == "Private"
+            categoryName = list.categoryName
+            categoryIcon = list.categoryIcon
+            categoryColour = list.categoryColour
+            selectedRankoItems = items.sorted(by: { $0.rank < $1.rank })
         })
+    }
+
+    // Helper to safely coerce Firebase numbers/strings into Int
+    private func intFromAny(_ any: Any?) -> Int? {
+        if let i = any as? Int { return i }
+        if let d = any as? Double { return Int(d) }
+        if let s = any as? String { return Int(s) }
+        if let n = any as? NSNumber { return n.intValue }
+        return nil
     }
     
     // Item Helpers

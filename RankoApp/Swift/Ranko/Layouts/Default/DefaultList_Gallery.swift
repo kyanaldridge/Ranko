@@ -28,7 +28,7 @@ struct DefaultListIndividualGallery: View {
                     .foregroundColor(Color(hex: 0x514343))
                     .multilineTextAlignment(.leading)
                 HStack(spacing: 6) {
-                    FeaturedCategoryBadge(text: listData.categoryName)
+                    FeaturedCategoryBadge(name: listData.categoryName, icon: listData.categoryIcon, colour: listData.categoryColour)
                     Text("• \(timeAgo(from: String(listData.dateTime)))")
                         .font(.custom("Nunito-Black", size: 9))
                         .foregroundColor(Color(hex: 0x514343))

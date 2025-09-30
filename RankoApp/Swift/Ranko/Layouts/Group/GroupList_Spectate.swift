@@ -559,102 +559,78 @@ struct GroupListSpectate: View {
     }
     
     private func loadListFromFirebase() {
-        let db = Database.database().reference()
-        let listRef = db.child("RankoData").child(listID)
+        let ref = Database.database().reference()
+            .child("RankoData")
+            .child(listID)
 
-        listRef.observeSingleEvent(of: .value, with: { snapshot in
-            guard let data = snapshot.value as? [String: Any] else {
-                print("⚠️ No data at RankoData/\(listID)")
+        ref.observeSingleEvent(of: .value, with: { snap in
+            guard let dict = snap.value as? [String: Any] else {
                 return
             }
 
-            // map top-level
-            let rankoName   = data["RankoName"]        as? String ?? ""
-            let description = data["RankoDescription"] as? String ?? ""
-            let isPrivate   = data["RankoPrivacy"]     as? Bool   ?? false
-
-            // push to UI on main
-            DispatchQueue.main.async {
-                self.rankoName   = rankoName
-                self.description = description
-                self.isPrivate   = isPrivate
+            // Core fields
+            guard
+                let name = dict["RankoName"] as? String,
+                let description = dict["RankoDescription"] as? String,
+                let type = dict["RankoType"] as? String,
+                let isPrivate = dict["RankoPrivacy"] as? Bool,
+                let userID = dict["RankoUserID"] as? String,
+                let dateTimeStr = dict["RankoDateTime"] as? String
+            else {
+                return
             }
 
-            // --- CATEGORY LOOKUP ---
-            // Prefer an ID if present; otherwise fall back to the old name field.
-            let catID   = (data["RankoCategoryID"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let catName = (data["RankoCategory"]   as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Category (nested)
+            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
+            let catName  = (cat["name"] as? String) ?? ""
+            let catIcon  = (cat["icon"] as? String) ?? ""
+            let catColour = UInt(cat["colour"] as! String) ?? UInt(0xFFFFFF)  // store as Int; convert to your Color later
 
-            if let id = catID, !id.isEmpty {
-                fetchCategoryByID(id) { cat in
-                    DispatchQueue.main.async {
-                        if let cat {
-                            // adapt to your model:
-                            // if you still have `self.category` (SampleCategoryChip?), construct it here.
-                            // Else store resolved bits:
-                            self.categoryID   = cat.id
-                            self.categoryName = cat.name
-                            self.categoryIcon = cat.icon
-                        } else {
-                            // fallback if id missing in DB
-                            self.categoryID   = id
-                            self.categoryName = catName ?? id
-                            self.categoryIcon = nil
-                        }
-                    }
-                }
-            } else if let name = catName, !name.isEmpty {
-                fetchCategoryByName(name) { cat in
-                    DispatchQueue.main.async {
-                        if let cat {
-                            self.categoryID   = cat.id
-                            self.categoryName = cat.name
-                            self.categoryIcon = cat.icon
-                        } else {
-                            // still show something
-                            self.categoryID   = ""
-                            self.categoryName = name
-                            self.categoryIcon = nil
-                        }
-                    }
-                }
-            } else {
-                print("⚠️ No category field present on RankoData/\(listID)")
+            // Items
+            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
+            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
+                guard
+                    let itemName = item["ItemName"] as? String,
+                    let itemDesc = item["ItemDescription"] as? String,
+                    let itemImage = item["ItemImage"] as? String
+                else { return nil }
+
+                let rank  = intFromAny(item["ItemRank"])  ?? 0
+                let votes = intFromAny(item["ItemVotes"]) ?? 0
+
+                let record = RankoRecord(
+                    objectID: itemID,
+                    ItemName: itemName,
+                    ItemDescription: itemDesc,
+                    ItemCategory: "category",  // replace if you store real per-item category
+                    ItemImage: itemImage
+                )
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
             }
 
-            // --- ITEMS ---
-            if let itemsDict = data["RankoItems"] as? [String: [String: Any]] {
-                var loaded: [RankoItem] = []
-
-                for (_, itemData) in itemsDict {
-                    guard
-                        let id    = itemData["ItemID"]          as? String,
-                        let name  = itemData["ItemName"]        as? String,
-                        let desc  = itemData["ItemDescription"] as? String,
-                        let image = itemData["ItemImage"]       as? String,
-                        let rank  = itemData["ItemRank"]        as? Int,
-                        let votes = itemData["ItemVotes"]       as? Int
-                    else { continue }
-
-                    let record = RankoRecord(
-                        objectID: id,
-                        ItemName: name,
-                        ItemDescription: desc,
-                        ItemCategory: "",   // populate if you store per-item cats
-                        ItemImage: image
-                    )
-
-                    loaded.append(RankoItem(id: id, rank: rank, votes: votes, record: record))
-                }
-
-                DispatchQueue.main.async {
-                    self.unGroupedItems = loaded.sorted { $0.rank < $1.rank }
-                }
-            }
-
-        }, withCancel: { error in
-            print("❌ Firebase load error:", error.localizedDescription)
+            let list = RankoList(
+                id: listID,
+                listName: name,
+                listDescription: description,
+                type: type,
+                categoryName: catName,
+                categoryIcon: catIcon,
+                categoryColour: catColour,
+                isPrivate: isPrivate ? "Private" : "Public",
+                userCreator: userID,
+                dateTime: dateTimeStr,
+                items: items
+            )
         })
+    }
+
+    // Helper to safely coerce Firebase numbers/strings into Int
+    private func intFromAny(_ any: Any?) -> Int? {
+        if let i = any as? Int { return i }
+        if let d = any as? Double { return Int(d) }
+        if let s = any as? String { return Int(s) }
+        if let n = any as? NSNumber { return n.intValue }
+        return nil
     }
     
     

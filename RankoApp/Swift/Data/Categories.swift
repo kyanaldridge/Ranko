@@ -409,22 +409,25 @@ struct CategoryPickerView: View {
 
 // MARK: – Category badge helper
 struct FeaturedCategoryBadge: View {
-    let text: String
+    let name: String
+    let icon: String
+    let colour: UInt
+    
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: FilterChip.icon(named: text, in: defaultFilterChips) ?? "circle.fill")
+            Image(systemName: icon)
                 .font(.system(size: 10, weight: .heavy))
-                .foregroundColor(categoryChipIconColors[text])
-            Text(text)
+                .foregroundColor(Color(hex: colour))
+            Text(name)
                 .font(.custom("Nunito-ExtraBold", size: 11))
-                .foregroundColor(categoryChipIconColors[text])
+                .foregroundColor(Color(hex: colour))
         }
         .font(.caption)
         .padding(.vertical, 3)
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(categoryChipIconColors[text] ?? .black)
+                .fill(Color(hex: colour))
                 .opacity(0.15)
         )
     }

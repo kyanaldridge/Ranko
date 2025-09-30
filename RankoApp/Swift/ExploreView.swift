@@ -155,28 +155,52 @@ struct ExploreView: View {
 
     // ✅ NEW: fetch a single Ranko list from Firebase by objectID
     private func fetchRankoList(_ objectID: String, completion: @escaping (RankoList?) -> Void) {
-        let ref = Database.database().reference().child("RankoData").child(objectID)
-        ref.observeSingleEvent(of: .value) { snap in
-            guard let dict = snap.value as? [String: Any],
-                  let name = dict["RankoName"] as? String,
-                  let description = dict["RankoDescription"] as? String,
-                  let category = dict["RankoCategory"] as? String,
-                  let type = dict["RankoType"] as? String,
-                  let isPrivate = dict["RankoPrivacy"] as? Bool,
-                  let userID = dict["RankoUserID"] as? String,
-                  let dateTimeStr = dict["RankoDateTime"] as? String,
-                  let itemsDict = dict["RankoItems"] as? [String: [String: Any]] else {
-                completion(nil)
-                return
+        let ref = Database.database().reference()
+            .child("RankoData")
+            .child(objectID)
+
+        ref.observeSingleEvent(of: .value, with: { snap in
+            guard let dict = snap.value as? [String: Any] else {
+                completion(nil); return
             }
 
+            // Core fields
+            guard
+                let name = dict["RankoName"] as? String,
+                let description = dict["RankoDescription"] as? String,
+                let type = dict["RankoType"] as? String,
+                let isPrivate = dict["RankoPrivacy"] as? Bool,
+                let userID = dict["RankoUserID"] as? String,
+                let dateTimeStr = dict["RankoDateTime"] as? String
+            else {
+                completion(nil); return
+            }
+
+            // Category (nested)
+            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
+            let catName  = (cat["name"] as? String) ?? ""
+            let catIcon  = (cat["icon"] as? String) ?? ""
+            let catColour = UInt(cat["colour"] as! String) ?? UInt(0xFFFFFF)  // store as Int; convert to your Color later
+
+            // Items
+            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
             let items: [RankoItem] = itemsDict.compactMap { itemID, item in
-                guard let itemName = item["ItemName"] as? String,
-                      let itemDesc = item["ItemDescription"] as? String,
-                      let itemImage = item["ItemImage"] as? String else { return nil }
-                let rank = item["ItemRank"] as? Int ?? 0
-                let votes = item["ItemVotes"] as? Int ?? 0
-                let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: category, ItemImage: itemImage)
+                guard
+                    let itemName = item["ItemName"] as? String,
+                    let itemDesc = item["ItemDescription"] as? String,
+                    let itemImage = item["ItemImage"] as? String
+                else { return nil }
+
+                let rank  = intFromAny(item["ItemRank"])  ?? 0
+                let votes = intFromAny(item["ItemVotes"]) ?? 0
+
+                let record = RankoRecord(
+                    objectID: itemID,
+                    ItemName: itemName,
+                    ItemDescription: itemDesc,
+                    ItemCategory: "category",  // replace if you store real per-item category
+                    ItemImage: itemImage
+                )
                 return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
             }
 
@@ -185,16 +209,26 @@ struct ExploreView: View {
                 listName: name,
                 listDescription: description,
                 type: type,
-                categoryName: "Albums",
-                categoryIcon: "circle.circle",
-                categoryColour: 0xFFFFFF,
+                categoryName: catName,
+                categoryIcon: catIcon,
+                categoryColour: catColour,
                 isPrivate: isPrivate ? "Private" : "Public",
                 userCreator: userID,
                 dateTime: dateTimeStr,
                 items: items
             )
-            completion(list)
-        }
+
+            // If UI code expects main thread:
+            DispatchQueue.main.async { completion(list) }
+        })
+    }
+    
+    private func intFromAny(_ any: Any?) -> Int? {
+        if let i = any as? Int { return i }
+        if let d = any as? Double { return Int(d) }
+        if let s = any as? String { return Int(s) }
+        if let n = any as? NSNumber { return n.intValue }
+        return nil
     }
 
     // ✅ NEW: load next batch of 6 (refill queue if needed)

@@ -1040,6 +1040,26 @@ struct ProfileView: View {
         }
     }
     
+    func parseColour(_ any: Any?) -> Int {
+        // numbers coming from Firebase (Int/Double)
+        if let n = any as? NSNumber {
+            return n.intValue
+        }
+        // strings: "16776960", "#FFCC00", "0xFFCC00", "FFCC00"
+        if let s = any as? String {
+            let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            // try decimal first
+            if let dec = Int(trimmed) { return dec }
+            // strip prefixes for hex
+            var hex = trimmed.lowercased()
+            if hex.hasPrefix("#") { hex.removeFirst() }
+            if hex.hasPrefix("0x") { hex.removeFirst(2) }
+            if let hx = Int(hex, radix: 16) { return hx }
+        }
+        // fallback
+        return 0xFFFFFF
+    }
+    
     private func parseListData(dict: [String: Any], id: String) -> RankoList? {
         guard
             let listName      = dict["RankoName"]        as? String,
@@ -1079,15 +1099,25 @@ struct ProfileView: View {
         }
 
         rankoItems.sort { $0.rank < $1.rank }
+        
+        var catName = "Unknown"
+        var catIcon = "circle"
+        var catColourInt = 0x446D7A
+
+        if let cat = dict["RankoCategory"] as? [String: Any] {
+            catName = (cat["name"] as? String) ?? catName
+            catIcon = (cat["icon"] as? String) ?? catIcon
+            catColourInt = parseColour(cat["colour"])
+        }
 
         return RankoList(
             id:               id,
             listName:         listName,
             listDescription:  description,
             type:             type,
-            categoryName: "Albums",
-            categoryIcon: "circle.circle",
-            categoryColour: 0xFFFFFF,
+            categoryName:     catName,
+            categoryIcon:     catIcon,
+            categoryColour:   UInt(catColourInt),
             isPrivate:        isPrivateString,
             userCreator:      userCreator,
             dateTime:         dateTime,
@@ -2604,7 +2634,7 @@ struct SearchRankosView: View {
                         .foregroundColor(Color(hex: 0x514343))
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 6) {
-                        FeaturedCategoryBadge(text: listData.categoryName)
+                        FeaturedCategoryBadge(name: listData.categoryName, icon: listData.categoryIcon, colour: listData.categoryColour)
                         Text("• \(timeAgo(from: String(listData.dateTime)))")
                             .font(.custom("Nunito-Black", size: 9))
                             .foregroundColor(Color(hex: 0x514343))
@@ -2692,60 +2722,80 @@ struct SearchRankosView: View {
         let dispatchGroup = DispatchGroup()
         var fetchedLists: [RankoList] = []
         let queue = DispatchQueue.global(qos: .userInitiated)
-        
-        // Batch requests for better performance
+
+        // returns an Int hex like 0xFF9864
+        func parseColour(_ any: Any?) -> Int {
+            // numbers coming from Firebase (Int/Double)
+            if let n = any as? NSNumber {
+                return n.intValue
+            }
+            // strings: "16776960", "#FFCC00", "0xFFCC00", "FFCC00"
+            if let s = any as? String {
+                let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                // try decimal first
+                if let dec = Int(trimmed) { return dec }
+                // strip prefixes for hex
+                var hex = trimmed.lowercased()
+                if hex.hasPrefix("#") { hex.removeFirst() }
+                if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                if let hx = Int(hex, radix: 16) { return hx }
+            }
+            // fallback
+            return 0xFFFFFF
+        }
+
         queue.async {
             for objectID in objectIDs {
                 dispatchGroup.enter()
-                
-                // Only fetch essential fields for memory optimization
-                rankoDataRef.child(objectID).child("RankoName").observeSingleEvent(of: .value) { nameSnapshot, _ in
-                    rankoDataRef.child(objectID).child("RankoDescription").observeSingleEvent(of: .value) { descSnapshot, _ in
-                        rankoDataRef.child(objectID).child("RankoCategory").observeSingleEvent(of: .value) { catSnapshot, _ in
-                            rankoDataRef.child(objectID).child("RankoType").observeSingleEvent(of: .value) { typeSnapshot, _ in
-                                rankoDataRef.child(objectID).child("RankoPrivacy").observeSingleEvent(of: .value) { privacySnapshot, _ in
-                                    rankoDataRef.child(objectID).child("RankoUserID").observeSingleEvent(of: .value) { userSnapshot, _ in
-                                        rankoDataRef.child(objectID).child("RankoDateTime").observeSingleEvent(of: .value) { dateSnapshot, _ in
-                                            defer { dispatchGroup.leave() }
-                                            
-                                            guard let name = nameSnapshot.value as? String,
-                                                  let description = descSnapshot.value as? String,
-                                                  let type = typeSnapshot.value as? String,
-                                                  let isPrivate = privacySnapshot.value as? Bool,
-                                                  let userID = userSnapshot.value as? String,
-                                                  let dateTimeStr = dateSnapshot.value as? String else {
-                                                return
-                                            }
+                rankoDataRef.child(objectID).observeSingleEvent(of: .value) { snap, _ in
+                    defer { dispatchGroup.leave() }
+                    guard let dict = snap.value as? [String: Any] else { return }
 
-                                            let rankoList = RankoList(
-                                                id: objectID,
-                                                listName: name,
-                                                listDescription: description,
-                                                type: type,
-                                                categoryName: "Albums",
-                                                categoryIcon: "circle.circle",
-                                                categoryColour: 0xFFFFFF,
-                                                isPrivate: isPrivate ? "Private" : "Public",
-                                                userCreator: userID,
-                                                dateTime: dateTimeStr,
-                                                items: [] // Empty for memory optimization
-                                            )
+                    let name = dict["RankoName"] as? String ?? "(untitled)"
+                    let description = dict["RankoDescription"] as? String ?? ""
+                    let type = dict["RankoType"] as? String ?? "default"
 
-                                            fetchedLists.append(rankoList)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    let isPrivateBool: Bool = {
+                        if let b = dict["RankoPrivacy"] as? Bool { return b }
+                        if let s = dict["RankoPrivacy"] as? String { return s.lowercased() == "private" }
+                        return false
+                    }()
+
+                    let userID = dict["RankoUserID"] as? String ?? ""
+                    let dateTimeStr = dict["RankoDateTime"] as? String ?? "19700101000000"
+
+                    var catName = "Unknown"
+                    var catIcon = "circle"
+                    var catColourInt = 0x446D7A
+
+                    if let cat = dict["RankoCategory"] as? [String: Any] {
+                        catName = (cat["name"] as? String) ?? catName
+                        catIcon = (cat["icon"] as? String) ?? catIcon
+                        catColourInt = parseColour(cat["colour"])
+                    }
+
+                    let rankoList = RankoList(
+                        id: objectID,
+                        listName: name,
+                        listDescription: description,
+                        type: type,
+                        categoryName: catName,
+                        categoryIcon: catIcon,
+                        categoryColour: UInt(catColourInt),          // <- Int, consistent with your badge helper
+                        isPrivate: isPrivateBool ? "Private" : "Public",
+                        userCreator: userID,
+                        dateTime: dateTimeStr,
+                        items: []
+                    )
+
+                    DispatchQueue.main.async {
+                        fetchedLists.append(rankoList)
                     }
                 }
             }
-            
+
             dispatchGroup.notify(queue: .main) {
-                // Sort by date (newest first)
-                self.allLists = fetchedLists.sorted {
-                    Int($0.dateTime) ?? 0 > Int($1.dateTime) ?? 0
-                }
+                self.allLists = fetchedLists.sorted { Int($0.dateTime) ?? 0 > Int($1.dateTime) ?? 0 }
                 self.isLoading = false
             }
         }
