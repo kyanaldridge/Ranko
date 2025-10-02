@@ -91,6 +91,8 @@ struct HomeView: View {
     @State private var toastMessage = ""
     @State private var toastID = UUID()
     @State private var toastDismissWorkItem: DispatchWorkItem?
+    @State private var selectedList: RankoList?
+    @State private var clonedList: RankoList?
     
     // ✅ NEW: app storage for timestamp + ID queue
     @AppStorage("homeLastRefreshTimestamp") private var homeLastRefreshTimestamp: String = ""   // "yyyyMMddHHmmss"
@@ -181,89 +183,127 @@ struct HomeView: View {
         func intFromAny(_ any: Any?) -> Int? {
             if let n = any as? NSNumber { return n.intValue }
             if let s = any as? String    { return Int(s) }
+            if let d = any as? Double    { return Int(d) }
             return nil
         }
 
-        func parseColour(_ any: Any?) -> Int {
-            if let n = any as? NSNumber { return n.intValue }
+        func parseColourUInt(_ any: Any?) -> UInt {
+            // accepts "0xFFCF00", "#FFCF00", "FFCF00", 16763904, NSNumber, etc.
+            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
             if let s = any as? String {
-                let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
-                // try decimal first (e.g. "16776960")
-                if let dec = Int(trimmed) { return dec }
-                // try hex: "#FFCC00" / "0xFFCC00" / "FFCC00"
-                var hex = trimmed.lowercased()
+                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
                 if hex.hasPrefix("#")  { hex.removeFirst() }
                 if hex.hasPrefix("0x") { hex.removeFirst(2) }
-                if let hx = Int(hex, radix: 16) { return hx }
+                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
             }
-            return 0xFFFFFF
+            return 0x446D7A
         }
 
         ref.observeSingleEvent(of: .value, with: { snap in
-            guard let dict = snap.value as? [String: Any] else {
+            guard let root = snap.value as? [String: Any] else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
 
-            // Core fields
+            // ======== NEW SCHEMA PREFERRED ========
+            if let details = root["RankoDetails"] as? [String: Any] {
+                let privacy = root["RankoPrivacy"] as? [String: Any]
+                let cat     = root["RankoCategory"] as? [String: Any]
+                let items   = root["RankoItems"] as? [String: Any] ?? [:]
+                let dt      = root["RankoDateTime"] as? [String: Any]
+
+                let name        = (details["name"] as? String) ?? ""
+                let description = (details["description"] as? String) ?? ""
+                let type        = (details["type"] as? String) ?? "default"
+                let userID      = (details["user_id"] as? String) ?? ""
+
+                let isPrivBool  = (privacy?["private"] as? Bool) ?? false
+
+                let catName     = (cat?["name"] as? String) ?? ""
+                let catIcon     = (cat?["icon"] as? String) ?? "circle"
+                let catColour   = parseColourUInt(cat?["colour"])
+
+                let createdStr  = (dt?["created"] as? String) ?? ""
+                let updatedStr  = (dt?["updated"] as? String) ?? createdStr
+
+                let parsedItems: [RankoItem] = items.compactMap { (k, v) in
+                    guard let it = v as? [String: Any] else { return nil }
+                    guard
+                        let itemName  = it["ItemName"] as? String,
+                        let itemDesc  = it["ItemDescription"] as? String,
+                        let itemImage = it["ItemImage"] as? String
+                    else { return nil }
+                    let rank  = intFromAny(it["ItemRank"])  ?? 0
+                    let votes = intFromAny(it["ItemVotes"]) ?? 0
+                    let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
+                    return RankoItem(id: k, rank: rank, votes: votes, record: rec)
+                }
+
+                let list = RankoList(
+                    id: objectID,
+                    listName: name,
+                    listDescription: description,
+                    type: type,
+                    categoryName: catName,
+                    categoryIcon: catIcon,
+                    categoryColour: catColour,
+                    isPrivate: isPrivBool ? "Private" : "Public",
+                    userCreator: userID,
+                    timeCreated: createdStr,
+                    timeUpdated: updatedStr,
+                    items: parsedItems.sorted { $0.rank < $1.rank }
+                )
+                DispatchQueue.main.async { completion(list) }
+                return
+            }
+
+            // ======== LEGACY SCHEMA FALLBACK ========
             guard
-                let name        = dict["RankoName"] as? String,
-                let description = dict["RankoDescription"] as? String,
-                let type        = dict["RankoType"] as? String,
-                let isPrivBool  = dict["RankoPrivacy"] as? Bool,
-                let userID      = dict["RankoUserID"] as? String
+                let name        = root["RankoName"] as? String,
+                let description = root["RankoDescription"] as? String,
+                let type        = root["RankoType"] as? String,
+                let isPrivBool  = root["RankoPrivacy"] as? Bool,
+                let userID      = root["RankoUserID"] as? String
             else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
 
-            // RankoDateTime: { RankoCreated, RankoUpdated }  (fallback: single string)
             var createdStr = ""
             var updatedStr = ""
-            if let dt = dict["RankoDateTime"] as? [String: Any] {
-                createdStr = (dt["RankoCreated"] as? String) ?? ""
-                updatedStr = (dt["RankoUpdated"] as? String) ?? createdStr
-            } else if let s = dict["RankoDateTime"] as? String {
+            if let dt = root["RankoDateTime"] as? [String: Any] {
+                // older keys
+                createdStr = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? ""
+                updatedStr = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? createdStr
+            } else if let s = root["RankoDateTime"] as? String {
                 createdStr = s
                 updatedStr = s
             }
 
-            // Category (object or legacy string)
             var catName = "Unknown"
             var catIcon = "circle"
             var catColourUInt: UInt = 0x446D7A
-
-            if let cat = dict["RankoCategory"] as? [String: Any] {
-                catName = (cat["name"] as? String) ?? catName
-                catIcon = (cat["icon"] as? String) ?? catIcon
-                let colourInt = parseColour(cat["colour"])
-                let masked = colourInt & 0x00FF_FFFF
-                catColourUInt = UInt(clamping: masked)
-            } else if let catStr = dict["RankoCategory"] as? String {
-                // legacy: only name
+            if let catObj = root["RankoCategory"] as? [String: Any] {
+                catName = (catObj["name"] as? String) ?? catName
+                catIcon = (catObj["icon"] as? String) ?? catIcon
+                catColourUInt = parseColourUInt(catObj["colour"])
+            } else if let catStr = root["RankoCategory"] as? String {
                 catName = catStr
             }
 
-            // Items
-            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
-            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
+            let itemsDict = root["RankoItems"] as? [String: [String: Any]] ?? [:]
+            let items: [RankoItem] = itemsDict.compactMap { itemID, it in
                 guard
-                    let itemName  = item["ItemName"] as? String,
-                    let itemDesc  = item["ItemDescription"] as? String,
-                    let itemImage = item["ItemImage"] as? String
+                    let itemName  = it["ItemName"] as? String,
+                    let itemDesc  = it["ItemDescription"] as? String,
+                    let itemImage = it["ItemImage"] as? String
                 else { return nil }
-
-                let rank  = intFromAny(item["ItemRank"])  ?? 0
-                let votes = intFromAny(item["ItemVotes"]) ?? 0
-
-                let record = RankoRecord(
-                    objectID: itemID,
-                    ItemName: itemName,
-                    ItemDescription: itemDesc,
-                    ItemCategory: "", // fill if you later store per-item category
-                    ItemImage: itemImage
-                )
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
+                let rank  = intFromAny(it["ItemRank"])  ?? 0
+                let votes = intFromAny(it["ItemVotes"]) ?? 0
+                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec)
             }
 
             let list = RankoList(
@@ -416,23 +456,34 @@ struct HomeView: View {
                         } else {
                             // ✅ FEED
                             LazyVStack(alignment: .leading, spacing: 16) {
-                                ForEach($feedLists, id: \.id) { list in
+                                ForEach(feedLists.indices, id: \.self) { idx in
+                                    let list = feedLists[idx]
                                     if list.type == "group" {
-                                        GroupListHomeView(listData: list, onCommentTap: { msg in
-                                            showComingSoonToast(msg)
-                                        }, onRankoTap: { _ in
-                                            
-                                        }, onProfileTap: { _ in
-                                            
-                                        })
+                                        GroupListHomeView(
+                                            listData: list,
+                                            onCommentTap: { msg in
+                                                showComingSoonToast(msg)
+                                            },
+                                            onRankoTap: { _ in
+                                                
+                                            },
+                                            onProfileTap: { _ in
+                                                
+                                            }
+                                        )
                                     } else {
-                                        DefaultListHomeView(listData: list, onCommentTap: { msg in
-                                            showComingSoonToast(msg)
-                                        }, onRankoTap: { _ in
-                                            
-                                        }, onProfileTap: { _ in
-                                            
-                                        })
+                                        DefaultListHomeView(
+                                            listData: list,
+                                            onCommentTap: { msg in
+                                                showComingSoonToast(msg)
+                                            },
+                                            onRankoTap: { _ in
+                                                selectedList = list
+                                            },
+                                            onProfileTap: { _ in
+                                                
+                                            }
+                                        )
                                     }
                                 }
                                 
@@ -484,8 +535,21 @@ struct HomeView: View {
             }
         }
         
+        .fullScreenCover(item: $selectedList) { list in
+            DefaultListSpectate(listID: list.id, onClone: {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    clonedList = list
+                }
+            })
+        }
+        
+        .fullScreenCover(item: $clonedList) { list in
+            DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, category: SampleCategoryChip(id: "", name: list.categoryName, icon: list.categoryIcon, colour: String(list.categoryColour)), selectedRankoItems: list.items, onSave: { _ in})
+        }
+        
         // MARK: – reset "listViewID" whenever HomeView comes back on screen
         .onAppear {
+            clearAllCache()
             user_data.userID = Auth.auth().currentUser?.uid ?? "0"
             listViewID = UUID()
             
@@ -764,7 +828,7 @@ struct DefaultListHomeView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 .onTapGesture {
-                    <#code#>
+                    onProfileTap(listData.userCreator)
                 }
                 
                 LazyVStack(alignment: .leading) {
@@ -786,6 +850,9 @@ struct DefaultListHomeView: View {
                         .padding(.bottom, -15)
                 }
                 .padding(.leading, 8)
+                .onTapGesture {
+                    onRankoTap(listData.id)
+                }
                 Spacer()
             }
             ZStack {
@@ -794,6 +861,9 @@ struct DefaultListHomeView: View {
                         .fill(Color.clear)
                         .frame(width: 42)
                     itemsSection
+                }
+                .onTapGesture {
+                    onRankoTap(listData.id)
                 }
                 HStack(spacing: 0) {
                     Rectangle()
@@ -818,6 +888,9 @@ struct DefaultListHomeView: View {
                         colour: listData.categoryColour,   // UInt from Firebase
                         icon: listData.categoryIcon        // SF Symbol name from Firebase
                     )
+                    .onTapGesture {
+                        onRankoTap(listData.id)
+                    }
                 }
                 
                 HStack(spacing: 4) {
@@ -1241,18 +1314,14 @@ struct DefaultListHomeView: View {
 
 struct GroupListHomeView: View {
     let listData: RankoList
-    var showToastHelper: (String) -> Void
-    var showRankoHelper: (RankoList) -> Void
-    var showProfileHelper: (String) -> Void
+    var onCommentTap: (String) -> Void
+    var onRankoTap: (RankoList) -> Void
+    var onProfileTap: (String) -> Void
     
     private var adjustedItems: [RankoItem] {
         listData.items.map { item in
-            var newItem = item
-            // Adjust rank: e.g., 1003 → 1, 4005 → 4
-            let rawRank = item.rank
-            let adjustedRank = rawRank / 1000
-            newItem.rank = adjustedRank
-            return newItem
+            let adjustedRank = item.rank / 1000
+            return RankoItem(id: item.id, rank: adjustedRank, votes: item.votes, record: item.record)
         }
     }
     
@@ -1271,11 +1340,11 @@ struct GroupListHomeView: View {
             timeUpdated: listData.timeUpdated,
             items: adjustedItems
         ), onCommentTap: { msg in
-            showToastHelper(msg)
+            onCommentTap(msg)
         }, onRankoTap: { _ in
-            showRankoHelper(listData)
+            onRankoTap(listData)
         }, onProfileTap: { _ in
-            showProfileHelper(listData.userCreator)
+            onProfileTap(listData.userCreator)
         })
     }
 }

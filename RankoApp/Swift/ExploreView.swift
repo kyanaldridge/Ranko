@@ -162,89 +162,127 @@ struct ExploreView: View {
         func intFromAny(_ any: Any?) -> Int? {
             if let n = any as? NSNumber { return n.intValue }
             if let s = any as? String    { return Int(s) }
+            if let d = any as? Double    { return Int(d) }
             return nil
         }
 
-        func parseColour(_ any: Any?) -> Int {
-            if let n = any as? NSNumber { return n.intValue }
+        func parseColourUInt(_ any: Any?) -> UInt {
+            // accepts "0xFFCF00", "#FFCF00", "FFCF00", 16763904, NSNumber, etc.
+            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
             if let s = any as? String {
-                let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
-                // try decimal first (e.g. "16776960")
-                if let dec = Int(trimmed) { return dec }
-                // try hex: "#FFCC00" / "0xFFCC00" / "FFCC00"
-                var hex = trimmed.lowercased()
+                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
                 if hex.hasPrefix("#")  { hex.removeFirst() }
                 if hex.hasPrefix("0x") { hex.removeFirst(2) }
-                if let hx = Int(hex, radix: 16) { return hx }
+                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
             }
-            return 0xFFFFFF
+            return 0x446D7A
         }
 
         ref.observeSingleEvent(of: .value, with: { snap in
-            guard let dict = snap.value as? [String: Any] else {
+            guard let root = snap.value as? [String: Any] else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
 
-            // Core fields
+            // ======== NEW SCHEMA PREFERRED ========
+            if let details = root["RankoDetails"] as? [String: Any] {
+                let privacy = root["RankoPrivacy"] as? [String: Any]
+                let cat     = root["RankoCategory"] as? [String: Any]
+                let items   = root["RankoItems"] as? [String: Any] ?? [:]
+                let dt      = root["RankoDateTime"] as? [String: Any]
+
+                let name        = (details["name"] as? String) ?? ""
+                let description = (details["description"] as? String) ?? ""
+                let type        = (details["type"] as? String) ?? "default"
+                let userID      = (details["user_id"] as? String) ?? ""
+
+                let isPrivBool  = (privacy?["private"] as? Bool) ?? false
+
+                let catName     = (cat?["name"] as? String) ?? ""
+                let catIcon     = (cat?["icon"] as? String) ?? "circle"
+                let catColour   = parseColourUInt(cat?["colour"])
+
+                let createdStr  = (dt?["created"] as? String) ?? ""
+                let updatedStr  = (dt?["updated"] as? String) ?? createdStr
+
+                let parsedItems: [RankoItem] = items.compactMap { (k, v) in
+                    guard let it = v as? [String: Any] else { return nil }
+                    guard
+                        let itemName  = it["ItemName"] as? String,
+                        let itemDesc  = it["ItemDescription"] as? String,
+                        let itemImage = it["ItemImage"] as? String
+                    else { return nil }
+                    let rank  = intFromAny(it["ItemRank"])  ?? 0
+                    let votes = intFromAny(it["ItemVotes"]) ?? 0
+                    let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
+                    return RankoItem(id: k, rank: rank, votes: votes, record: rec)
+                }
+
+                let list = RankoList(
+                    id: objectID,
+                    listName: name,
+                    listDescription: description,
+                    type: type,
+                    categoryName: catName,
+                    categoryIcon: catIcon,
+                    categoryColour: catColour,
+                    isPrivate: isPrivBool ? "Private" : "Public",
+                    userCreator: userID,
+                    timeCreated: createdStr,
+                    timeUpdated: updatedStr,
+                    items: parsedItems.sorted { $0.rank < $1.rank }
+                )
+                DispatchQueue.main.async { completion(list) }
+                return
+            }
+
+            // ======== LEGACY SCHEMA FALLBACK ========
             guard
-                let name        = dict["RankoName"] as? String,
-                let description = dict["RankoDescription"] as? String,
-                let type        = dict["RankoType"] as? String,
-                let isPrivBool  = dict["RankoPrivacy"] as? Bool,
-                let userID      = dict["RankoUserID"] as? String
+                let name        = root["RankoName"] as? String,
+                let description = root["RankoDescription"] as? String,
+                let type        = root["RankoType"] as? String,
+                let isPrivBool  = root["RankoPrivacy"] as? Bool,
+                let userID      = root["RankoUserID"] as? String
             else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
 
-            // RankoDateTime: { RankoCreated, RankoUpdated }  (fallback: single string)
             var createdStr = ""
             var updatedStr = ""
-            if let dt = dict["RankoDateTime"] as? [String: Any] {
-                createdStr = (dt["RankoCreated"] as? String) ?? ""
-                updatedStr = (dt["RankoUpdated"] as? String) ?? createdStr
-            } else if let s = dict["RankoDateTime"] as? String {
+            if let dt = root["RankoDateTime"] as? [String: Any] {
+                // older keys
+                createdStr = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? ""
+                updatedStr = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? createdStr
+            } else if let s = root["RankoDateTime"] as? String {
                 createdStr = s
                 updatedStr = s
             }
 
-            // Category (object or legacy string)
             var catName = "Unknown"
             var catIcon = "circle"
             var catColourUInt: UInt = 0x446D7A
-
-            if let cat = dict["RankoCategory"] as? [String: Any] {
-                catName = (cat["name"] as? String) ?? catName
-                catIcon = (cat["icon"] as? String) ?? catIcon
-                let colourInt = parseColour(cat["colour"])
-                let masked = colourInt & 0x00FF_FFFF
-                catColourUInt = UInt(clamping: masked)
-            } else if let catStr = dict["RankoCategory"] as? String {
-                // legacy: only name
+            if let catObj = root["RankoCategory"] as? [String: Any] {
+                catName = (catObj["name"] as? String) ?? catName
+                catIcon = (catObj["icon"] as? String) ?? catIcon
+                catColourUInt = parseColourUInt(catObj["colour"])
+            } else if let catStr = root["RankoCategory"] as? String {
                 catName = catStr
             }
 
-            // Items
-            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
-            let items: [RankoItem] = itemsDict.compactMap { itemID, item in
+            let itemsDict = root["RankoItems"] as? [String: [String: Any]] ?? [:]
+            let items: [RankoItem] = itemsDict.compactMap { itemID, it in
                 guard
-                    let itemName  = item["ItemName"] as? String,
-                    let itemDesc  = item["ItemDescription"] as? String,
-                    let itemImage = item["ItemImage"] as? String
+                    let itemName  = it["ItemName"] as? String,
+                    let itemDesc  = it["ItemDescription"] as? String,
+                    let itemImage = it["ItemImage"] as? String
                 else { return nil }
-
-                let rank  = intFromAny(item["ItemRank"])  ?? 0
-                let votes = intFromAny(item["ItemVotes"]) ?? 0
-
-                let record = RankoRecord(
-                    objectID: itemID,
-                    ItemName: itemName,
-                    ItemDescription: itemDesc,
-                    ItemCategory: "", // fill if you later store per-item category
-                    ItemImage: itemImage
-                )
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
+                let rank  = intFromAny(it["ItemRank"])  ?? 0
+                let votes = intFromAny(it["ItemVotes"]) ?? 0
+                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec)
             }
 
             let list = RankoList(
@@ -638,212 +676,6 @@ struct ExploreView: View {
         }
         toastDismissWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: work)
-    }
-}
-
-
-struct ExploreListsDisplay: View {
-    @State private var lists: [RankoList] = []
-    @State private var allItems: [RankoItem] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
-    @State private var selectedList: RankoList? = nil
-    @State var presentFakeRankos: Bool
-    @Binding var showToast: Bool
-    @Binding var toastMessage: String
-    
-    var showToastHelper: (String) -> Void
-    
-    static let mockItems1: [RankoItem] = [
-        .init(id: "1hewhlehwlhcx", rank: 1, votes: 103, record: RankoRecord(objectID: "1hewhlehwlhcx", ItemName: "Love Sick", ItemDescription: "Don Toliver", ItemCategory: "", ItemImage: "https://store.warnermusic.com.au/cdn/shop/files/20221202_DON-T_LP.jpg?v=1683766183&width=800")),
-        .init(id: "h1ewhlehwlhcx", rank: 2, votes: 97, record: RankoRecord(objectID: "h1ewhlehwlhcx", ItemName: "Man On The Moon III: The Chosen", ItemDescription: "Kid Cudi", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/e/e2/Man_on_the_Moon_III.png")),
-        .init(id: "he1whlehwlhcx", rank: 3, votes: 72, record: RankoRecord(objectID: "he1whlehwlhcx", ItemName: "HEROES & VILLAINS", ItemDescription: "Metro Boomin", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/5/5f/Metro_Boomin_-_Heroes_%26_Villains.png")),
-        .init(id: "hew1hlehwlhcx", rank: 4, votes: 56, record: RankoRecord(objectID: "hew1hlehwlhcx", ItemName: "Death Race For Love", ItemDescription: "Juice WRLD", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/0/04/Juice_Wrld_-_Death_Race_for_Love.png")),
-        .init(id: "hewh1lehwlhcx", rank: 5, votes: 53, record: RankoRecord(objectID: "hewh1lehwlhcx", ItemName: "TIMELESS", ItemDescription: "KAYTRANADA", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/1/17/Album_cover_for_Timeless_by_Kaytranada.webp")),
-        .init(id: "hewhl1ehwlhcx", rank: 6, votes: 49, record: RankoRecord(objectID: "hewhl1ehwlhcx", ItemName: "Hurry Up Tomorrow", ItemDescription: "The Weeknd", ItemCategory: "", ItemImage: "https://preview.redd.it/hut-full-album-theory-v0-wxtp9tt4ayie1.jpeg?auto=webp&s=476e8ed57a870940a855525e09bb1f87a5779a81")),
-        .init(id: "hewhle1hwlhcx", rank: 7, votes: 32, record: RankoRecord(objectID: "hewhle1hwlhcx", ItemName: "The Life Of Pablo", ItemDescription: "Kanye West", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/4/4d/The_life_of_pablo_alternate.jpg")),
-        .init(id: "hewhleh1wlhcx", rank: 8, votes: 29, record: RankoRecord(objectID: "hewhleh1wlhcx", ItemName: "beerbongs & bentleys", ItemDescription: "Post Malone", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/634175-Product-0-I_1024x1024.jpg")),
-        .init(id: "hewhlehw1lhcx", rank: 9, votes: 28, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Manic", ItemDescription: "Halsey", ItemCategory: "", ItemImage: "https://upload.wikimedia.org/wikipedia/en/c/ce/Halsey_-_Manic.png")),
-        .init(id: "hewhlehwl1hcx", rank: 10, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg")),
-        .init(id: "hewhlehwl1hcx", rank: 11, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "channel ORANGE", ItemDescription: "Frank Ocean", ItemCategory: "", ItemImage: "https://www.jbhifi.com.au/cdn/shop/products/295143-Product-0-I_16643d3b-c81d-42c5-a016-4e65927e00f2_grande.jpg"))
-    ]
-    // Mock list that matches your model usage inside the view
-    static let mockList1 = RankoList(
-        id: "list_123",
-        listName: "Top 10 Albums This Decade",
-        listDescription: "My current fave bangers — argue with your mum 😌",
-        type: "default",
-        categoryName: "Songs",
-        categoryIcon: "music.note",
-        categoryColour: 0xFFFFFF,
-        isPrivate: "Public",
-        userCreator: "user_abc123",
-        timeCreated: "20250815123045",
-        timeUpdated: "20250815123045",
-        items: mockItems1
-    )
-    
-    static let mockItems2: [RankoItem] = [
-        .init(id: "1hewhlehwlhcx", rank: 1, votes: 103, record: RankoRecord(objectID: "1hewhlehwlhcx", ItemName: "Cookies & Cream", ItemDescription: "", ItemCategory: "", ItemImage: "https://image.shutterstock.com/image-photo/isolated-scoop-cream-ice-white-250nw-2498180691.jpg")),
-        .init(id: "h1ewhlehwlhcx", rank: 2, votes: 97, record: RankoRecord(objectID: "h1ewhlehwlhcx", ItemName: "Chocolate", ItemDescription: "", ItemCategory: "", ItemImage: "https://t3.ftcdn.net/jpg/15/54/40/82/360_F_1554408215_prUzouZME3FBK1G4tzGDMkAyiqbc3PZk.jpg")),
-        .init(id: "he1whlehwlhcx", rank: 3, votes: 72, record: RankoRecord(objectID: "he1whlehwlhcx", ItemName: "Strawberry", ItemDescription: "", ItemCategory: "", ItemImage: "https://media.istockphoto.com/id/138087063/photo/strawberry-ice-cream.jpg?s=612x612&w=0&k=20&c=KRwUn679tUQnW7n76ZvDWfI9glRfITaeuqqj5xTasT0=")),
-        .init(id: "hew1hlehwlhcx", rank: 4, votes: 56, record: RankoRecord(objectID: "hew1hlehwlhcx", ItemName: "Mint Choc Chip", ItemDescription: "", ItemCategory: "", ItemImage: "https://thumbs.dreamstime.com/b/flavorful-mint-chocolate-chip-classic-dessert-rich-flavor-perfect-refreshing-your-taste-buds-isolated-white-367177761.jpg")),
-        .init(id: "hewh1lehwlhcx", rank: 5, votes: 53, record: RankoRecord(objectID: "hewh1lehwlhcx", ItemName: "Chocolate Chip", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.shutterstock.com/image-photo/scoop-vanilla-ice-cream-chocolate-600nw-2569287049.jpg")),
-        .init(id: "hewhl1ehwlhcx", rank: 6, votes: 49, record: RankoRecord(objectID: "hewhl1ehwlhcx", ItemName: "Rocky Road", ItemDescription: "", ItemCategory: "", ItemImage: "https://images.getbento.com/accounts/7be06ab46c91545d057b03e4bc16a220/media/images/66456Rocky-Road_4286.png?w=1800&fit=max&auto=compress,format&cs=origin&h=1800")),
-        .init(id: "hewhle1hwlhcx", rank: 7, votes: 32, record: RankoRecord(objectID: "hewhle1hwlhcx", ItemName: "Vanilla", ItemDescription: "", ItemCategory: "", ItemImage: "https://static.vecteezy.com/system/resources/previews/054/709/028/non_2x/close-up-ice-cream-scoop-delicious-vanilla-flavor-ice-cream-isolated-on-white-background-photo.jpg")),
-        .init(id: "hewhleh1wlhcx", rank: 8, votes: 29, record: RankoRecord(objectID: "hewhleh1wlhcx", ItemName: "Coffee", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.shutterstock.com/image-photo/coffee-ice-cream-scoop-isolated-600nw-2636609039.jpg")),
-        .init(id: "hewhlehw1lhcx", rank: 9, votes: 28, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Peanut Butter Cup", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.benjerry.ie/files/live/sites/systemsite/files/EU%20Specific%20Assets/Flavors/Product%20Assets/Peanut%20Butter%20Cup%20Ice%20Cream/web_EU_Tower_PeanutButterCup_RGB_HR2_60M.png")),
-        .init(id: "hewhlehwl1hcx", rank: 10, votes: 21, record: RankoRecord(objectID: "hewhlehw1lhcx", ItemName: "Brownie Batter", ItemDescription: "", ItemCategory: "", ItemImage: "https://www.benjerry.com/files/live/sites/systemsite/files/US%20and%20Global%20Assets/Flavors/Product%20Assets/US/Chocolate%20Fudge%20Brownie%20Ice%20Cream/web_Tower_ChocolateFudgeBrownie_RGB_HR2_60M.png")),
-    ]
-    // Mock list that matches your model usage inside the view
-    static let mockList2 = RankoList(
-        id: "list_123",
-        listName: "My Favourite Ice Cream Flavours",
-        listDescription: "My current fave flavours — argue with your mum 😌",
-        type: "default",
-        categoryName: "Ice Cream",
-        categoryIcon: "snowflake",
-        categoryColour: 0xFFFFFF,
-        isPrivate: "Public",
-        userCreator: "user_abc123",
-        timeCreated: "20250815123045",
-        timeUpdated: "20250815123045",
-        items: mockItems2
-    )
-    
-    var body: some View {
-        LazyHStack(alignment: .top, spacing: 16) {
-            if presentFakeRankos {
-                DefaultListExploreView(
-                    listData: HomeListsDisplay.mockList1,
-                    onCommentTap: { msg in
-                        print("Comment tapped with message: \(msg)")
-                    }
-                )
-                DefaultListExploreView(
-                    listData: HomeListsDisplay.mockList2,
-                    onCommentTap: { msg in
-                        print("Comment tapped with message: \(msg)")
-                    }
-                )
-            }
-            if isLoading {
-                ForEach(0..<4, id: \.self) { _ in
-                    ExploreListSkeletonViewRow()
-                }
-            } else if let errorMessage = errorMessage {
-                Text("❌ Error: \(errorMessage)")
-                    .foregroundColor(.red)
-                    .padding()
-            } else {
-                ForEach(lists, id: \.id) { list in
-                    if list.type == "group" {
-                        GroupListExploreView(listData: list, showToastHelper: { msg in
-                            showToastHelper(msg)
-                        })
-                            .onTapGesture {
-                                selectedList = list
-                            }
-                    } else {
-                        DefaultListExploreView(listData: list, onCommentTap: { msg in
-                            showToastHelper(msg)
-                        }
-                    )
-                        .onTapGesture {
-                            selectedList = list
-                        }
-                    }
-                }
-            }
-        }
-        .scrollTargetLayout()
-        .padding(.top, 10)
-        .padding(.bottom, 10)
-//        .fullScreenCover(item: $selectedList) { list in
-//            if list.type == "default" {
-//                DefaultListVote(listID: list.id, creatorID: list.userCreator)
-//            } else if list.type == "group" {
-//                GroupListSpectate(listID: list.id, creatorID: list.userCreator)
-//            }
-//        }
-        .padding(.leading)
-        .onAppear {
-            loadAllData()
-        }
-    }
-    
-    private func loadAllData(attempt: Int = 1) {
-        isLoading = true
-        errorMessage = nil
-
-        let rankoDataRef = Database.database().reference().child("RankoData")
-        
-        rankoDataRef.observeSingleEvent(of: .value) { snapshot,anything  in
-            guard let value = snapshot.value as? [String: Any] else {
-                self.errorMessage = "❌ No data found."
-                self.isLoading = false
-                return
-            }
-
-            var fetchedLists: [RankoList] = []
-
-            for (objectID, listData) in value {
-                guard let listDict = listData as? [String: Any],
-                      let name = listDict["RankoName"] as? String,
-                      let description = listDict["RankoDescription"] as? String,
-                      let category = listDict["RankoCategory"] as? String,
-                      let type = listDict["RankoType"] as? String,
-                      let isPrivate = listDict["RankoPrivacy"] as? Bool,
-                      let userID = listDict["RankoUserID"] as? String,
-                      let dateTimeStr = listDict["RankoDateTime"] as? String,
-                      let itemsDict = listDict["RankoItems"] as? [String: [String: Any]] else {
-                    continue
-                }
-
-                let items: [RankoItem] = itemsDict.compactMap { itemID, item in
-                    guard let itemName = item["ItemName"] as? String,
-                          let itemDesc = item["ItemDescription"] as? String,
-                          let itemImage = item["ItemImage"] as? String else {
-                        return nil
-                    }
-
-                    let rank = item["ItemRank"] as? Int ?? 0
-                    let votes = item["ItemVotes"] as? Int ?? 0
-
-                    let record = RankoRecord(
-                        objectID: itemID,
-                        ItemName: itemName,
-                        ItemDescription: itemDesc,
-                        ItemCategory: category,
-                        ItemImage: itemImage
-                    )
-
-                    return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
-                }
-
-                let rankoList = RankoList(
-                    id: objectID,
-                    listName: name,
-                    listDescription: description,
-                    type: type,
-                    categoryName: "Albums",
-                    categoryIcon: "circle.circle",
-                    categoryColour: 0xFFFFFF,
-                    isPrivate: isPrivate ? "Private" : "Public",
-                    userCreator: userID,
-                    timeCreated: dateTimeStr,
-                    timeUpdated: dateTimeStr,
-                    items: items
-                )
-
-                fetchedLists.append(rankoList)
-            }
-
-            DispatchQueue.main.async {
-                self.lists = fetchedLists
-                self.isLoading = false
-            }
-        }
     }
 }
 

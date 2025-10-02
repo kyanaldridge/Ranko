@@ -255,42 +255,42 @@ struct SettingsView: View {
             !(setting.title.lowercased().contains(lowercased) ||
             setting.keywords.contains(where: { $0.contains(lowercased) })) }
     }
+}
+
+func clearAllCache() {
+    // 1. Remove URLCache entries
+    let urlCache = URLCache.shared
+    urlCache.removeAllCachedResponses()
     
-    private func clearAllCache() {
-        // 1. Remove URLCache entries
-        let urlCache = URLCache.shared
-        urlCache.removeAllCachedResponses()
-        
-        // 2. Reset its capacities
-        URLCache.shared = URLCache(memoryCapacity: 0, diskCapacity: 0, diskPath: nil)
-        
-        // 3. Clear out everything in Caches directory
-        if let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            do {
-                let contents = try FileManager.default.contentsOfDirectory(at: cachesURL,
-                                                                           includingPropertiesForKeys: nil)
-                for file in contents {
-                    try FileManager.default.removeItem(at: file)
-                }
-            } catch {
-                print("⚠️ Failed to clear Caches directory:", error)
-            }
-        }
-        
-        // 4. Clear out the tmp directory
-        let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+    // 2. Reset its capacities
+    URLCache.shared = URLCache(memoryCapacity: 0, diskCapacity: 0, diskPath: nil)
+    
+    // 3. Clear out everything in Caches directory
+    if let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
         do {
-            let tmpContents = try FileManager.default.contentsOfDirectory(at: tmpURL,
-                                                                          includingPropertiesForKeys: nil)
-            for file in tmpContents {
+            let contents = try FileManager.default.contentsOfDirectory(at: cachesURL,
+                                                                       includingPropertiesForKeys: nil)
+            for file in contents {
                 try FileManager.default.removeItem(at: file)
             }
         } catch {
-            print("⚠️ Failed to clear tmp directory:", error)
+            print("⚠️ Failed to clear Caches directory:", error)
         }
-        
-        print("✅ All caches cleared")
     }
+    
+    // 4. Clear out the tmp directory
+    let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+    do {
+        let tmpContents = try FileManager.default.contentsOfDirectory(at: tmpURL,
+                                                                      includingPropertiesForKeys: nil)
+        for file in tmpContents {
+            try FileManager.default.removeItem(at: file)
+        }
+    } catch {
+        print("⚠️ Failed to clear tmp directory:", error)
+    }
+    
+    print("✅ All caches cleared")
 }
 
 struct SettingsView1: View {
@@ -514,6 +514,7 @@ struct SettingsView1: View {
                 AnalyticsParameterScreenName: "Settings",
                 AnalyticsParameterScreenClass: "SettingsView"
             ])
+            clearAllCache()
         }
         .sheet(isPresented: $accountView) {
             AccountView()

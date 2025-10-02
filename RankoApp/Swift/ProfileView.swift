@@ -1064,11 +1064,78 @@ struct ProfileView: View {
         // tolerant int parser
         func intFromAny(_ any: Any?) -> Int? {
             if let n = any as? NSNumber { return n.intValue }
+            if let d = any as? Double   { return Int(d) }
             if let s = any as? String   { return Int(s) }
             return nil
         }
 
-        // Core
+        // parse "0xRRGGBB", "#RRGGBB", "RRGGBB", decimal, NSNumber → UInt (24-bit)
+        func parseColourUInt(_ any: Any?) -> UInt {
+            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
+            if let s = any as? String {
+                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
+                if hex.hasPrefix("#")  { hex.removeFirst() }
+                if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
+            }
+            return 0x446D7A
+        }
+
+        // ======== NEW SCHEMA PREFERRED ========
+        if let details = dict["RankoDetails"] as? [String: Any] {
+            let privacy = dict["RankoPrivacy"]   as? [String: Any]
+            let cat     = dict["RankoCategory"]  as? [String: Any]
+            let items   = dict["RankoItems"]     as? [String: Any] ?? [:]
+            let dt      = dict["RankoDateTime"]  as? [String: Any]
+
+            let listName    = (details["name"] as? String) ?? ""
+            let description = (details["description"] as? String) ?? ""
+            let type        = (details["type"] as? String) ?? "default"
+            let userCreator = (details["user_id"] as? String) ?? ""
+
+            let isPrivate   = (privacy?["private"] as? Bool) ?? false
+
+            let catName     = (cat?["name"] as? String) ?? "Unknown"
+            let catIcon     = (cat?["icon"] as? String) ?? "circle"
+            let catColour   = parseColourUInt(cat?["colour"])
+
+            let timeCreated = (dt?["created"] as? String) ?? ""
+            let timeUpdated = (dt?["updated"] as? String) ?? timeCreated
+
+            // items can be [String: Any] with inner dicts
+            let rankoItems: [RankoItem] = items.compactMap { (keyID, raw) in
+                guard let itemDict = raw as? [String: Any] else { return nil }
+                let itemID   = (itemDict["ItemID"] as? String) ?? keyID
+                guard
+                    let itemName  = itemDict["ItemName"]        as? String,
+                    let itemDesc  = itemDict["ItemDescription"] as? String,
+                    let itemImg   = itemDict["ItemImage"]       as? String
+                else { return nil }
+                let itemRank  = intFromAny(itemDict["ItemRank"])  ?? 0
+                let itemVotes = intFromAny(itemDict["ItemVotes"]) ?? 0
+                let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImg)
+                return RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record)
+            }.sorted { $0.rank < $1.rank }
+
+            return RankoList(
+                id:              id,
+                listName:        listName,
+                listDescription: description,
+                type:            type,
+                categoryName:    catName,
+                categoryIcon:    catIcon,
+                categoryColour:  catColour,
+                isPrivate:       isPrivate ? "Private" : "Public",
+                userCreator:     userCreator,
+                timeCreated:     timeCreated,
+                timeUpdated:     timeUpdated,
+                items:           rankoItems
+            )
+        }
+
+        // ======== LEGACY SCHEMA FALLBACK ========
         guard
             let listName    = dict["RankoName"]        as? String,
             let description = dict["RankoDescription"] as? String,
@@ -1077,12 +1144,11 @@ struct ProfileView: View {
             let userCreator = dict["RankoUserID"]      as? String
         else { return nil }
 
-        // Date/time: new shape { RankoCreated, RankoUpdated } with legacy fallback
         var timeCreated = ""
         var timeUpdated = ""
         if let dt = dict["RankoDateTime"] as? [String: Any] {
-            timeCreated = (dt["RankoCreated"] as? String) ?? ""
-            timeUpdated = (dt["RankoUpdated"] as? String) ?? timeCreated
+            timeCreated = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? ""
+            timeUpdated = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? timeCreated
         } else if let s = dict["RankoDateTime"] as? String {
             timeCreated = s
             timeUpdated = s
@@ -1092,44 +1158,40 @@ struct ProfileView: View {
         let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
         var rankoItems: [RankoItem] = []
         for (keyID, itemDict) in itemsDict {
-            let itemID    = (itemDict["ItemID"] as? String) ?? keyID
+            let itemID   = (itemDict["ItemID"] as? String) ?? keyID
             guard
                 let itemName  = itemDict["ItemName"]        as? String,
                 let itemDesc  = itemDict["ItemDescription"] as? String,
                 let itemImg   = itemDict["ItemImage"]       as? String
             else { continue }
-
             let itemRank  = intFromAny(itemDict["ItemRank"])  ?? 0
             let itemVotes = intFromAny(itemDict["ItemVotes"]) ?? 0
-
-            let record = RankoRecord(
-                objectID:        itemID,
-                ItemName:        itemName,
-                ItemDescription: itemDesc,
-                ItemCategory:    "",
-                ItemImage:       itemImg
-            )
-            rankoItems.append(
-                RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record)
-            )
+            let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImg)
+            rankoItems.append(RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record))
         }
         rankoItems.sort { $0.rank < $1.rank }
 
-        // Category
+        // Category (object or legacy string)
         var catName = "Unknown"
         var catIcon = "circle"
-        var catColourInt = 0x446D7A
+        var catColour = 0x446D7A
         if let cat = dict["RankoCategory"] as? [String: Any] {
-            catName      = (cat["name"] as? String) ?? catName
-            catIcon      = (cat["icon"] as? String) ?? catIcon
-            catColourInt = parseColour(cat["colour"])  // your existing helper
+            catName   = (cat["name"] as? String) ?? catName
+            catIcon   = (cat["icon"] as? String) ?? catIcon
+            catColour = {
+                if let n = cat["colour"] as? NSNumber { return n.intValue }
+                if let s = cat["colour"] as? String {
+                    var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    if let dec = Int(hex) { return dec }
+                    if hex.hasPrefix("#")  { hex.removeFirst() }
+                    if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                    return Int(hex, radix: 16) ?? 0x446D7A
+                }
+                return 0x446D7A
+            }()
         } else if let catStr = dict["RankoCategory"] as? String {
-            // legacy lists that stored just the name
             catName = catStr
         }
-
-        // safe UInt conversion (mask to 24-bit to avoid sign issues)
-        let maskedColour = UInt(clamping: catColourInt & 0x00FF_FFFF)
 
         return RankoList(
             id:              id,
@@ -1138,7 +1200,7 @@ struct ProfileView: View {
             type:            type,
             categoryName:    catName,
             categoryIcon:    catIcon,
-            categoryColour:  maskedColour,
+            categoryColour:  UInt(catColour & 0x00FF_FFFF),
             isPrivate:       privacy ? "Private" : "Public",
             userCreator:     userCreator,
             timeCreated:     timeCreated,
@@ -2744,58 +2806,48 @@ struct SearchRankosView: View {
         let rankoDataRef = Database.database().reference().child("RankoData")
         let dispatchGroup = DispatchGroup()
         var fetchedLists: [RankoList] = []
-        let queue = DispatchQueue.global(qos: .userInitiated)
 
-        // returns an Int hex like 0xFF9864
-        func parseColour(_ any: Any?) -> Int {
-            // numbers coming from Firebase (Int/Double)
-            if let n = any as? NSNumber {
-                return n.intValue
-            }
-            // strings: "16776960", "#FFCC00", "0xFFCC00", "FFCC00"
+        func parseColourUInt(_ any: Any?) -> UInt {
+            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
             if let s = any as? String {
-                let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
-                // try decimal first
-                if let dec = Int(trimmed) { return dec }
-                // strip prefixes for hex
-                var hex = trimmed.lowercased()
-                if hex.hasPrefix("#") { hex.removeFirst() }
+                let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let dec = Int(t) { return UInt(dec & 0x00FF_FFFF) }
+                var hex = t.lowercased()
+                if hex.hasPrefix("#")  { hex.removeFirst() }
                 if hex.hasPrefix("0x") { hex.removeFirst(2) }
-                if let hx = Int(hex, radix: 16) { return hx }
+                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
             }
-            // fallback
-            return 0xFFFFFF
+            return 0x446D7A
         }
 
-        queue.async {
-            for objectID in objectIDs {
-                dispatchGroup.enter()
-                rankoDataRef.child(objectID).observeSingleEvent(of: .value) { snap, _ in
-                    defer { dispatchGroup.leave() }
-                    guard let dict = snap.value as? [String: Any] else { return }
+        for objectID in objectIDs {
+            dispatchGroup.enter()
 
-                    let name = dict["RankoName"] as? String ?? "(untitled)"
-                    let description = dict["RankoDescription"] as? String ?? ""
-                    let type = dict["RankoType"] as? String ?? "default"
+            // use the 1-parameter closure form to avoid the “expects 2 arguments” compile error
+            rankoDataRef.child(objectID).observeSingleEvent(of: .value) { snap in
+                defer { dispatchGroup.leave() }
+                guard let root = snap.value as? [String: Any] else { return }
 
-                    let isPrivateBool: Bool = {
-                        if let b = dict["RankoPrivacy"] as? Bool { return b }
-                        if let s = dict["RankoPrivacy"] as? String { return s.lowercased() == "private" }
-                        return false
-                    }()
+                // --------- NEW SCHEMA ---------
+                if let details = root["RankoDetails"] as? [String: Any] {
+                    let privacy = root["RankoPrivacy"]  as? [String: Any]
+                    let cat     = root["RankoCategory"] as? [String: Any]
+                    let dt      = root["RankoDateTime"] as? [String: Any]
 
-                    let userID = dict["RankoUserID"] as? String ?? ""
-                    let dateTimeStr = dict["RankoDateTime"] as? String ?? "19700101000000"
+                    let name        = (details["name"] as? String) ?? "(untitled)"
+                    let description = (details["description"] as? String) ?? ""
+                    let type        = (details["type"] as? String) ?? "default"
+                    let userID      = (details["user_id"] as? String) ?? ""
 
-                    var catName = "Unknown"
-                    var catIcon = "circle"
-                    var catColourInt = 0x446D7A
+                    let isPrivateBool = (privacy?["private"] as? Bool) ?? false
 
-                    if let cat = dict["RankoCategory"] as? [String: Any] {
-                        catName = (cat["name"] as? String) ?? catName
-                        catIcon = (cat["icon"] as? String) ?? catIcon
-                        catColourInt = parseColour(cat["colour"])
-                    }
+                    let catName   = (cat?["name"] as? String) ?? "Unknown"
+                    let catIcon   = (cat?["icon"] as? String) ?? "circle"
+                    let catColour = parseColourUInt(cat?["colour"])
+
+                    let created = (dt?["created"] as? String) ?? "19700101000000"
+                    let updated = (dt?["updated"] as? String) ?? created
 
                     let rankoList = RankoList(
                         id: objectID,
@@ -2804,24 +2856,77 @@ struct SearchRankosView: View {
                         type: type,
                         categoryName: catName,
                         categoryIcon: catIcon,
-                        categoryColour: UInt(catColourInt),          // <- Int, consistent with your badge helper
+                        categoryColour: catColour,                  // ✅ UInt
                         isPrivate: isPrivateBool ? "Private" : "Public",
                         userCreator: userID,
-                        timeCreated: dateTimeStr,
-                        timeUpdated: dateTimeStr,
-                        items: []
+                        timeCreated: created,
+                        timeUpdated: updated,
+                        items: []                                    // minimal fetch
                     )
 
-                    DispatchQueue.main.async {
-                        fetchedLists.append(rankoList)
-                    }
+                    DispatchQueue.main.async { fetchedLists.append(rankoList) }
+                    return
                 }
-            }
 
-            dispatchGroup.notify(queue: .main) {
-                self.allLists = fetchedLists.sorted { Int($0.timeUpdated) ?? 0 > Int($1.timeUpdated) ?? 0 }
-                self.isLoading = false
+                // --------- LEGACY SCHEMA FALLBACK ---------
+                let name        = root["RankoName"] as? String ?? "(untitled)"
+                let description = root["RankoDescription"] as? String ?? ""
+                let type        = root["RankoType"] as? String ?? "default"
+
+                let isPrivateBool: Bool = {
+                    if let b = root["RankoPrivacy"] as? Bool { return b }
+                    if let s = root["RankoPrivacy"] as? String { return s.lowercased() == "private" }
+                    return false
+                }()
+
+                let userID = root["RankoUserID"] as? String ?? ""
+
+                var created = "19700101000000"
+                var updated = "19700101000000"
+                if let dt = root["RankoDateTime"] as? [String: Any] {
+                    // legacy keys may be RankoCreated/RankoUpdated
+                    created = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? created
+                    updated = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? created
+                } else if let s = root["RankoDateTime"] as? String {
+                    created = s; updated = s
+                }
+
+                var catName = "Unknown"
+                var catIcon = "circle"
+                var catColour: UInt = 0x446D7A
+                if let cat = root["RankoCategory"] as? [String: Any] {
+                    catName   = (cat["name"] as? String) ?? catName
+                    catIcon   = (cat["icon"] as? String) ?? catIcon
+                    catColour = parseColourUInt(cat["colour"])
+                } else if let catStr = root["RankoCategory"] as? String {
+                    catName = catStr
+                }
+
+                let rankoList = RankoList(
+                    id: objectID,
+                    listName: name,
+                    listDescription: description,
+                    type: type,
+                    categoryName: catName,
+                    categoryIcon: catIcon,
+                    categoryColour: catColour,                      // ✅ UInt
+                    isPrivate: isPrivateBool ? "Private" : "Public",
+                    userCreator: userID,
+                    timeCreated: created,
+                    timeUpdated: updated,
+                    items: []
+                )
+
+                DispatchQueue.main.async { fetchedLists.append(rankoList) }
             }
+        }
+
+        dispatchGroup.notify(queue: .main) {
+            self.allLists = fetchedLists.sorted {
+                Int($0.timeUpdated) ?? 0 > Int($1.timeUpdated) ?? 0
+            }
+            
+            self.isLoading = false
         }
     }
 }
@@ -3068,111 +3173,147 @@ struct SelectFeaturedRankosView: View {
 
         func intFromAny(_ any: Any?) -> Int? {
             if let n = any as? NSNumber { return n.intValue }
-            if let s = any as? String    { return Int(s) }
+            if let d = any as? Double   { return Int(d) }
+            if let s = any as? String   { return Int(s) }
             return nil
         }
-        func parseColour(_ any: Any?) -> UInt {
-            // supports: Int/Double/NSNumber and strings: "16776960", "#FFCC00", "0xFFCC00", "FFCC00"
-            if let n = any as? NSNumber {
-                return UInt(clamping: n.intValue & 0x00FF_FFFF)
-            }
+        func parseColourUInt(_ any: Any?) -> UInt {
+            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
             if let s = any as? String {
-                let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                if let dec = Int(trimmed) {
-                    return UInt(clamping: dec & 0x00FF_FFFF)
-                }
-                var hex = trimmed
-                if hex.hasPrefix("#")  { hex.removeFirst() }
-                if hex.hasPrefix("0x") { hex.removeFirst(2) }
-                if let hx = Int(hex, radix: 16) {
-                    return UInt(clamping: hx & 0x00FF_FFFF)
-                }
+                var t = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(t) { return UInt(dec & 0x00FF_FFFF) }
+                if t.hasPrefix("#")  { t.removeFirst() }
+                if t.hasPrefix("0x") { t.removeFirst(2) }
+                if let v = Int(t, radix: 16) { return UInt(v & 0x00FF_FFFF) }
             }
-            return 0x446D7A // sensible default
+            return 0x446D7A
         }
 
-        // ✅ use the 1-parameter closure; the 2-parameter variant causes compile issues in newer SDKs
+        // ✅ one-parameter closure variant
         rankoDataRef.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
+            guard let all = snapshot.value as? [String: Any] else {
                 self.errorMessage = "❌ No data found in Firebase."
                 self.isLoading = false
                 return
             }
 
-            var fetchedLists: [RankoList] = []
+            var fetched: [RankoList] = []
 
             for objectID in objectIDs {
-                guard let listData = value[objectID] as? [String: Any],
-                      let name = listData["RankoName"] as? String,
-                      let description = listData["RankoDescription"] as? String,
-                      let type = listData["RankoType"] as? String,
-                      let isPrivate = listData["RankoPrivacy"] as? Bool,
-                      let userID = listData["RankoUserID"] as? String
-                else { continue }
+                guard let dict = all[objectID] as? [String: Any] else { continue }
 
-                // RankoDateTime { RankoCreated, RankoUpdated } with fallback
-                var timeCreated = ""
-                var timeUpdated = ""
-                if let dt = listData["RankoDateTime"] as? [String: Any] {
-                    timeCreated = (dt["RankoCreated"] as? String) ?? ""
-                    timeUpdated = (dt["RankoUpdated"] as? String) ?? timeCreated
-                } else if let s = listData["RankoDateTime"] as? String {
-                    timeCreated = s; timeUpdated = s
+                // ---------- NEW SCHEMA ----------
+                if let details = dict["RankoDetails"] as? [String: Any] {
+                    let privacy = dict["RankoPrivacy"]  as? [String: Any]
+                    let cat     = dict["RankoCategory"] as? [String: Any]
+                    let dt      = dict["RankoDateTime"] as? [String: Any]
+
+                    let name        = (details["name"] as? String) ?? "(untitled)"
+                    let description = (details["description"] as? String) ?? ""
+                    let type        = (details["type"] as? String) ?? "default"
+                    let userID      = (details["user_id"] as? String) ?? ""
+
+                    let isPriv     = (privacy?["private"] as? Bool) ?? false
+                    let catName    = (cat?["name"] as? String) ?? "Unknown"
+                    let catIcon    = (cat?["icon"] as? String) ?? "circle"
+                    let catColour  = parseColourUInt(cat?["colour"])
+
+                    let created    = (dt?["created"] as? String) ?? "19700101000000"
+                    let updated    = (dt?["updated"] as? String) ?? created
+
+                    // Items may be [String: Any] under new schema
+                    let itemsRaw   = dict["RankoItems"] as? [String: Any] ?? [:]
+                    let items: [RankoItem] = itemsRaw.compactMap { (k, v) in
+                        guard let it = v as? [String: Any],
+                              let itemName  = it["ItemName"] as? String,
+                              let itemDesc  = it["ItemDescription"] as? String,
+                              let itemImage = it["ItemImage"] as? String else { return nil }
+                        let rank  = intFromAny(it["ItemRank"])  ?? 0
+                        let votes = intFromAny(it["ItemVotes"]) ?? 0
+                        let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
+                        return RankoItem(id: k, rank: rank, votes: votes, record: rec)
+                    }.sorted { $0.rank < $1.rank }
+
+                    fetched.append(
+                        RankoList(
+                            id: objectID,
+                            listName: name,
+                            listDescription: description,
+                            type: type,
+                            categoryName: catName,
+                            categoryIcon: catIcon,
+                            categoryColour: catColour,
+                            isPrivate: isPriv ? "Private" : "Public",
+                            userCreator: userID,
+                            timeCreated: created,
+                            timeUpdated: updated,
+                            items: items
+                        )
+                    )
+                    continue
                 }
 
-                // Category object with fallback to legacy string
+                // ---------- LEGACY SCHEMA FALLBACK ----------
+                guard
+                    let name        = dict["RankoName"]        as? String,
+                    let description = dict["RankoDescription"] as? String,
+                    let type        = dict["RankoType"]        as? String,
+                    let isPrivBool  = dict["RankoPrivacy"]     as? Bool,
+                    let userID      = dict["RankoUserID"]      as? String
+                else { continue }
+
+                var created = "19700101000000"
+                var updated = "19700101000000"
+                if let dt = dict["RankoDateTime"] as? [String: Any] {
+                    created = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? created
+                    updated = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? created
+                } else if let s = dict["RankoDateTime"] as? String {
+                    created = s; updated = s
+                }
+
                 var catName = "Unknown"
                 var catIcon = "circle"
                 var catColour: UInt = 0x446D7A
-                if let cat = listData["RankoCategory"] as? [String: Any] {
+                if let cat = dict["RankoCategory"] as? [String: Any] {
                     catName   = (cat["name"] as? String) ?? catName
                     catIcon   = (cat["icon"] as? String) ?? catIcon
-                    catColour = parseColour(cat["colour"])
-                } else if let catStr = listData["RankoCategory"] as? String {
+                    catColour = parseColourUInt(cat["colour"])
+                } else if let catStr = dict["RankoCategory"] as? String {
                     catName = catStr
                 }
 
-                // Items
-                let itemsDict = listData["RankoItems"] as? [String: [String: Any]] ?? [:]
-                let items: [RankoItem] = itemsDict.compactMap { itemID, item in
-                    guard let itemName  = item["ItemName"] as? String,
-                          let itemDesc  = item["ItemDescription"] as? String,
-                          let itemImage = item["ItemImage"] as? String else {
-                        return nil
-                    }
-                    let rank  = intFromAny(item["ItemRank"])  ?? 0
-                    let votes = intFromAny(item["ItemVotes"]) ?? 0
+                let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
+                let items: [RankoItem] = itemsDict.compactMap { itemID, it in
+                    guard let itemName  = it["ItemName"] as? String,
+                          let itemDesc  = it["ItemDescription"] as? String,
+                          let itemImage = it["ItemImage"] as? String else { return nil }
+                    let rank  = intFromAny(it["ItemRank"])  ?? 0
+                    let votes = intFromAny(it["ItemVotes"]) ?? 0
+                    let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
+                    return RankoItem(id: itemID, rank: rank, votes: votes, record: rec)
+                }.sorted { $0.rank < $1.rank }
 
-                    let record = RankoRecord(
-                        objectID: itemID,
-                        ItemName: itemName,
-                        ItemDescription: itemDesc,
-                        ItemCategory: "", // or catName if you want to mirror the list's category
-                        ItemImage: itemImage
+                fetched.append(
+                    RankoList(
+                        id: objectID,
+                        listName: name,
+                        listDescription: description,
+                        type: type,
+                        categoryName: catName,
+                        categoryIcon: catIcon,
+                        categoryColour: catColour,
+                        isPrivate: isPrivBool ? "Private" : "Public",
+                        userCreator: userID,
+                        timeCreated: created,
+                        timeUpdated: updated,
+                        items: items
                     )
-                    return RankoItem(id: itemID, rank: rank, votes: votes, record: record)
-                }
-
-                let rankoList = RankoList(
-                    id: objectID,
-                    listName: name,
-                    listDescription: description,
-                    type: type,
-                    categoryName: catName,
-                    categoryIcon: catIcon,
-                    categoryColour: catColour,
-                    isPrivate: isPrivate ? "Private" : "Public",
-                    userCreator: userID,
-                    timeCreated: timeCreated,
-                    timeUpdated: timeUpdated,
-                    items: items.sorted { $0.rank < $1.rank }
                 )
-
-                fetchedLists.append(rankoList)
             }
 
             DispatchQueue.main.async {
-                self.lists = fetchedLists
+                self.lists = fetched
                 self.isLoading = false
             }
         }
@@ -4614,58 +4755,151 @@ struct ProfileSpectateView: View {
     }
     
     private func parseListData(dict: [String: Any], id: String) -> RankoList? {
-        guard
-            let listName      = dict["RankoName"]        as? String,
-            let description   = dict["RankoDescription"] as? String,
-            let type          = dict["RankoType"]        as? String,
-            let privacy       = dict["RankoPrivacy"]     as? Bool,
-            let dateTime      = dict["RankoDateTime"]    as? String,
-            let userCreator   = dict["RankoUserID"]      as? String,
-            let itemsDict     = dict["RankoItems"]       as? [String: Any]
-        else { return nil }
-
-        let isPrivateString = privacy ? "Private" : "Public"
-        var rankoItems: [RankoItem] = []
-
-        for (_, value) in itemsDict {
-            guard
-                let itemDict  = value as? [String: Any],
-                let itemID    = itemDict["ItemID"]          as? String,
-                let itemName  = itemDict["ItemName"]        as? String,
-                let itemDesc  = itemDict["ItemDescription"] as? String,
-                let itemImg   = itemDict["ItemImage"]       as? String,
-                let itemVotes = itemDict["ItemVotes"]       as? Int,
-                let itemRank  = itemDict["ItemRank"]        as? Int
-            else { continue }
-
-            let record = RankoRecord(
-                objectID:        itemID,
-                ItemName:        itemName,
-                ItemDescription: itemDesc,
-                ItemCategory: "",
-                ItemImage:       itemImg
-            )
-            rankoItems.append(RankoItem(id: itemID,
-                                        rank: itemRank,
-                                        votes: itemVotes,
-                                        record: record))
+        // tolerant int parser
+        func intFromAny(_ any: Any?) -> Int? {
+            if let n = any as? NSNumber { return n.intValue }
+            if let d = any as? Double   { return Int(d) }
+            if let s = any as? String   { return Int(s) }
+            return nil
         }
 
+        // parse "0xRRGGBB", "#RRGGBB", "RRGGBB", decimal, NSNumber → UInt (24-bit)
+        func parseColourUInt(_ any: Any?) -> UInt {
+            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
+            if let s = any as? String {
+                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
+                if hex.hasPrefix("#")  { hex.removeFirst() }
+                if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
+            }
+            return 0x446D7A
+        }
+
+        // ======== NEW SCHEMA PREFERRED ========
+        if let details = dict["RankoDetails"] as? [String: Any] {
+            let privacy = dict["RankoPrivacy"]   as? [String: Any]
+            let cat     = dict["RankoCategory"]  as? [String: Any]
+            let items   = dict["RankoItems"]     as? [String: Any] ?? [:]
+            let dt      = dict["RankoDateTime"]  as? [String: Any]
+
+            let listName    = (details["name"] as? String) ?? ""
+            let description = (details["description"] as? String) ?? ""
+            let type        = (details["type"] as? String) ?? "default"
+            let userCreator = (details["user_id"] as? String) ?? ""
+
+            let isPrivate   = (privacy?["private"] as? Bool) ?? false
+
+            let catName     = (cat?["name"] as? String) ?? "Unknown"
+            let catIcon     = (cat?["icon"] as? String) ?? "circle"
+            let catColour   = parseColourUInt(cat?["colour"])
+
+            let timeCreated = (dt?["created"] as? String) ?? ""
+            let timeUpdated = (dt?["updated"] as? String) ?? timeCreated
+
+            // items can be [String: Any] with inner dicts
+            let rankoItems: [RankoItem] = items.compactMap { (keyID, raw) in
+                guard let itemDict = raw as? [String: Any] else { return nil }
+                let itemID   = (itemDict["ItemID"] as? String) ?? keyID
+                guard
+                    let itemName  = itemDict["ItemName"]        as? String,
+                    let itemDesc  = itemDict["ItemDescription"] as? String,
+                    let itemImg   = itemDict["ItemImage"]       as? String
+                else { return nil }
+                let itemRank  = intFromAny(itemDict["ItemRank"])  ?? 0
+                let itemVotes = intFromAny(itemDict["ItemVotes"]) ?? 0
+                let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImg)
+                return RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record)
+            }.sorted { $0.rank < $1.rank }
+
+            return RankoList(
+                id:              id,
+                listName:        listName,
+                listDescription: description,
+                type:            type,
+                categoryName:    catName,
+                categoryIcon:    catIcon,
+                categoryColour:  catColour,
+                isPrivate:       isPrivate ? "Private" : "Public",
+                userCreator:     userCreator,
+                timeCreated:     timeCreated,
+                timeUpdated:     timeUpdated,
+                items:           rankoItems
+            )
+        }
+
+        // ======== LEGACY SCHEMA FALLBACK ========
+        guard
+            let listName    = dict["RankoName"]        as? String,
+            let description = dict["RankoDescription"] as? String,
+            let type        = dict["RankoType"]        as? String,
+            let privacy     = dict["RankoPrivacy"]     as? Bool,
+            let userCreator = dict["RankoUserID"]      as? String
+        else { return nil }
+
+        var timeCreated = ""
+        var timeUpdated = ""
+        if let dt = dict["RankoDateTime"] as? [String: Any] {
+            timeCreated = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? ""
+            timeUpdated = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? timeCreated
+        } else if let s = dict["RankoDateTime"] as? String {
+            timeCreated = s
+            timeUpdated = s
+        }
+
+        // Items
+        let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
+        var rankoItems: [RankoItem] = []
+        for (keyID, itemDict) in itemsDict {
+            let itemID   = (itemDict["ItemID"] as? String) ?? keyID
+            guard
+                let itemName  = itemDict["ItemName"]        as? String,
+                let itemDesc  = itemDict["ItemDescription"] as? String,
+                let itemImg   = itemDict["ItemImage"]       as? String
+            else { continue }
+            let itemRank  = intFromAny(itemDict["ItemRank"])  ?? 0
+            let itemVotes = intFromAny(itemDict["ItemVotes"]) ?? 0
+            let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImg)
+            rankoItems.append(RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record))
+        }
         rankoItems.sort { $0.rank < $1.rank }
 
+        // Category (object or legacy string)
+        var catName = "Unknown"
+        var catIcon = "circle"
+        var catColour = 0x446D7A
+        if let cat = dict["RankoCategory"] as? [String: Any] {
+            catName   = (cat["name"] as? String) ?? catName
+            catIcon   = (cat["icon"] as? String) ?? catIcon
+            catColour = {
+                if let n = cat["colour"] as? NSNumber { return n.intValue }
+                if let s = cat["colour"] as? String {
+                    var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    if let dec = Int(hex) { return dec }
+                    if hex.hasPrefix("#")  { hex.removeFirst() }
+                    if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                    return Int(hex, radix: 16) ?? 0x446D7A
+                }
+                return 0x446D7A
+            }()
+        } else if let catStr = dict["RankoCategory"] as? String {
+            catName = catStr
+        }
+
         return RankoList(
-            id:               id,
-            listName:         listName,
-            listDescription:  description,
-            type:             type,
-            categoryName: "Albums",
-            categoryIcon: "circle.circle",
-            categoryColour: 0xFFFFFF,
-            isPrivate:        isPrivateString,
-            userCreator:      userCreator,
-            timeCreated: dateTime,
-            timeUpdated: dateTime,
-            items:            rankoItems
+            id:              id,
+            listName:        listName,
+            listDescription: description,
+            type:            type,
+            categoryName:    catName,
+            categoryIcon:    catIcon,
+            categoryColour:  UInt(catColour & 0x00FF_FFFF),
+            isPrivate:       privacy ? "Private" : "Public",
+            userCreator:     userCreator,
+            timeCreated:     timeCreated,
+            timeUpdated:     timeUpdated,
+            items:           rankoItems
         )
     }
 }

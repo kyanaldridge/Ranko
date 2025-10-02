@@ -134,6 +134,9 @@ struct RankoRecord: Codable, Identifiable, Equatable, Hashable {
     let ItemDescription: String
     let ItemCategory: String
     let ItemImage: String
+    let ItemGIF: String
+    let ItemVideo: String
+    let ItemAudio: String
     
     var id: String { objectID }
 }
@@ -146,6 +149,10 @@ struct RankoItem: Identifiable, Codable, Equatable, Hashable {
     var itemName: String { record.ItemName }
     var itemDescription: String { record.ItemDescription }
     var itemImage: String { record.ItemImage }
+    var itemGIF: String { record.ItemGIF }
+    var itemVideo: String { record.ItemVideo }
+    var itemAudio: String { record.ItemAudio }
+    var playCount: Int
 }
 
 struct RankoUser: Identifiable, Codable {

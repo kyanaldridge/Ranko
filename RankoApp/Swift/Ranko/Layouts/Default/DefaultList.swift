@@ -1177,64 +1177,111 @@ struct DefaultListView: View {
         let safeUID = rawUID.components(separatedBy: invalidSet).joined()
         guard !safeUID.isEmpty else { throw PublishErr.invalidUserID }
 
-        // Items payload — use each item's existing ID as both the key and ItemID
+        // Build Items payload (keep original IDs)
         var rankoItemsDict: [String: Any] = [:]
         for item in selectedRankoItems {
-            let itemID = item.id // ✅ keep the original ID
+            let itemID = item.id
             rankoItemsDict[itemID] = [
-                "ItemID":          itemID,
-                "ItemRank":        item.rank,
-                "ItemName":        item.itemName,
                 "ItemDescription": item.itemDescription,
-                "ItemImage":       item.itemImage,
-                "ItemVotes":       item.votes  // keep known votes (or 0 if you prefer)
+                "ItemID":         itemID,
+                "ItemImage":      item.itemImage,     // URL or storage path
+                "ItemName":       item.itemName,
+                "ItemRank":       item.rank,
+                "ItemVotes":      item.votes,
+
+                // Extra media/stat fields to match your sample schema
+                "ItemGIF":   item.itemGIF,
+                "ItemVideo": item.itemVideo,
+                "ItemAudio": item.itemAudio,
+                "PlayCount": item.playCount
             ]
         }
 
-        // timestamps (AEDT/AEST) → yyyymmddHHMMSS
+        // Timestamp (AEST/AEDT) → "yyyyMMddHHmmss"
         let now = Date()
-        let aedtFormatter = DateFormatter()
-        aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
-        aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
-        aedtFormatter.dateFormat = "yyyyMMddHHmmss"
-        let ts = aedtFormatter.string(from: now)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Australia/Sydney")
+        formatter.dateFormat = "yyyyMMddHHmmss"
+        let ts = formatter.string(from: now)
 
-        // Build the category object exactly like RTDB expects
-        // If you have a hex/brand colour on the chip, use it; otherwise fall back to a neutral.
+        // Category object (use hex string like "0xFFCF00")
+        let colourString: String = {
+            // prefer a provided string; otherwise derive if you store as Int/UIColor, etc.
+            if let s = category.colour as? String { return s }
+            if let i = category.colour as? Int { return String(format: "0x%06X", i) }
+            return "0x446D7A" // sane default
+        }()
+
         let categoryDict: [String: Any] = [
-            "colour": category.colour, // add `colourHex` on your model if needed
+            "colour": colourString,
             "icon":   category.icon,
             "name":   category.name
         ]
 
-        // list node payload — RankoDateTime is an object with Created & Updated
-        let listDataForFirebase: [String: Any] = [
-            "RankoID":          listUUID,
-            "RankoName":        rankoName,
-            "RankoDescription": description,
-            "RankoType":        "default",
-            "RankoPrivacy":     isPrivate,
-            "RankoStatus":      "active",
-            "RankoCategory":    categoryDict,                           // ✅ object, not string
-            "RankoUserID":      safeUID,
-            "RankoItems":       rankoItemsDict,
-            "RankoDateTime":    ["RankoUpdated": ts, "RankoCreated": ts] // ✅ object with both fields
+        // Details (fill tags/region/lang with smart defaults if you don't have UI for them yet)
+        let normalizedTags: [String] = {
+            if let t = self.tags, !t.isEmpty { return t }
+            return ["ranko", category.name.lowercased()]
+        }()
+
+        let rankoDetails: [String: Any] = [
+            "id":          listUUID,
+            "name":        rankoName,
+            "description": description,
+            "type":        "default",
+            "user_id":     safeUID,
+            "tags":        normalizedTags,
+            "region":      "AUS",
+            "language":    "en",
+            "downloaded":  true
         ]
 
-        // write both nodes concurrently
+        // Privacy block (match your example)
+        let rankoPrivacy: [String: Any] = [
+            "private":   isPrivate,
+            "cloneable": true,
+            "comments":  true,
+            "likes":     true,
+            "shares":    true,
+            "saves":     true,
+            "status":    "active"
+        ]
+
+        // Statistics (start at 0; your sample shows some nonzero values — adjust if you keep history)
+        let rankoStats: [String: Any] = [
+            "views":  0,
+            "saves":  0,
+            "shares": 0,
+            "clones": 0
+        ]
+
+        // Full payload shaped like your sample
+        let payload: [String: Any] = [
+            "RankoDetails":   rankoDetails,
+            "RankoCategory":  categoryDict,
+            "RankoPrivacy":   rankoPrivacy,
+            "RankoDateTime":  ["updated": ts, "created": ts],   // <- exact keys
+            "RankoStatistics": rankoStats,
+            "RankoLikes":     [:], // empty map to start
+            "RankoComments":  [:], // empty map to start
+            "RankoItems":     rankoItemsDict
+        ]
+
+        // write the Ranko and mirror minimal info under the user
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
                 try await setValueAsync(
-                    db.child("RankoData").child(listUUID),
-                    value: listDataForFirebase
+                    db.child("RankoData").child(self.listUUID),
+                    value: payload
                 )
             }
             group.addTask {
-                // If you want to mirror rich data here later, go for it.
-                // Keeping your original write (category name) for now.
+                // keep a lightweight pointer under the user (you can mirror more later)
                 try await setValueAsync(
                     db.child("UserData").child(safeUID)
-                      .child("UserRankos").child("UserActiveRankos").child(listUUID),
+                      .child("UserRankos").child("UserActiveRankos")
+                      .child(self.listUUID),
                     value: category.name
                 )
             }
