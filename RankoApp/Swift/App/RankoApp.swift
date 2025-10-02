@@ -10,6 +10,7 @@ import Firebase
 import FirebaseAppCheck
 import GoogleSignIn
 import GoogleSignInSwift
+import StoreKit
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
@@ -39,6 +40,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct RankoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var purchaseController = PurchaseController.shared
     @StateObject private var imageService = ProfileImageService()
     @State private var showLaunchScreen = true  // State to control visibility of the launch screen
     @State private var scale: CGFloat = 1
@@ -65,6 +67,13 @@ struct RankoApp: App {
                 GIDSignIn.sharedInstance.handle(url)
             }
             .environmentObject(imageService)
+            .environmentObject(purchaseController)
+            .task {
+                // begin listening asap
+                purchaseController.startListening()
+                // also do an initial entitlement refresh for UI
+                await purchaseController.refreshEntitlements()
+            }
         }
     }
 
@@ -123,6 +132,86 @@ struct LaunchScreenView: View {
                 scale = 3.5  // Zoom in
                 opacity = 0  // Fade out the launch screen
             }
+        }
+    }
+}
+
+@MainActor
+final class PurchaseController: ObservableObject {
+    static let shared = PurchaseController()
+    private var updatesTask: Task<Void, Never>? = nil
+
+    @Published var isProUser: Bool = false
+    @Published var activeProductID: String? = nil
+
+    private init() {}
+
+    func startListening() {
+        // avoid multiple listeners
+        guard updatesTask == nil else { return }
+
+        // 1) catch historical/unfinished transactions once at launch
+        Task { await self.consumePendingTransactions() }
+
+        // 2) long-lived listener for new purchases/renewals/refunds
+        updatesTask = Task { [weak self] in
+            guard let self else { return }
+            for await result in Transaction.updates {
+                await self.handle(result)
+            }
+        }
+    }
+
+    func stopListening() {
+        updatesTask?.cancel()
+        updatesTask = nil
+    }
+
+    // call after purchase button too, but the listener will also catch it
+    func refreshEntitlements() async {
+        do {
+            let statuses = try await Product.SubscriptionInfo.status(for: "4205BB53")
+            if let active = statuses.first(where: { $0.state == .subscribed }) {
+                switch active.renewalInfo {
+                case .verified(let info):
+                    activeProductID = info.currentProductID
+                    isProUser = true
+                case .unverified:
+                    activeProductID = nil
+                    isProUser = true
+                }
+            } else {
+                activeProductID = nil
+                isProUser = false
+            }
+
+            // persist if you like
+            UserDefaults.standard.set(isProUser ? 1 : 0, forKey: "isProUser")
+            UserDefaults.standard.set(activeProductID, forKey: "activeProductID")
+        } catch {
+            print("refreshEntitlements error:", error.localizedDescription)
+        }
+    }
+
+    // MARK: - Internals
+
+    private func consumePendingTransactions() async {
+        // iterate current entitlements and finish any un-finished transactions
+        for await entitlement in Transaction.currentEntitlements {
+            await handle(entitlement)
+        }
+    }
+
+    private func handle(_ result: VerificationResult<StoreKit.Transaction>) async {
+        switch result {
+        case .unverified(_, let error):
+            print("❌ Unverified transaction:", error.localizedDescription)
+
+        case .verified(let transaction):
+            if let groupID = transaction.subscriptionGroupID, groupID == "4205BB53" {
+                await refreshEntitlements()
+            }
+            await transaction.finish()
         }
     }
 }

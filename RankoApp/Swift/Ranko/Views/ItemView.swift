@@ -192,13 +192,17 @@ struct ItemDetailView: View {
                             ItemName: newName,
                             ItemDescription: newDesc,
                             ItemCategory: "",
-                            ItemImage: rec.ItemImage
+                            ItemImage: rec.ItemImage,
+                            ItemGIF: rec.ItemGIF,
+                            ItemVideo: rec.ItemVideo,
+                            ItemAudio: rec.ItemVideo
                         )
                         let updatedItem = RankoItem(
                             id: currentItem.id,
                             rank: currentItem.rank,
                             votes: currentItem.votes,
-                            record: updatedRecord
+                            record: updatedRecord,
+                            playCount: currentItem.playCount
                         )
                         // callback to parent
                         onSave(updatedItem)
@@ -844,42 +848,6 @@ struct SpecItemDetailView: View {
     }
 }
 
-// MARK: - Preview Provider (unchanged)
-struct ItemView_Previews: PreviewProvider {
-    static var previews: some View {
-        let sampleRecord = RankoRecord(
-            objectID: "IYEGY7767sSS",
-            ItemName: "Apple",
-            ItemDescription: "a red fruit",
-            ItemCategory: "",
-            ItemImage: "https://img.freepik.com/free-psd/close-up-delicious-apple_23-2151868338.jpg"
-        )
-        let sampleItem = RankoItem(
-            id: "IYEGY7767sSS",
-            rank: 3,
-            votes: 42,
-            record: sampleRecord
-        )
-
-        ItemDetailView(
-            items: [sampleItem],
-            initialItem: sampleItem,
-            listID: "sampleListID"
-        ) { updatedItem in
-            // no-op in preview
-        }
-    }
-}
-
-
-
-// MARK: - Preview Provider (unchanged)
-struct SpectateItemView_Previews: PreviewProvider {
-    static var previews: some View {
-        SpecItemDetailView(item: RankoItem(id: "IYEGY7767sSS", rank: 3, votes: 42, record: RankoRecord(objectID: "IYEGY7767sSS", ItemName: "Apple", ItemDescription: "a red fruit", ItemCategory: "", ItemImage: "https://img.freepik.com/free-psd/close-up-delicious-apple_23-2151868338.jpg")))
-    }
-}
-
 fileprivate enum Colors: String, CaseIterable, Identifiable {
     case red
     case blue
@@ -1423,13 +1391,17 @@ struct GroupItemDetailView: View {
                             ItemName: newName,
                             ItemDescription: newDesc,
                             ItemCategory: "",
-                            ItemImage: rec.ItemImage
+                            ItemImage: rec.ItemImage,
+                            ItemGIF: rec.ItemGIF,
+                            ItemVideo: rec.ItemVideo,
+                            ItemAudio: rec.ItemAudio
                         )
                         let updatedItem = RankoItem(
                             id: currentItem.id,
                             rank: currentItem.rank,
                             votes: currentItem.votes,
-                            record: updatedRecord
+                            record: updatedRecord,
+                            playCount: currentItem.playCount
                         )
                         // callback to parent
                         onSave(updatedItem)

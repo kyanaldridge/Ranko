@@ -343,13 +343,17 @@ struct DefaultListPersonal: View {
                                                             ItemName: newName,
                                                             ItemDescription: newDesc,
                                                             ItemCategory: "",
-                                                            ItemImage: rec.ItemImage
+                                                            ItemImage: rec.ItemImage,
+                                                            ItemGIF: rec.ItemAudio,
+                                                            ItemVideo: rec.ItemVideo,
+                                                            ItemAudio: rec.ItemAudio
                                                         )
                                                         let updatedItem = RankoItem(
                                                             id: item.id,
                                                             rank: item.rank,
                                                             votes: item.votes,
-                                                            record: updatedRecord
+                                                            record: updatedRecord,
+                                                            playCount: item.playCount
                                                         )
                                                         onSave(updatedItem)
                                                     }
@@ -367,13 +371,17 @@ struct DefaultListPersonal: View {
                                                             ItemName: newName,
                                                             ItemDescription: newDesc,
                                                             ItemCategory: "",
-                                                            ItemImage: rec.ItemImage
+                                                            ItemImage: rec.ItemImage,
+                                                            ItemGIF: rec.ItemGIF,
+                                                            ItemVideo: rec.ItemVideo,
+                                                            ItemAudio: rec.ItemAudio
                                                         )
                                                         let updatedItem = RankoItem(
                                                             id: item.id,
                                                             rank: item.rank,
                                                             votes: item.votes,
-                                                            record: updatedRecord
+                                                            record: updatedRecord,
+                                                            playCount: item.playCount
                                                         )
                                                         // callback to parent
                                                         onSave(updatedItem)
@@ -1170,9 +1178,12 @@ struct DefaultListPersonal: View {
                 ItemName: draft.name,
                 ItemDescription: draft.description,
                 ItemCategory: "",
-                ItemImage: url                              // 👈 DB value visible in your rows
+                ItemImage: url,                              // 👈 DB value visible in your rows
+                ItemGIF: draft.gif,
+                ItemVideo: draft.video,
+                ItemAudio: draft.audio
             )
-            let item = RankoItem(id: newItemID, rank: nextRank, votes: 0, record: rec)
+            let item = RankoItem(id: newItemID, rank: nextRank, votes: 0, record: rec, playCount: 0)
             selectedRankoItems.append(item)
             nextRank += 1
         }
@@ -1279,6 +1290,16 @@ struct DefaultListPersonal: View {
         }
     }
     
+    func normalizeHexString(_ value: String) -> String {
+        var s = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("0x") || s.hasPrefix("0X") { s.removeFirst(2) }
+        if s.hasPrefix("#") { s.removeFirst() }
+        // keep only hex digits
+        s = s.filter { "0123456789abcdefABCDEF".contains($0) }
+        guard let intVal = UInt32(s, radix: 16) else { return "0x446D7A" }
+        return String(format: "0x%06X", intVal)
+    }
+    
     private func resetExitDragState() {
         withAnimation { exitButtonTranslation = .zero }
         withAnimation { saveButtonHovered = false }
@@ -1383,22 +1404,16 @@ struct DefaultListPersonal: View {
                     guard
                         let itemName  = it["ItemName"] as? String,
                         let itemDesc  = it["ItemDescription"] as? String,
-                        let itemImage = it["ItemImage"] as? String
+                        let itemImage = it["ItemImage"] as? String,
+                        let itemGIF    = it["ItemGIF"] as? String,
+                        let itemVideo    = it["ItemVideo"] as? String,
+                        let itemAudio    = it["ItemAudio"] as? String
                     else { return nil }
-
-                    let rank  = (it["ItemRank"] as? NSNumber)?.intValue
-                             ?? Int(it["ItemRank"] as? String ?? "") ?? 0
-                    let votes = (it["ItemVotes"] as? NSNumber)?.intValue
-                             ?? Int(it["ItemVotes"] as? String ?? "") ?? 0
-
-                    let rec = RankoRecord(
-                        objectID: k,
-                        ItemName: itemName,
-                        ItemDescription: itemDesc,
-                        ItemCategory: "",
-                        ItemImage: itemImage
-                    )
-                    return RankoItem(id: k, rank: rank, votes: votes, record: rec)
+                    let rank  = intFromAny(it["ItemRank"])  ?? 0
+                    let votes = intFromAny(it["ItemVotes"]) ?? 0
+                    let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                    let plays = intFromAny(it["PlayCount"]) ?? 0
+                    return RankoItem(id: k, rank: rank, votes: votes, record: rec, playCount: plays)
                 }
 
                 // assign UI state
@@ -1440,21 +1455,16 @@ struct DefaultListPersonal: View {
                 guard
                     let itemName  = it["ItemName"] as? String,
                     let itemDesc  = it["ItemDescription"] as? String,
-                    let itemImage = it["ItemImage"] as? String
+                    let itemImage = it["ItemImage"] as? String,
+                    let itemGIF    = it["ItemGIF"] as? String,
+                    let itemVideo    = it["ItemVideo"] as? String,
+                    let itemAudio    = it["ItemAudio"] as? String
                 else { return nil }
-                let rank  = (it["ItemRank"] as? NSNumber)?.intValue
-                         ?? Int(it["ItemRank"] as? String ?? "") ?? 0
-                let votes = (it["ItemVotes"] as? NSNumber)?.intValue
-                         ?? Int(it["ItemVotes"] as? String ?? "") ?? 0
-
-                let rec = RankoRecord(
-                    objectID: itemID,
-                    ItemName: itemName,
-                    ItemDescription: itemDesc,
-                    ItemCategory: "",
-                    ItemImage: itemImage
-                )
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec)
+                let rank  = intFromAny(it["ItemRank"])  ?? 0
+                let votes = intFromAny(it["ItemVotes"]) ?? 0
+                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                let plays = intFromAny(it["PlayCount"]) ?? 0
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
             }
 
             // assign UI state
@@ -2054,7 +2064,7 @@ struct DefaultListPersonal: View {
         }()
 
         // fan-out partial updates to nested paths
-        var updates: [String: Any] = [
+        let updates: [String: Any] = [
             "RankoDetails/name":        rankoName,
             "RankoDetails/description": description,
 
@@ -2212,7 +2222,10 @@ private extension RankoRecord {
             ItemName: ItemName,
             ItemDescription: ItemDescription,
             ItemCategory: ItemCategory,
-            ItemImage: url
+            ItemImage: url,
+            ItemGIF: ItemGIF,
+            ItemVideo: ItemVideo,
+            ItemAudio: ItemAudio
         )
     }
 }
@@ -2223,148 +2236,9 @@ private extension RankoItem {
             id: id,
             rank: rank,
             votes: votes,
-            record: newRecord
+            record: newRecord,
+            playCount: playCount
         )
-    }
-}
-
-struct DefaultListPersonal_Previews: PreviewProvider {
-    // Create 10 sample RankoItem instances representing top destinations
-    static var sampleItems: [RankoItem] = [
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 1,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "1",
-                ItemName: "Paris",
-                ItemDescription: "The City of Light",
-                ItemCategory: "",
-                ItemImage:"https://res.klook.com/image/upload/c_fill,w_750,h_750/q_80/w_80,x_15,y_15,g_south_west,l_Klook_water_br_trans_yhcmh3/activities/wrgwlkhnjekv8h5tjbn4.jpg"
-            )
-        ),
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 2,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "2",
-                ItemName: "New York",
-                ItemDescription: "The Big Apple",
-                ItemCategory: "",
-                ItemImage:"https://hips.hearstapps.com/hmg-prod/images/manhattan-skyline-with-empire-state-building-royalty-free-image-960609922-1557777571.jpg?crop=0.66635xw:1xh;center,top&resize=640:*"
-            )
-        ),
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 3,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "3",
-                ItemName: "Tokyo",
-                ItemDescription: "Land of the Rising Sun",
-                ItemCategory: "",
-                ItemImage:"https://static.independent.co.uk/s3fs-public/thumbnails/image/2018/04/10/13/tokyo-main.jpg?width=1200&height=1200&fit=crop"
-            )
-        ),
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 4,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "4",
-                ItemName: "Rome",
-                ItemDescription: "a city steeped in history, culture, and artistic treasures, often referred to as the Eternal City",
-                ItemCategory: "",
-                ItemImage:"https://i.guim.co.uk/img/media/03303b5f042b72c03541fcd7f3777180f61a01a5/0_2310_4912_2947/master/4912.jpg?width=1200&height=1200&quality=85&auto=format&fit=crop&s=19cf880f7508ea310bdb136057d78240"
-            )
-        ),
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 5,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "5",
-                ItemName: "Sydney",
-                ItemDescription: "Harbour City",
-                ItemCategory: "",
-                ItemImage:"https://dynamic-media-cdn.tripadvisor.com/media/photo-o/13/93/a7/be/sydney-opera-house.jpg?w=500&h=500&s=1"
-            )
-        ),
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 6,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "6",
-                ItemName: "Barcelona",
-                ItemDescription: "Gaudí’s Masterpiece City",
-                ItemCategory: "",
-                ItemImage:"https://lp-cms-production.imgix.net/2023-08/iStock-1297827939.jpg?fit=crop&ar=1%3A1&w=1200&auto=format&q=75"
-            )
-        ),
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 7,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "7",
-                ItemName: "Cape Town",
-                ItemDescription: "Mother City of South Africa",
-                ItemCategory: "",
-                ItemImage:"https://imageresizer.static9.net.au/0sx9mhfU8tYDs_T-ftiFBrWR_as=/0x0:1307x735/1200x1200/https%3A%2F%2Fprod.static9.net.au%2Ffs%2F15af5183-fb21-49d9-a22c-d9f4813ccbea"
-            )
-        ),
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 8,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "8",
-                ItemName: "Rio de Janeiro",
-                ItemDescription: "Marvelous City",
-                ItemCategory: "",
-                ItemImage:"https://whc.unesco.org/uploads/thumbs/site_1100_0004-750-750-20120625114004.jpg"
-            )
-        ),
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 9,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "9",
-                ItemName: "Reykjavik",
-                ItemDescription: "Land of Fire and Ice",
-                ItemCategory: "",
-                ItemImage:"https://media.gq-magazine.co.uk/photos/5d138e07d7a7017355bb9bf3/1:1/w_1280,h_1280,c_limit/reykjavik-gq-22jun18_istock_b.jpg"
-            )
-        ),
-        RankoItem(
-            id: UUID().uuidString,
-            rank: 10,
-            votes: 0,
-            record: RankoRecord(
-                objectID: "10",
-                ItemName: "Istanbul",
-                ItemDescription: "Where East Meets West",
-                ItemCategory: "",
-                ItemImage:"https://images.contentstack.io/v3/assets/blt06f605a34f1194ff/blt289d3aab2da77bc9/6777f31f93a84b03b5a37ef2/BCC-2023-EXPLORER-Istanbul-Fun-things-to-do-in-Istanbul-HEADER_MOBILE.jpg?format=webp&auto=avif&quality=60&crop=1%3A1&width=425"
-            )
-        )
-    ]
-
-    static var previews: some View {
-        DefaultListView(
-            rankoName: "Top 10 Destinations",
-            description: "Bucket-list travel spots around the world",
-            isPrivate: false,
-            category: SampleCategoryChip(id: "", name: "Countries", icon: "globe.europe.africa.fill", colour: "0xFFCF00"),
-            selectedRankoItems: sampleItems
-        ) { updatedItem in
-            // no-op in preview
-        }
-         // Optional: wrap in a NavigationView or set a fixed frame for better preview layout
-        .previewLayout(.sizeThatFits)
     }
 }
 

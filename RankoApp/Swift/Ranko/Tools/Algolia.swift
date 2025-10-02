@@ -671,7 +671,8 @@ struct AddItemView: View {
                 id: randomString(length: 12),
                 rank: newRank,
                 votes: 0,
-                record: record
+                record: record,
+                playCount: 0
             )
             selectedItems.append(newItem)
         }

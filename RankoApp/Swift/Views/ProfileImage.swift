@@ -180,16 +180,22 @@ final class ProfileImageService: ObservableObject {
                 self.user_data.userProfilePictureModified = Self.timestampString()
             }
         }
+        
+        print("UPLOADING IMAGE...")
     }
     
     func refreshFromRemote(path: String? = nil) {
         let pathToUse = path ?? user_data.userProfilePicturePath
         guard !pathToUse.isEmpty else { return }
         downloadAndCache(path: pathToUse)
+        
+        print("REFRESHING FROM REMOTE...")
     }
     
     func reloadFromDisk() {
         self.image = loadCachedImage()
+        
+        print("RELOADING FROM DISK...")
     }
     
     private func downloadAndCache(path: String) {
@@ -219,6 +225,8 @@ final class ProfileImageService: ObservableObject {
                     }
                 }
             }
+        
+        print("DOWNLOADING AND CACHING...")
     }
     
     private func loadCachedImage() -> UIImage? {

@@ -8,9 +8,11 @@
 import SwiftUI
 import UIKit
 import FirebaseAuth
+import FirebaseAnalytics
+import FirebaseStorage
+import FirebaseDatabase
 import InstantSearchCore
 import StoreKit
-import FirebaseAnalytics
 import SpotifyWebAPI
 
 struct SettingItem: Identifiable {
@@ -86,7 +88,7 @@ struct SettingsView: View {
                                         switch setting.title {
                                         case "Account":
                                             accountView = true
-                                        case "Ranko Pro":
+                                        case "Ranko Platinum":
                                             rankoProView = true
                                         case "Notifications":
                                             notificationsView = true
@@ -168,9 +170,9 @@ struct SettingsView: View {
                 )
         }
         .fullScreenCover(isPresented: $rankoProView) {
-            ProSubscriptionView()
+            RankoPlatinumView()
                 .navigationTransition(
-                    .zoom(sourceID: "Ranko Pro", in: transition)
+                    .zoom(sourceID: "Ranko Platinum", in: transition)
                 )
         }
         .fullScreenCover(isPresented: $notificationsView) {
@@ -225,7 +227,7 @@ struct SettingsView: View {
     private var settings: [SettingItem] {
         [
             SettingItem(variable: "account", title: "Account", icon: "person.crop.circle", keywords: ["account", "profile", "sign in", "sign out", "user", "login", "logout"]),
-            SettingItem(variable: "rankoPro", title: "Ranko Pro", icon: "medal.star", keywords: ["ranko", "pro", "premium"]),
+            SettingItem(variable: "rankoPlatinum", title: "Ranko Platinum", icon: "medal.star", keywords: ["ranko", "pro", "premium"]),
             SettingItem(variable: "notifications", title: "Notifications", icon: "bell.badge", keywords: ["notification", "alerts", "reminders", "push", "messages"]),
             SettingItem(variable: "preferences", title: "Preferences", icon: "wrench.and.screwdriver", keywords: ["preferences", "alerts", "reminders", "push", "messages"]),
             SettingItem(variable: "privacy", title: "Privacy & Security", icon: "lock.shield", keywords: ["privacy", "security", "password", "passcode", "auth", "protection"]),
@@ -550,7 +552,7 @@ struct SettingsView1: View {
     private var settings: [SettingItem] {
         [
             SettingItem(variable: "account", title: "Account", icon: "person.crop.circle", keywords: ["account", "profile", "sign in", "sign out", "user", "login", "logout"]),
-            SettingItem(variable: "rankoPro", title: "Ranko Pro", icon: "medal.star", keywords: ["ranko", "pro", "premium"]),
+            SettingItem(variable: "rankoPlatinum", title: "Ranko Pro", icon: "medal.star", keywords: ["ranko", "pro", "premium"]),
             SettingItem(variable: "notifications", title: "Notifications", icon: "bell.badge", keywords: ["notification", "alerts", "reminders", "push", "messages"]),
             SettingItem(variable: "preferences", title: "Preferences", icon: "wrench.and.screwdriver", keywords: ["preferences", "alerts", "reminders", "push", "messages"]),
             SettingItem(variable: "privacy", title: "Privacy & Security", icon: "lock.shield", keywords: ["privacy", "security", "password", "passcode", "auth", "protection"]),
@@ -855,13 +857,6 @@ struct ProSubscriptionView: View {
     }
 }
 
-struct SubscriptionFeatures: Identifiable {
-    let id: Int
-    let title: String
-    let icon: String
-    let description: String
-}
-
 // used in HomeView
 struct SubscriptionStatusManager {
     static func fetchSubscriptionStatus(
@@ -898,14 +893,340 @@ func updateGlobalSubscriptionStatus(groupID: String, productIDs: [String]) async
     UserDefaults.standard.set(result.productID, forKey: "activeProductID")
 }
 
-#Preview {
-    SettingsView()
-        .environmentObject(ProfileImageService())
+// MARK: - Feature Model (reuse your existing one if already in project)
+struct SubscriptionFeatures: Identifiable {
+    let id: Int
+    let title: String
+    let icon: String
+    let description: String
 }
 
-struct SubscriptionView_Previews: PreviewProvider {
-    static var previews: some View {
-        SettingsView(rankoProView: true)
+// MARK: - RankoPlatinumView
+struct RankoPlatinumView: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var purchaseController = PurchaseController.shared
+    @StateObject private var user_data = UserInformation.shared
+
+    // tabs
+    enum PlatinumTab: String, CaseIterable { case features = "Features", plans = "Plans" }
+    @State private var currentTab: PlatinumTab = .features
+
+    // storekit
+    private let productIDs = ["pro_weekly", "pro_monthly", "pro_yearly"]
+    @State private var products: [Product] = []
+    @State private var isSyncing = false
+    @State private var purchaseInFlight: String? = nil
+
+    // content
+    private let features: [SubscriptionFeatures] = [
+        .init(id: 14, title: "Unlimited Items & Rankos", icon: "infinity", description: "Create as many Rankos and items as you want."),
+        .init(id: 13, title: "Create New Blank Items", icon: "rectangle.dashed", description: "Add blank items to your Rankos."),
+        .init(id: 12, title: "Add Custom Images", icon: "photo.fill", description: "Attach camera-roll images to items."),
+        .init(id: 11, title: "Download & Export", icon: "arrow.down.circle.fill", description: "Offline Rankos + CSV export (more soon)."),
+        .init(id: 10, title: "Folders & Tags", icon: "square.grid.3x1.folder.fill.badge.plus", description: "Organise Rankos by folders and tags."),
+        .init(id: 9,  title: "Pro App Icons", icon: "apps.iphone", description: "Unlock premium app icons."),
+        .init(id: 8,  title: "Pin 20 Rankos", icon: "pin.fill", description: "Quick-access your favourites."),
+        .init(id: 7,  title: "Clone Rankos", icon: "square.fill.on.square.fill", description: "Copy community Rankos and remix."),
+        .init(id: 6,  title: "Collaborate", icon: "person.3.fill", description: "Build Rankos together in real time."),
+        .init(id: 5,  title: "Spotify Integration", icon: "music.note", description: "Add artists, albums, tracks, playlists."),
+        .init(id: 4,  title: "Search Community", icon: "rectangle.and.text.magnifyingglass", description: "Find public Rankos fast."),
+        .init(id: 3,  title: "Personal Homepage", icon: "star.bubble.fill", description: "See Rankos tailored to you."),
+        .init(id: 2,  title: "Save Rankos", icon: "star.fill", description: "Bookmark to your library."),
+        .init(id: 1,  title: "Archive Rankos", icon: "archivebox.fill", description: "Hide without deleting.")
+    ]
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                // Top bar
+                HStack {
+                    Spacer(minLength: 0)
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .black))
+                            .padding(10)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .foregroundColor(.black.opacity(0.75))
+                    .padding(.trailing, 16)
+                    .padding(.top, 12)
+                }
+
+                // Header
+                VStack(spacing: 14) {
+                    Image("Platinum_AppIcon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 120)
+                        .shadow(radius: 8, y: 4)
+
+                    Text("BECOME A PLATINUM MEMBER")
+                        .font(.custom("Nunito-Black", size: 22))
+                        .kerning(1.1)
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+                .padding(.top, 6)
+
+                // Tabs
+                Picker("", selection: $currentTab) {
+                    ForEach(PlatinumTab.allCases, id: \.self) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
+
+                // Content
+                Group {
+                    switch currentTab {
+                    case .features: featuresTab(proxy: proxy)
+                    case .plans:    plansTab()
+                    }
+                }
+                .padding(.top, 10)
+            }
+            .background(Color.white.ignoresSafeArea())
+            .task {
+                await loadProducts()
+            }
+        }
+    }
+
+    // MARK: - Features Tab
+    @ViewBuilder
+    private func featuresTab(proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 12, pinnedViews: []) {
+                ForEach(features) { f in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: f.icon)
+                            .font(.system(size: 18, weight: .bold))
+                            .frame(width: 36, height: 36)
+                            .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.06), lineWidth: 1))
+                            .padding(.top, 2)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(f.title)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                            Text(f.description)
+                                .font(.system(size: 14))
+                                .foregroundColor(.black.opacity(0.65))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(14)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.black.opacity(0.07), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 4)
+                    .padding(.horizontal, 16)
+                }
+
+                // Look At Plans button
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) {
+                        currentTab = .plans
+                    }
+                } label: {
+                    Text("LOOK AT PLANS")
+                        .font(.custom("Nunito-Black", size: 16))
+                        .kerning(0.8)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.black, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 28)
+            }
+        }
+    }
+
+    // MARK: - Plans Tab
+    @ViewBuilder
+    private func plansTab() -> some View {
+        VStack(spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(sortedProducts(products), id: \.id) { product in
+                        PlanCard(
+                            product: product,
+                            activeProductID: purchaseController.activeProductID,
+                            isLoading: purchaseInFlight == product.id
+                        ) {
+                            Task {
+                                purchaseInFlight = product.id
+                                defer { purchaseInFlight = nil }
+                                do {
+                                    _ = try await product.purchase()
+                                    // listener will pick it up, but refresh for snappier UI
+                                    await purchaseController.refreshEntitlements()
+                                } catch {
+                                    print("purchase error:", error.localizedDescription)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+                .padding(.bottom, 6)
+            }
+
+            HStack(spacing: 14) {
+                Button {
+                    Task {
+                        isSyncing = true
+                        defer { isSyncing = false }
+                        do { try await AppStore.sync() } catch { print("sync error:", error.localizedDescription) }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if isSyncing { ProgressView().scaleEffect(0.8) }
+                        Text("Restore Purchases")
+                    }
+                }
+
+                Spacer()
+
+                Link("Terms of Service", destination: URL(string: "https://apple.com")!)
+                Text("•").foregroundColor(.black.opacity(0.4))
+                Link("Privacy", destination: URL(string: "https://apple.com")!)
+            }
+            .font(.footnote)
+            .foregroundColor(.black.opacity(0.75))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 18)
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - Helpers
+    private func sortedProducts(_ products: [Product]) -> [Product] {
+        // keep the horizontal order: weekly, monthly, yearly (matches your IDs)
+        let order = ["pro_weekly", "pro_monthly", "pro_yearly"]
+        return products.sorted { a, b in
+            order.firstIndex(of: a.id) ?? 99 < order.firstIndex(of: b.id) ?? 99
+        }
+    }
+
+    @MainActor
+    private func loadProducts() async {
+        do {
+            let result = try await Product.products(for: Set(productIDs))
+            self.products = sortedProducts(result)
+        } catch {
+            print("products load error:", error.localizedDescription)
+        }
+    }
+}
+
+// MARK: - PlanCard
+private struct PlanCard: View {
+    let product: Product
+    let activeProductID: String?
+    let isLoading: Bool
+    let onPurchase: () -> Void
+
+    var isActive: Bool { activeProductID == product.id }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // badge / name
+            Text(planName(for: product.id).uppercased())
+                .font(.custom("Nunito-Black", size: 13))
+                .foregroundColor(.black.opacity(0.7))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.black.opacity(0.06), in: Capsule())
+
+            // price
+            Text(product.displayPrice)
+                .font(.system(size: 28, weight: .black))
+                .foregroundColor(.black)
+
+            // period
+            if let period = product.subscription?.subscriptionPeriod {
+                Text("per \(period.unit.localizedUnit)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.black.opacity(0.6))
+            }
+
+            // blurb
+            Text(planBlurb(for: product.id))
+                .font(.system(size: 13))
+                .foregroundColor(.black.opacity(0.7))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+
+            Button(action: onPurchase) {
+                HStack {
+                    if isLoading { ProgressView().tint(.white) }
+                    Text(isActive ? "Subscribed" : (isLoading ? "Processing…" : "Choose Plan"))
+                        .font(.custom("Nunito-Black", size: 15))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(isActive ? Color.black.opacity(0.15) : Color.black,
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .foregroundColor(isActive ? .black : .white)
+            }
+            .disabled(isActive || isLoading)
+        }
+        .padding(16)
+        .frame(width: 260, height: 220)
+        .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.black.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.05), radius: 12, x: 0, y: 8)
+    }
+
+    private func planName(for id: String) -> String {
+        switch id {
+        case "pro_weekly":  return "Weekly"
+        case "pro_monthly": return "Monthly"
+        case "pro_yearly":  return "Yearly"
+        default:            return product.displayName
+        }
+    }
+
+    private func planBlurb(for id: String) -> String {
+        switch id {
+        case "pro_weekly":  return "Low-Commitment"
+        case "pro_monthly": return "Most Popular"
+        case "pro_yearly":  return "Best Value"
+        default:            return product.description
+        }
+    }
+    
+    private func freePeriod(for id: String) -> String {
+        switch id {
+        case "pro_weekly":  return "one week free"
+        case "pro_monthly": return "one month free"
+        case "pro_yearly":  return "one month free"
+        default:            return product.description
+        }
+    }
+}
+
+// MARK: - Period helper
+private extension Product.SubscriptionPeriod.Unit {
+    var localizedUnit: String {
+        switch self {
+        case .day: return "day"
+        case .week: return "week"
+        case .month: return "month"
+        case .year: return "year"
+        @unknown default: return "period"
+        }
     }
 }
 
@@ -2001,76 +2322,66 @@ struct PrivacySecurityView: View {
     }
 }
 
+
+
 struct SuggestionsIdeasView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
-    
-    @State private var snappedItem = 0.0
-    @State private var draggingItem = 0.0
-    @State var activeIndex: Int = 4
-    @State private var suggestionCategoryName = "Features & User Interface"
-    
-    private var orderedIDs: [Int] { suggestionCategories.map(\.id).sorted(by: >) } // [4,3,2,1,0]
-    private var activePage: Int { orderedIDs.firstIndex(of: activeIndex) ?? 0 }
 
-    private func jumpTo(_ page: Int) {
-        let targetID = orderedIDs[page]
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            snappedItem  = Double(targetID)
-            draggingItem = snappedItem
-            activeIndex  = targetID
-        }
+    // MARK: - Types & Data
+    enum SuggestionType: String, CaseIterable {
+        case problems = "Problems"
+        case ideas = "Ideas"
+        case other = "Other"
     }
-    
-    let suggestionCategories: [SuggestionCategory] = [
-        .init(id: 4, title: "Features & User Interface", icon: "star.fill",
-              feature1: "New Feature Request",
-              feature2: "Navigation & Layout",
-              feature3: "Customization & Themes",
-              feature4: "Accessibility Improvements",
-              feature5: "Animations & Polish",
-              feature6: "Usability/Clarity Issues"),
 
-        .init(id: 3, title: "Crashes & Bugs", icon: "ant.fill",
-              feature1: "App Crashed Suddenly",
-              feature2: "View Won't Load or Open",
-              feature3: "Screen Freezes",
-              feature4: "Ranko Deleted For No Reason",
-              feature5: "Search Functionality Not Working",
-              feature6: "Images or Contents Not Loading"),
-
-        .init(id: 2, title: "Data & Performance", icon: "speedometer",
-              feature1: "Slow Loading Times",
-              feature2: "Laggy Scrolling",
-              feature3: "High Battery Usage",
-              feature4: "Offline/Sync Problems",
-              feature5: "Data Not Saving",
-              feature6: "Unexpected Data Changes"),
-
-        .init(id: 1, title: "Integrations & External Data", icon: "cylinder.split.1x2.fill",
-              feature1: "Apple/Google Sign-In",
-              feature2: "Algolia Search Results",
-              feature3: "Firebase Read/Write",
-              feature4: "Spotify Data/Images",
-              feature5: "AFL/Champion Data",
-              feature6: "Webhooks/Rate Limits"),
-
-        .init(id: 0, title: "Any Feedback & Suggestions", icon: "hand.thumbsup.fill",
-              feature1: "Overall Experience",
-              feature2: "What Felt Confusing",
-              feature3: "Missing Feature",
-              feature4: "Notifications",
-              feature5: "Pricing & Pro",
-              feature6: "Other Suggestions")
+    private let problemCats: [(icon: String, name: String)] = [
+        ("ladybug.fill", "Bugs"),
+        ("exclamationmark.shield.fill", "App Crashes"),
+        ("tortoise.fill", "Slow Performance"),
+        ("externaldrive.fill.badge.exclamationmark", "Saving Data"),
+        ("questionmark.folder.fill", "Unexpected Issues"),
+        ("ellipsis", "Other")
     ]
+    private let ideaCats: [(icon: String, name: String)] = [
+        ("square.grid.3x3.fill", "Ranko Layouts"),
+        ("paintbrush.pointed.fill", "App UI Design"),
+        ("sparkles", "New Sample Items"),
+        ("slider.horizontal.3", "New Customisation"),
+        ("arrow.triangle.2.circlepath", "Update Data"),
+        ("ellipsis", "Other")
+    ]
+
+    // MARK: - Form State
+    @State private var suggestionID: String = UUID().uuidString
+    @State private var selectedType: SuggestionType = .problems
+    @State private var selectedCategory: String? = nil
+
+    @State private var subject: String = ""
+    @State private var message: String = ""
+    @State private var contact: String = ""
+
+    // image attach (re-using your DraftCard flow vibe)
+    @State private var attachedImage: UIImage? = nil
+    @State private var showAttachSheet = false
+    @State private var showPhotoPicker = false
+    @State private var showImageCropper = false
+    @State private var imageForCropping: UIImage? = nil
+
+    // progress / errors
+    @State private var isUploadingImage = false
+    @State private var uploadError: String? = nil
+    @State private var uploadedImageURL: String? = nil
+
+    @State private var isSubmitting = false
+    @State private var submitError: String? = nil
 
     var body: some View {
         ZStack {
-            Color(hex: 0xFFFFFF)
-                .ignoresSafeArea()
-            
+            Color(hex: 0xFFFFFF).ignoresSafeArea()
+
             VStack(alignment: .leading, spacing: 0) {
-                // Title
+                // Title Bar
                 HStack {
                     Text("Suggestions")
                         .font(.custom("Nunito-Black", size: 32))
@@ -2084,226 +2395,468 @@ struct SuggestionsIdeasView: View {
                     .foregroundColor(Color(hex: 0x514343))
                     .tint(Color(hex: 0xFFFFFF))
                     .buttonStyle(.glassProminent)
-                    .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
+                    .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 0)
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
-                
+
                 RoundedRectangle(cornerRadius: 5)
-                    .fill(Color(hex: 0x000000))
+                    .fill(Color.black)
                     .frame(height: 3)
                     .opacity(0.08)
                     .padding(.horizontal, 25)
                     .padding(.top, 20)
-                
-                
-                VStack(spacing: 10) {
-                    VStack(spacing: 10) {
-                        HStack {
-                            Text("Suggestion Category")
-                                .foregroundColor(Color(hex: 0x514343))
-                                .font(.title2)
-                                .bold()
-                            Spacer()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+
+                        // MARK: Type Picker
+                        Picker("Type", selection: $selectedType) {
+                            ForEach(SuggestionType.allCases, id: \.self) { t in
+                                Text(t.rawValue).tag(t)
+                            }
                         }
-                        
-                        Divider()
-                    }
-                    .padding(.horizontal)
-                    
-                    
-                    ZStack {
-                        ForEach(suggestionCategories) { item in
-                            // article view
-                            ZStack {
-                                VStack {
-                                    HStack {
-                                        Image(systemName: item.icon)
-                                            .font(.system(size: 15, weight: .heavy, design: .default))
-                                            .foregroundColor(Color(hex: 0x514343))
-                                        Text(item.title)
-                                            .font(.custom("Nunito-Black", size: 15))
-                                            .foregroundColor(Color(hex: 0x514343))
-                                    }
-                                    VStack(alignment: .leading, spacing: 10) {
-                                        if item.feature1 != "" {
-                                            Text("•  \(item.feature1)")
-                                                .font(.custom("Nunito-Black", size: 12))
-                                                .foregroundColor(Color(hex: 0x514343))
-                                                .lineLimit(1)
-                                                .padding(.top, 8)
-                                        }
-                                        if item.feature2 != "" {
-                                            Text("•  \(item.feature2)")
-                                                .font(.custom("Nunito-Black", size: 12))
-                                                .foregroundColor(Color(hex: 0x514343))
-                                                .lineLimit(1)
-                                        }
-                                        if item.feature3 != "" {
-                                            Text("•  \(item.feature3)")
-                                                .font(.custom("Nunito-Black", size: 12))
-                                                .foregroundColor(Color(hex: 0x514343))
-                                                .lineLimit(1)
-                                        }
-                                        if item.feature4 != "" {
-                                            Text("•  \(item.feature4)")
-                                                .font(.custom("Nunito-Black", size: 12))
-                                                .foregroundColor(Color(hex: 0x514343))
-                                                .lineLimit(1)
-                                        }
-                                        if item.feature5 != "" {
-                                            Text("•  \(item.feature5)")
-                                                .font(.custom("Nunito-Black", size: 12))
-                                                .foregroundColor(Color(hex: 0x514343))
-                                                .lineLimit(1)
-                                        }
-                                        if item.feature6 != "" {
-                                            Text("•  \(item.feature6)")
-                                                .font(.custom("Nunito-Black", size: 12))
-                                                .foregroundColor(Color(hex: 0x514343))
-                                                .lineLimit(1)
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 25)
+                        .onChange(of: selectedType) { _, newVal in
+                            selectedCategory = nil
+                        }
+
+                        // MARK: Category Chips (Problems/Ideas only)
+                        if selectedType == .problems || selectedType == .ideas {
+                            let cats = selectedType == .problems ? problemCats : ideaCats
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Category")
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 25)
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 14) {
+                                        ForEach(cats, id: \.name) { c in
+                                            CategoryCircle(icon: c.icon, name: c.name, isSelected: selectedCategory == c.name)
+                                                .onTapGesture {
+                                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.88)) {
+                                                        selectedCategory = c.name
+                                                    }
+                                                }
                                         }
                                     }
-                                    
-                                }
-                                .padding(.vertical, 15)
-                                .frame(width: 300)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 18)
-                                        .fill(Color(hex: 0xFEFAED))
-                                        .stroke(Color(hex: 0xFFFFFF), lineWidth: 2)
-                                }
-                            }
-                            .scaleEffect(1.0 - abs(distance(item.id)) * 0.2 )
-                            .opacity(1.0 - abs(distance(item.id)) * 0.3 )
-                            .offset(x: myXOffset(item.id), y: 0)
-                            .zIndex(1.0 - abs(distance(item.id)) * 0.1)
-                            .onAppear {
-                                activeIndex = 4
-                                activeIndex = item.id
-                            }
-                            .onTapGesture {
-                                withAnimation {
-                                    draggingItem = Double(item.id)
-                                    snappedItem  = Double(item.id)
-                                    activeIndex  = item.id
-                                    updateCategoryName(for: item.id)   // ← NEW
+                                    .padding(.horizontal, 25)
+                                    .padding(.vertical, 4)
                                 }
                             }
                         }
-                        HStack(alignment: .center) {
-                            Button { step(+1) } label: {
-                                Image(systemName: "chevron.backward")
-                                    .font(.system(size: 16, weight: .black))
-                                    .frame(width: 25, height: 30)
+
+                        // MARK: Subject
+                        VStack(spacing: 6) {
+                            HStack {
+                                Text("SUBJECT").font(.custom("Nunito-Black", size: 12)).foregroundStyle(.secondary)
+                                Text("*").foregroundColor(.red).font(.custom("Nunito-Black", size: 12))
+                                Spacer()
                             }
-                            .foregroundColor(Color(hex: 0x514343))
-                            .tint(Color(hex: 0xFFFCF7))
-                            .buttonStyle(.glassProminent)
-                            
-                            Spacer()
-                            
-                            Button { step(-1) } label: {
-                                Image(systemName: "chevron.forward")
-                                    .font(.system(size: 16, weight: .black))
-                                    .frame(width: 25, height: 30)
+                            .padding(.horizontal, 6)
+
+                            HStack(spacing: 8) {
+                                Image(systemName: "textformat.size.larger").foregroundColor(.gray)
+                                TextField("Short subject…", text: $subject)
+                                    .font(.custom("Nunito-Black", size: 18))
+                                    .autocorrectionDisabled(true)
                             }
-                            .foregroundColor(Color(hex: 0x514343))
-                            .tint(Color(hex: 0xFFFCF7))
-                            .buttonStyle(.glassProminent)
-                        }
-                        .padding(.horizontal, 8)
-                        .zIndex(100)
-                    }
-                    .gesture(getDragGesture())
-                    .padding(.top, 20)
-                    
-                }
-                
-                HStack(spacing: 8) {
-                    ForEach(0..<orderedIDs.count, id: \.self) { i in
-                        Circle()
-                            .frame(width: 8, height: 8)
-                            .foregroundColor(i == activePage ? .white : Color(hex: 0xCFC2B3)) // white = active, grey = others
-                            .overlay(
-                                Circle().stroke(Color(hex: 0x857467).opacity(0.25), lineWidth: 0.5)
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.gray.opacity(0.06))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08), lineWidth: 1))
                             )
-                            .scaleEffect(i == activePage ? 1.15 : 1.0)
-                            .animation(.spring(response: 0.25, dampingFraction: 0.9), value: activePage)
-                            .onTapGesture { jumpTo(i) } // optional: tap to jump
+                        }
+                        .padding(.horizontal, 25)
+
+                        // MARK: Message
+                        VStack(spacing: 6) {
+                            HStack {
+                                Text("MESSAGE").font(.custom("Nunito-Black", size: 12)).foregroundStyle(.secondary)
+                                Text("*").foregroundColor(.red).font(.custom("Nunito-Black", size: 12))
+                                Spacer()
+                            }
+                            .padding(.horizontal, 6)
+
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "text.justify").foregroundColor(.gray).padding(.top, 6)
+                                TextField("Describe the problem/idea…", text: $message, axis: .vertical)
+                                    .font(.custom("Nunito-Black", size: 18))
+                                    .lineLimit(5...10)
+                                    .autocorrectionDisabled(true)
+                            }
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.gray.opacity(0.06))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08), lineWidth: 1))
+                            )
+                        }
+                        .padding(.horizontal, 25)
+
+                        // MARK: Contact
+                        VStack(spacing: 6) {
+                            HStack {
+                                Text("CONTACT (OPTIONAL)").font(.custom("Nunito-Black", size: 12)).foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 6)
+
+                            HStack(spacing: 8) {
+                                Image(systemName: "at").foregroundColor(.gray)
+                                TextField("Email or phone number for follow-up", text: $contact)
+                                    .font(.custom("Nunito-Black", size: 16))
+                                    .textContentType(.emailAddress)
+                                    .keyboardType(.emailAddress)
+                            }
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.gray.opacity(0.06))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.08), lineWidth: 1))
+                            )
+                        }
+                        .padding(.horizontal, 25)
+
+                        // MARK: Attach Image
+                        VStack(spacing: 10) {
+                            Button {
+                                showAttachSheet = true
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "paperclip")
+                                        .font(.system(size: 16, weight: .bold))
+                                    Text(attachedImage == nil ? "ATTACH IMAGE" : "REPLACE IMAGE")
+                                        .font(.custom("Nunito-Black", size: 14))
+                                    if isUploadingImage { ProgressView().controlSize(.mini) }
+                                    Spacer()
+                                }
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 14)
+                            }
+                            .buttonStyle(.glassProminent)
+                            .disabled(isUploadingImage)
+                            .padding(.horizontal, 25)
+
+                            if let img = attachedImage {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(height: 180)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .padding(.horizontal, 25)
+                                    .overlay {
+                                        if isUploadingImage {
+                                            ZStack {
+                                                Color.black.opacity(0.2)
+                                                ProgressView("Uploading…")
+                                                    .padding(8)
+                                                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                                            }
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        }
+                                    }
+                            }
+
+                            if let err = uploadError {
+                                Text(err)
+                                    .font(.footnote)
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal, 25)
+                            }
+                        }
+
+                        // MARK: Submit
+                        VStack(spacing: 12) {
+                            if let e = submitError {
+                                Label(e, systemImage: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.red)
+                                    .font(.footnote)
+                            }
+
+                            Button {
+                                Task { await handleSubmit() }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "paperplane.fill")
+                                    Text(isSubmitting ? "SUBMITTING…" : "SUBMIT")
+                                        .font(.custom("Nunito-Black", size: 16))
+                                    if isSubmitting { ProgressView().controlSize(.mini) }
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.glassProminent)
+                            .disabled(isSubmitting || isUploadingImage)
+                        }
+                        .padding(.horizontal, 25)
+                        .padding(.bottom, 24)
+                    }
+                    .padding(.top, 18)
+                }
+            }
+        }
+        // MARK: Sheets (same flow you use for DraftCard)
+        .sheet(isPresented: $showAttachSheet) {
+            AttachImageSheet(pickFromLibrary: {
+                showAttachSheet = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { showPhotoPicker = true }
+            })
+            .presentationDetents([.fraction(0.35)])
+            .presentationBackground(Color.white)
+        }
+        .sheet(isPresented: $showPhotoPicker) {
+            ImagePicker(image: $imageForCropping, isPresented: $showPhotoPicker)
+        }
+        .fullScreenCover(isPresented: $showImageCropper) {
+            if let img = imageForCropping {
+                SwiftyCropView(
+                    imageToCrop: img,
+                    maskShape: .square,
+                    configuration: SwiftyCropConfiguration(
+                        maxMagnificationScale: 8.0,
+                        maskRadius: 190.0,
+                        cropImageCircular: false,
+                        rotateImage: false,
+                        rotateImageWithButtons: true,
+                        usesLiquidGlassDesign: true,
+                        zoomSensitivity: 3.0
+                    ),
+                    onCancel: {
+                        imageForCropping = nil
+                        showImageCropper = false
+                    },
+                    onComplete: { cropped in
+                        imageForCropping = nil
+                        showImageCropper = false
+                        if let out = cropped { Task { await uploadSuggestionImage(out) } }
+                    }
+                )
+            }
+        }
+        .onChange(of: imageForCropping) { _, val in
+            if val != nil { showImageCropper = true }
+        }
+        .alert("Couldn't submit", isPresented: .init(
+            get: { submitError != nil },
+            set: { if !$0 { submitError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(submitError ?? "")
+        }
+    }
+
+    // MARK: - UI Bits
+    private struct CategoryCircle: View {
+        let icon: String
+        let name: String
+        let isSelected: Bool
+
+        var body: some View {
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Color(hex: 0x514343) : Color.gray.opacity(0.12))
+                        .frame(width: 64, height: 64)
+                        .overlay(
+                            Circle().stroke(Color.black.opacity(0.08), lineWidth: isSelected ? 0 : 1)
+                        )
+                    Image(systemName: icon)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(isSelected ? .white : .primary.opacity(0.75))
+                }
+                Text(name)
+                    .font(.custom("Nunito-Black", size: 11))
+                    .foregroundStyle(.primary.opacity(0.75))
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private struct AttachImageSheet: View {
+        var pickFromLibrary: () -> Void
+        var body: some View {
+            ScrollView {
+                VStack(spacing: 16) {
+                    HStack {
+                        Text("Attach Image").font(.system(size: 14, weight: .bold))
+                        Spacer()
+                        Button(action: pickFromLibrary) {
+                            Text("Photo Library")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(Color(hex: 0x0288FE))
+                        }
+                    }
+                    .padding(.horizontal, 24)
+
+                    Divider().padding(.horizontal, 24)
+
+                    Button(action: pickFromLibrary) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "photo.stack")
+                            Text("Choose from Library")
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                    }
+
+                    Button(action: {}) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "folder")
+                            Text("Files (optional hook)")
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 8)
-                
-                Text("\(suggestionCategoryName)")
-                Spacer()
+                .padding(.top, 18)
             }
         }
-        .onAppear {
-            snappedItem  = Double(activeIndex)
-            draggingItem = snappedItem
-            updateCategoryName(for: activeIndex)
-        }
     }
-    private func updateCategoryName(for id: Int) {
-        if let cat = suggestionCategories.first(where: { $0.id == id }) {
-            suggestionCategoryName = cat.title
-        }
-    }
-    
-    private func step(_ delta: Int) {
-        let count = suggestionCategories.count
-        guard count > 0 else { return }
 
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-            let current = Int(round(snappedItem))
-            let next = ((current + delta) % count + count) % count
-            snappedItem  = Double(next)
-            draggingItem = snappedItem
-            activeIndex  = next
-            updateCategoryName(for: next)       // ← NEW
+    // MARK: - Helpers
+    private func aedtTimestamp() -> String {
+        let now = Date()
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
+        fmt.dateFormat = "yyyyMMddHHmmss"
+        return fmt.string(from: now)
+    }
+
+    private func safeUID(_ raw: String) -> String {
+        let invalid = CharacterSet(charactersIn: ".#$[]")
+        return raw.components(separatedBy: invalid).joined()
+    }
+
+    // MARK: - Image Upload
+    private func uploadSuggestionImage(_ image: UIImage) async {
+        guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+        isUploadingImage = true
+        uploadError = nil
+
+        let path = "rankoSuggestions/\(suggestionID).jpg"
+        let ref  = Storage.storage().reference().child(path)
+
+        // metadata (like your profile uploads)
+        let md = StorageMetadata()
+        md.contentType = "image/jpeg"
+        md.customMetadata = [
+            "suggestionID": suggestionID,
+            "userID": user_data.userID,
+            "uploadedAt": aedtTimestamp()
+        ]
+
+        do {
+            try await withTimeout(seconds: 12) {
+                _ = try await ref.putDataAsync(data, metadata: md)
+            }
+            // deterministic public URL style you use elsewhere
+            let url = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoSuggestions%2F\(suggestionID).jpg?alt=media&token="
+            attachedImage = image
+            uploadedImageURL = url
+            isUploadingImage = false
+        } catch {
+            isUploadingImage = false
+            uploadError = (error as NSError).localizedDescription
         }
     }
-    private func getDragGesture() -> some Gesture {
-        DragGesture()
-            .onChanged { value in
-                draggingItem = snappedItem + value.translation.width / 400
-            }
-            .onEnded { value in
-                withAnimation {
-                    draggingItem = snappedItem + value.predictedEndTranslation.width / 400
-                    draggingItem = round(draggingItem).remainder(dividingBy: Double(suggestionCategories.count))
 
-                    let count = suggestionCategories.count
-                    let idx = ((Int(draggingItem) % count) + count) % count
-                    snappedItem  = Double(idx)
-                    activeIndex  = idx
-                    updateCategoryName(for: idx)
-                }
+    private enum TimeoutErr: Error { case timedOut }
+    private func withTimeout<T>(seconds: Double, _ op: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await op() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw TimeoutErr.timedOut
             }
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
-    
-    func distance(_ item: Int) -> Double {
-        return (draggingItem - Double(item)).remainder(dividingBy: Double(suggestionCategories.count))
+
+    // MARK: - Submit
+    @MainActor
+    private func handleSubmit() async {
+        submitError = nil
+
+        // basic validation
+        if subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            submitError = "please add a subject."
+            return
+        }
+        if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            submitError = "please add a message."
+            return
+        }
+        if (selectedType == .problems || selectedType == .ideas), selectedCategory == nil {
+            submitError = "please choose a category."
+            return
+        }
+        if isUploadingImage {
+            submitError = "please wait for the image to finish uploading."
+            return
+        }
+
+        isSubmitting = true
+        let db = Database.database().reference()
+
+        // user id
+        let rawUID = Auth.auth().currentUser?.uid ?? user_data.userID
+        let uid = safeUID(rawUID)
+
+        // payload
+        let ts = aedtTimestamp()
+        let typeStr = selectedType.rawValue
+        let catStr = (selectedType == .other) ? "Other" : (selectedCategory ?? "Other")
+
+        let payload: [String: Any] = [
+            "SuggestionID": suggestionID,
+            "UserID": uid,
+            "Type": typeStr,
+            "Category": catStr,
+            "Subject": subject,
+            "Message": message,
+            "Contact": contact,
+            "ImageURL": uploadedImageURL ?? "",
+            "DateTime": ts,
+            "Status": "open",
+            "Platform": "iOS",
+            "AppVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+            "Build": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        ]
+
+        do {
+            try await setValueAsync(
+                db.child("SuggestionData").child(suggestionID),
+                value: payload
+            )
+            isSubmitting = false
+            // reset & close
+            suggestionID = UUID().string
+            dismiss()
+        } catch {
+            isSubmitting = false
+            submitError = error.localizedDescription
+        }
     }
-    
-    func myXOffset(_ item: Int) -> Double {
-        let angle = Double.pi * 2 / Double(suggestionCategories.count) * distance(item)
-        return sin(angle) * 200
+
+    private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            ref.setValue(value) { err, _ in
+                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
+            }
+        }
     }
 }
 
-struct SuggestionCategory: Identifiable {
-    let id: Int
-    let title: String
-    let icon: String
-    let feature1: String
-    let feature2: String
-    let feature3: String
-    let feature4: String
-    let feature5: String
-    let feature6: String
+// tiny UUID helper
+private extension UUID {
+    var string: String { uuidString }
 }
 
 struct DataStorageView: View {

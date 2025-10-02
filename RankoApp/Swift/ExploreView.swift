@@ -212,12 +212,16 @@ struct ExploreView: View {
                     guard
                         let itemName  = it["ItemName"] as? String,
                         let itemDesc  = it["ItemDescription"] as? String,
-                        let itemImage = it["ItemImage"] as? String
+                        let itemImage = it["ItemImage"] as? String,
+                        let itemGIF    = it["ItemGIF"] as? String,
+                        let itemVideo    = it["ItemVideo"] as? String,
+                        let itemAudio    = it["ItemAudio"] as? String
                     else { return nil }
                     let rank  = intFromAny(it["ItemRank"])  ?? 0
                     let votes = intFromAny(it["ItemVotes"]) ?? 0
-                    let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
-                    return RankoItem(id: k, rank: rank, votes: votes, record: rec)
+                    let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                    let plays = intFromAny(it["PlayCount"]) ?? 0
+                    return RankoItem(id: k, rank: rank, votes: votes, record: rec, playCount: plays)
                 }
 
                 let list = RankoList(
@@ -277,12 +281,16 @@ struct ExploreView: View {
                 guard
                     let itemName  = it["ItemName"] as? String,
                     let itemDesc  = it["ItemDescription"] as? String,
-                    let itemImage = it["ItemImage"] as? String
+                    let itemImage = it["ItemImage"] as? String,
+                    let itemGIF    = it["ItemGIF"] as? String,
+                    let itemVideo    = it["ItemVideo"] as? String,
+                    let itemAudio    = it["ItemAudio"] as? String
                 else { return nil }
                 let rank  = intFromAny(it["ItemRank"])  ?? 0
                 let votes = intFromAny(it["ItemVotes"]) ?? 0
-                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec)
+                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                let plays = intFromAny(it["PlayCount"]) ?? 0
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
             }
 
             let list = RankoList(

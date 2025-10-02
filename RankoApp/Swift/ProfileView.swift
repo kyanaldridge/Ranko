@@ -1109,14 +1109,18 @@ struct ProfileView: View {
                 guard let itemDict = raw as? [String: Any] else { return nil }
                 let itemID   = (itemDict["ItemID"] as? String) ?? keyID
                 guard
-                    let itemName  = itemDict["ItemName"]        as? String,
+                    let itemName  = itemDict["ItemName"] as? String,
                     let itemDesc  = itemDict["ItemDescription"] as? String,
-                    let itemImg   = itemDict["ItemImage"]       as? String
+                    let itemImage = itemDict["ItemImage"] as? String,
+                    let itemGIF    = itemDict["ItemGIF"] as? String,
+                    let itemVideo    = itemDict["ItemVideo"] as? String,
+                    let itemAudio    = itemDict["ItemAudio"] as? String
                 else { return nil }
-                let itemRank  = intFromAny(itemDict["ItemRank"])  ?? 0
-                let itemVotes = intFromAny(itemDict["ItemVotes"]) ?? 0
-                let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImg)
-                return RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record)
+                let rank  = intFromAny(itemDict["ItemRank"])  ?? 0
+                let votes = intFromAny(itemDict["ItemVotes"]) ?? 0
+                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                let plays = intFromAny(itemDict["PlayCount"]) ?? 0
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
             }.sorted { $0.rank < $1.rank }
 
             return RankoList(
@@ -1157,18 +1161,41 @@ struct ProfileView: View {
         // Items
         let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
         var rankoItems: [RankoItem] = []
+
         for (keyID, itemDict) in itemsDict {
-            let itemID   = (itemDict["ItemID"] as? String) ?? keyID
+            let itemID = (itemDict["ItemID"] as? String) ?? keyID
+
+            // If these media fields aren’t guaranteed in legacy data, default them to ""
+            let itemGIF   = (itemDict["ItemGIF"]   as? String) ?? ""
+            let itemVideo = (itemDict["ItemVideo"] as? String) ?? ""
+            let itemAudio = (itemDict["ItemAudio"] as? String) ?? ""
+
             guard
-                let itemName  = itemDict["ItemName"]        as? String,
+                let itemName  = itemDict["ItemName"] as? String,
                 let itemDesc  = itemDict["ItemDescription"] as? String,
-                let itemImg   = itemDict["ItemImage"]       as? String
-            else { continue }
-            let itemRank  = intFromAny(itemDict["ItemRank"])  ?? 0
-            let itemVotes = intFromAny(itemDict["ItemVotes"]) ?? 0
-            let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImg)
-            rankoItems.append(RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record))
+                let itemImage = itemDict["ItemImage"] as? String
+            else { continue } // <- don’t return; just skip this item
+                                
+            let rank  = intFromAny(itemDict["ItemRank"])  ?? 0
+            let votes = intFromAny(itemDict["ItemVotes"]) ?? 0
+            let plays = intFromAny(itemDict["PlayCount"]) ?? 0
+
+            let rec = RankoRecord(
+                objectID: itemID,
+                ItemName: itemName,
+                ItemDescription: itemDesc,
+                ItemCategory: "",
+                ItemImage: itemImage,
+                ItemGIF: itemGIF,
+                ItemVideo: itemVideo,
+                ItemAudio: itemAudio
+            )
+
+            rankoItems.append(
+                RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
+            )
         }
+
         rankoItems.sort { $0.rank < $1.rank }
 
         // Category (object or legacy string)
@@ -2235,8 +2262,12 @@ struct ProfileView1: View {
                 let itemName  = itemDict["ItemName"]        as? String,
                 let itemDesc  = itemDict["ItemDescription"] as? String,
                 let itemImg   = itemDict["ItemImage"]       as? String,
+                let itemGif  = itemDict["ItemGIF"]       as? String,
+                let itemVideo  = itemDict["ItemVideo"]       as? String,
+                let itemAudio  = itemDict["ItemAudio"]       as? String,
                 let itemVotes = itemDict["ItemVotes"]       as? Int,
-                let itemRank  = itemDict["ItemRank"]        as? Int
+                let itemRank = itemDict["ItemRank"]       as? Int,
+                let playCount  = itemDict["PlayCount"]        as? Int
             else { continue }
 
             let record = RankoRecord(
@@ -2244,12 +2275,16 @@ struct ProfileView1: View {
                 ItemName:        itemName,
                 ItemDescription: itemDesc,
                 ItemCategory: "",
-                ItemImage:       itemImg
+                ItemImage:       itemImg,
+                ItemGIF: itemGif,
+                ItemVideo: itemVideo,
+                ItemAudio: itemAudio
             )
             rankoItems.append(RankoItem(id: itemID,
                                         rank: itemRank,
                                         votes: itemVotes,
-                                        record: record))
+                                        record: record,
+                                       playCount: playCount))
         }
 
         rankoItems.sort { $0.rank < $1.rank }
@@ -3228,11 +3263,16 @@ struct SelectFeaturedRankosView: View {
                         guard let it = v as? [String: Any],
                               let itemName  = it["ItemName"] as? String,
                               let itemDesc  = it["ItemDescription"] as? String,
-                              let itemImage = it["ItemImage"] as? String else { return nil }
-                        let rank  = intFromAny(it["ItemRank"])  ?? 0
-                        let votes = intFromAny(it["ItemVotes"]) ?? 0
-                        let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
-                        return RankoItem(id: k, rank: rank, votes: votes, record: rec)
+                              let itemImage = it["ItemImage"] as? String,
+                              let itemGIF    = it["ItemGIF"] as? String,
+                              let itemVideo    = it["ItemVideo"] as? String,
+                              let itemAudio    = it["ItemAudio"] as? String
+                          else { return nil }
+                          let rank  = intFromAny(it["ItemRank"])  ?? 0
+                          let votes = intFromAny(it["ItemVotes"]) ?? 0
+                          let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                          let plays = intFromAny(it["PlayCount"]) ?? 0
+                          return RankoItem(id: k, rank: rank, votes: votes, record: rec, playCount: plays)
                     }.sorted { $0.rank < $1.rank }
 
                     fetched.append(
@@ -3287,11 +3327,16 @@ struct SelectFeaturedRankosView: View {
                 let items: [RankoItem] = itemsDict.compactMap { itemID, it in
                     guard let itemName  = it["ItemName"] as? String,
                           let itemDesc  = it["ItemDescription"] as? String,
-                          let itemImage = it["ItemImage"] as? String else { return nil }
-                    let rank  = intFromAny(it["ItemRank"])  ?? 0
-                    let votes = intFromAny(it["ItemVotes"]) ?? 0
-                    let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage)
-                    return RankoItem(id: itemID, rank: rank, votes: votes, record: rec)
+                          let itemImage = it["ItemImage"] as? String,
+                          let itemGIF    = it["ItemGIF"] as? String,
+                          let itemVideo    = it["ItemVideo"] as? String,
+                          let itemAudio    = it["ItemAudio"] as? String
+                      else { return nil }
+                      let rank  = intFromAny(it["ItemRank"])  ?? 0
+                      let votes = intFromAny(it["ItemVotes"]) ?? 0
+                      let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                      let plays = intFromAny(it["PlayCount"]) ?? 0
+                      return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
                 }.sorted { $0.rank < $1.rank }
 
                 fetched.append(
@@ -4803,14 +4848,18 @@ struct ProfileSpectateView: View {
                 guard let itemDict = raw as? [String: Any] else { return nil }
                 let itemID   = (itemDict["ItemID"] as? String) ?? keyID
                 guard
-                    let itemName  = itemDict["ItemName"]        as? String,
+                    let itemName  = itemDict["ItemName"] as? String,
                     let itemDesc  = itemDict["ItemDescription"] as? String,
-                    let itemImg   = itemDict["ItemImage"]       as? String
+                    let itemImage = itemDict["ItemImage"] as? String,
+                    let itemGIF    = itemDict["ItemGIF"] as? String,
+                    let itemVideo    = itemDict["ItemVideo"] as? String,
+                    let itemAudio    = itemDict["ItemAudio"] as? String
                 else { return nil }
-                let itemRank  = intFromAny(itemDict["ItemRank"])  ?? 0
-                let itemVotes = intFromAny(itemDict["ItemVotes"]) ?? 0
-                let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImg)
-                return RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record)
+                let rank  = intFromAny(itemDict["ItemRank"])  ?? 0
+                let votes = intFromAny(itemDict["ItemVotes"]) ?? 0
+                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                let plays = intFromAny(itemDict["PlayCount"]) ?? 0
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
             }.sorted { $0.rank < $1.rank }
 
             return RankoList(
@@ -4851,18 +4900,41 @@ struct ProfileSpectateView: View {
         // Items
         let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
         var rankoItems: [RankoItem] = []
+
         for (keyID, itemDict) in itemsDict {
-            let itemID   = (itemDict["ItemID"] as? String) ?? keyID
+            let itemID = (itemDict["ItemID"] as? String) ?? keyID
+
+            // If these media fields aren’t guaranteed in legacy data, default them to ""
+            let itemGIF   = (itemDict["ItemGIF"]   as? String) ?? ""
+            let itemVideo = (itemDict["ItemVideo"] as? String) ?? ""
+            let itemAudio = (itemDict["ItemAudio"] as? String) ?? ""
+
             guard
-                let itemName  = itemDict["ItemName"]        as? String,
+                let itemName  = itemDict["ItemName"] as? String,
                 let itemDesc  = itemDict["ItemDescription"] as? String,
-                let itemImg   = itemDict["ItemImage"]       as? String
-            else { continue }
-            let itemRank  = intFromAny(itemDict["ItemRank"])  ?? 0
-            let itemVotes = intFromAny(itemDict["ItemVotes"]) ?? 0
-            let record = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImg)
-            rankoItems.append(RankoItem(id: itemID, rank: itemRank, votes: itemVotes, record: record))
+                let itemImage = itemDict["ItemImage"] as? String
+            else { continue } // <- don’t return; just skip this item
+                                
+            let rank  = intFromAny(itemDict["ItemRank"])  ?? 0
+            let votes = intFromAny(itemDict["ItemVotes"]) ?? 0
+            let plays = intFromAny(itemDict["PlayCount"]) ?? 0
+
+            let rec = RankoRecord(
+                objectID: itemID,
+                ItemName: itemName,
+                ItemDescription: itemDesc,
+                ItemCategory: "",
+                ItemImage: itemImage,
+                ItemGIF: itemGIF,
+                ItemVideo: itemVideo,
+                ItemAudio: itemAudio
+            )
+
+            rankoItems.append(
+                RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
+            )
         }
+
         rankoItems.sort { $0.rank < $1.rank }
 
         // Category (object or legacy string)
