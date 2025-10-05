@@ -9,7 +9,7 @@
       }
     ]
   },
-  "identifier" : "3BFA5A13",
+  "identifier" : "BCF18711",
   "nonRenewingSubscriptions" : [
 
   ],
@@ -26,52 +26,17 @@
     "_renewalBillingIssuesEnabled" : false,
     "_storefront" : "AUS",
     "_storeKitErrors" : [
-      {
-        "enabled" : false,
-        "name" : "Load Products"
-      },
-      {
-        "enabled" : false,
-        "name" : "Purchase"
-      },
-      {
-        "enabled" : false,
-        "name" : "Verification"
-      },
-      {
-        "enabled" : false,
-        "name" : "App Store Sync"
-      },
-      {
-        "enabled" : false,
-        "name" : "Subscription Status"
-      },
-      {
-        "enabled" : false,
-        "name" : "App Transaction"
-      },
-      {
-        "enabled" : false,
-        "name" : "Manage Subscriptions Sheet"
-      },
-      {
-        "enabled" : false,
-        "name" : "Refund Request Sheet"
-      },
-      {
-        "enabled" : false,
-        "name" : "Offer Code Redeem Sheet"
-      }
+
     ],
     "_timeRate" : 0
   },
   "subscriptionGroups" : [
     {
-      "id" : "4205BB53",
+      "id" : "D546B9ED",
       "localizations" : [
 
       ],
-      "name" : "Ranko Platinum",
+      "name" : "Subscription",
       "subscriptions" : [
         {
           "adHocOffers" : [
@@ -83,24 +48,23 @@
           "displayPrice" : "0.99",
           "familyShareable" : false,
           "groupNumber" : 1,
-          "internalID" : "E460ABFA",
+          "internalID" : "E2F1F13B",
           "introductoryOffer" : {
-            "displayPrice" : "0.99",
-            "internalID" : "6AC64180",
+            "internalID" : "2BB404C8",
             "paymentMode" : "free",
             "subscriptionPeriod" : "P1W"
           },
           "localizations" : [
             {
-              "description" : "Subscribe for a Week",
+              "description" : "Subscribe for One Week",
               "displayName" : "Weekly",
               "locale" : "en_US"
             }
           ],
-          "productID" : "pro_weekly",
+          "productID" : "platinum_weekly",
           "recurringSubscriptionPeriod" : "P1W",
           "referenceName" : "Platinum Weekly",
-          "subscriptionGroupID" : "4205BB53",
+          "subscriptionGroupID" : "D546B9ED",
           "type" : "RecurringSubscription",
           "winbackOffers" : [
 
@@ -116,23 +80,23 @@
           "displayPrice" : "2.99",
           "familyShareable" : false,
           "groupNumber" : 2,
-          "internalID" : "AE270B48",
+          "internalID" : "8D799B25",
           "introductoryOffer" : {
-            "internalID" : "E7B49AE1",
+            "internalID" : "E38EFB64",
             "paymentMode" : "free",
             "subscriptionPeriod" : "P1M"
           },
           "localizations" : [
             {
-              "description" : "Subscribe for one Month",
+              "description" : "Subscribe for One Month",
               "displayName" : "Monthly",
               "locale" : "en_US"
             }
           ],
-          "productID" : "pro_monthly",
+          "productID" : "platinum_monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Platinum Monthly",
-          "subscriptionGroupID" : "4205BB53",
+          "subscriptionGroupID" : "D546B9ED",
           "type" : "RecurringSubscription",
           "winbackOffers" : [
 
@@ -148,23 +112,24 @@
           "displayPrice" : "12.99",
           "familyShareable" : false,
           "groupNumber" : 3,
-          "internalID" : "239C5F78",
+          "internalID" : "55A847D7",
           "introductoryOffer" : {
-            "internalID" : "194416C2",
+            "displayPrice" : "0.99",
+            "internalID" : "9630B244",
             "paymentMode" : "free",
             "subscriptionPeriod" : "P1M"
           },
           "localizations" : [
             {
-              "description" : "Subscribe for one Year",
+              "description" : "Subscribe for One Year",
               "displayName" : "Yearly",
               "locale" : "en_US"
             }
           ],
-          "productID" : "pro_yearly",
+          "productID" : "platinum_yearly",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Platinum Yearly",
-          "subscriptionGroupID" : "4205BB53",
+          "subscriptionGroupID" : "D546B9ED",
           "type" : "RecurringSubscription",
           "winbackOffers" : [
 

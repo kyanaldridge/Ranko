@@ -647,10 +647,6 @@ struct ExploreView: View {
                     isLoadingLists = false
                 }
                 
-                Task {
-                    await updateGlobalSubscriptionStatus(groupID: "4205BB53", productIDs: ["pro_weekly","pro_monthly","pro_yearly"])
-                }
-                
                 Analytics.logEvent(AnalyticsEventScreenView, parameters: [
                     AnalyticsParameterScreenName: "Home",
                     AnalyticsParameterScreenClass: "HomeView"

@@ -645,13 +645,13 @@
 //                            .foregroundStyle(LinearGradient(colors: [Color(hex: 0xFFD358), Color(hex: 0xFFB753), Color(hex: 0xFF9B4F)], startPoint: .leading, endPoint: .trailing))
 //                    }
 //                    Text("x")
-//                        .font(.custom("Nunito-Bold", size: 25))
+//                        .font(.custom("Nunito-Regular", size: 25))
 //                    HStack(spacing: 4) {
 //                        Image(systemName: "applelogo")
 //                            .font(.system(size: 34, weight: .black, design: .default))
 //                            .padding(.bottom, 3)
 //                        Text("Music")
-//                            .font(.custom("Nunito-Bold", size: 40))
+//                            .font(.custom("Nunito-Regular", size: 40))
 //                    }
 //                }
 //                .padding(.bottom, 40)

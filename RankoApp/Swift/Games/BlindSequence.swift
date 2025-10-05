@@ -59,12 +59,6 @@ struct BlindSequence: View {
     @State private var showLeaderboard = false
     @State private var opacityViewNo: Double = 0
     
-    // app storage shi
-    @AppStorage("totalBlindSequenceGamesPlayed") private var totalGamesPlayed = 0
-    @AppStorage("BlindSequenceHighScore") private var highScore = 0
-    @AppStorage("BlindSequenceHighScoreTime") private var highScoreTime: Double = .infinity
-    @AppStorage("BS_MaxUnlockedLevel") private var maxUnlockedLevel: Int = 1   // progress
-    @AppStorage("BS_SelectedLevel") private var selectedLevel: Int = 1         // last picked
     @State private var currentLevel: Int? = nil                                 // active level while playing (free)
     @State private var isNewHighScore = false
 
@@ -255,13 +249,9 @@ struct BlindSequence: View {
                     .buttonStyle(.glassProminent)
                     .environment(\.colorScheme, .dark)
                     .sheet(isPresented: $showSettings) {
-                        BlindSequenceSettings(
-                            totalGamesPlayed: $totalGamesPlayed,
-                            highScore: $highScore,
-                            highScoreTime: $highScoreTime
-                        )
-                        .presentationDragIndicator(.visible)
-                        .presentationDetents([.medium])
+                        BlindSequenceSettings()
+                            .presentationDragIndicator(.visible)
+                            .presentationDetents([.medium])
                     }
                     
                     Button {
@@ -279,7 +269,7 @@ struct BlindSequence: View {
                             Text("SCORE")
                                 .font(.custom("Nunito-Black", size: 10))
                                 .foregroundColor(Color(hex: 0xFFFFFF))
-                            Text("\(highScore)")
+                            Text("\(user_data.blindSequenceHighScore)")
                                 .font(.custom("Nunito-Black", size: 24))
                                 .foregroundColor(Color(hex: 0xFFFFFF))
                         }
@@ -324,7 +314,7 @@ struct BlindSequence: View {
                             Text("LEVEL")
                                 .font(.custom("Nunito-Black", size: 10))
                                 .foregroundColor(Color(hex: 0xFFFFFF))
-                            Text("\(maxUnlockedLevel)")
+                            Text("\(user_data.blindSequenceMaxLevelUnlocked)")
                                 .font(.custom("Nunito-Black", size: 24))
                                 .foregroundColor(Color(hex: 0xFFFFFF))
                         }
@@ -362,18 +352,18 @@ struct BlindSequence: View {
                 let cols = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
                 LazyVGrid(columns: cols, spacing: 12) {
                     ForEach(1...24, id: \.self) { level in
-                        let isUnlocked = level <= maxUnlockedLevel
+                        let isUnlocked = level <= user_data.blindSequenceMaxLevelUnlocked
                         Button {
-                            if isUnlocked { selectedLevel = level }
+                            if isUnlocked { user_data.blindSequenceSelectedLevel = level }
                         } label: {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 14)
                                     .fill(isUnlocked
-                                          ? (selectedLevel == level ? Color.white.opacity(0.22) : Color.white.opacity(0.12))
+                                          ? (user_data.blindSequenceSelectedLevel == level ? Color.white.opacity(0.22) : Color.white.opacity(0.12))
                                           : Color.black.opacity(0.25))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 14)
-                                            .stroke(selectedLevel == level && isUnlocked ? Color.white.opacity(0.8) : Color.white.opacity(0.25), lineWidth: 2)
+                                            .stroke(user_data.blindSequenceSelectedLevel == level && isUnlocked ? Color.white.opacity(0.8) : Color.white.opacity(0.25), lineWidth: 2)
                                     )
                                     .frame(height: 56)
                                 
@@ -400,13 +390,13 @@ struct BlindSequence: View {
                 
                 Button(action: {
                     // start selected level in FREE mode
-                    let count = boxCount(for: selectedLevel)
-                    currentLevel = selectedLevel
+                    let count = boxCount(for: user_data.blindSequenceSelectedLevel)
+                    currentLevel = user_data.blindSequenceSelectedLevel
                     freePlayScore = 0
                     gameType = .free
                     startGame(boxCount: count)
                 }) {
-                    Text("Start Level \(selectedLevel)")
+                    Text("Start Level \(user_data.blindSequenceSelectedLevel)")
                         .font(.system(size: 24, weight: .bold, design: .default))
                         .foregroundColor(Color(hex: 0xFFFFFF))
                         .padding(.horizontal, 16)
@@ -436,8 +426,8 @@ struct BlindSequence: View {
     
     private func unlockNextLevelIfNeeded() {
         guard gameType == .free, didWin, let lvl = currentLevel else { return }
-        if lvl == maxUnlockedLevel && lvl < 24 {
-            maxUnlockedLevel = lvl + 1
+        if lvl == user_data.blindSequenceMaxLevelUnlocked && lvl < 24 {
+            user_data.blindSequenceMaxLevelUnlocked = lvl + 1
         }
     }
     
@@ -830,7 +820,7 @@ struct BlindSequence: View {
             if let lvl = currentLevel {
                 let next = min(lvl + 1, 24)
                 currentLevel = next
-                selectedLevel = next
+                user_data.blindSequenceSelectedLevel = next
                 let count = boxCount(for: next)
                 currentBoxCount = count
                 boxes = Array(repeating: "", count: count)
@@ -912,7 +902,7 @@ struct BlindSequence: View {
     
     private func startChallenge() {
         sessionScore = 0
-        totalGamesPlayed += 1
+        user_data.blindSequenceGamesPlayed += 1
         gameType = .challenge
         startGame(boxCount: 2)
         
@@ -990,12 +980,12 @@ struct BlindSequence: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 didWin = false
                 mode = .gameOver
-                if sessionScore > highScore {
-                    highScore = sessionScore
-                    highScoreTime = elapsedTime
+                if sessionScore > user_data.blindSequenceHighScore {
+                    user_data.blindSequenceHighScore = sessionScore
+                    user_data.blindSequenceHighScoreTime = elapsedTime
                     isNewHighScore = true
-                } else if sessionScore == highScore && elapsedTime < highScoreTime {
-                    highScoreTime = elapsedTime
+                } else if sessionScore == user_data.blindSequenceHighScore && elapsedTime < user_data.blindSequenceHighScoreTime {
+                    user_data.blindSequenceHighScoreTime = elapsedTime
                     isNewHighScore = true
                 } else {
                     isNewHighScore = false
@@ -1017,13 +1007,13 @@ struct BlindSequence: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if lives <= 0 {
-                if sessionScore > highScore {
-                    highScore = sessionScore
-                    highScoreTime = elapsedTime
+                if sessionScore > user_data.blindSequenceHighScore {
+                    user_data.blindSequenceHighScore = sessionScore
+                    user_data.blindSequenceHighScoreTime = elapsedTime
                     isNewHighScore = true
                     updateLeaderboardIfNeeded()
-                } else if sessionScore == highScore && elapsedTime < highScoreTime {
-                    highScoreTime = elapsedTime
+                } else if sessionScore == user_data.blindSequenceHighScore && elapsedTime < user_data.blindSequenceHighScoreTime {
+                    user_data.blindSequenceHighScoreTime = elapsedTime
                     isNewHighScore = true
                     updateLeaderboardIfNeeded()
                 } else {
@@ -1232,9 +1222,8 @@ struct GoalBox: View {
 }
 
 struct BlindSequenceSettings: View {
-    @Binding var totalGamesPlayed: Int
-    @Binding var highScore: Int
-    @Binding var highScoreTime: Double
+    
+    @StateObject private var user_data = UserInformation.shared
     @Environment(\.dismiss) var dismiss
     
     @AppStorage("unlocked_Medal_AppIcon") private var unlockedMedal: Bool = false
@@ -1273,9 +1262,9 @@ struct BlindSequenceSettings: View {
         .alert("Are you sure?", isPresented: $showConfirmReset) {
             Button("Cancel", role: .cancel) {}
             Button("Reset", role: .destructive) {
-                totalGamesPlayed = 0
-                highScore = 0
-                highScoreTime = .infinity
+                user_data.blindSequenceGamesPlayed = 0
+                user_data.blindSequenceHighScore = 0
+                user_data.blindSequenceHighScoreTime = .infinity
             }
         } message: {
             Text("This will erase all gameplay records.")

@@ -18,12 +18,14 @@ import SwiftData
 
 struct ProfileView: View {
     @EnvironmentObject private var imageService: ProfileImageService
+    @StateObject private var cache = FeaturedRankoCacheService.shared
     @StateObject private var user_data = UserInformation.shared
     @Namespace private var transition
 
     @State private var showEditProfile = false
     @State private var loadingProfileImage = false
     @State private var profileImage: UIImage?
+    @State private var usedOfflineFeatured: Bool = false
     
     private var profileImageService = ProfileImageService()
     
@@ -559,6 +561,10 @@ struct ProfileView: View {
 
                     // Update local UI state
                     featuredLists[slot] = selected
+                    
+                    cache.rebuildFromRemote(uid: user_data.userID) { fresh in
+                        self.featuredLists = fresh
+                    }
                 }
             }
         }
@@ -586,18 +592,18 @@ struct ProfileView: View {
                   }
                 )
             } else if list.type == "group" {
-                GroupListPersonal(
-                  listID: list.id,
-                  onDelete: {
-                      listViewID     = UUID()
-                      isLoadingLists = true
-                      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                          isLoadingLists = false
-                          retryFeaturedLoading()
-                          loadFollowStats()
-                      }
-                  }
-                )
+//                GroupListPersonal(
+//                  listID: list.id,
+//                  onDelete: {
+//                      listViewID     = UUID()
+//                      isLoadingLists = true
+//                      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+//                          isLoadingLists = false
+//                          retryFeaturedLoading()
+//                          loadFollowStats()
+//                      }
+//                  }
+//                )
             }
             
         }
@@ -661,39 +667,60 @@ struct ProfileView: View {
             }
         }
         .onAppear {
-            listViewID     = UUID()
+            listViewID = UUID()
+
+            // 1) serve from cache instantly (if any)
+            if !user_data.userID.isEmpty {
+                let cached = cache.loadCachedLists(uid: user_data.userID)
+                if !cached.isEmpty {
+                    featuredLists = cached
+                    featuredLoading = false
+                    usedOfflineFeatured = true
+                }
+            }
+
+            // 2) do your normal stuff that doesn’t depend on featured
             if !isSimulator {
                 loadNumberOfRankos()
                 syncUserDataFromFirebase()
                 isLoadingLists = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    isLoadingLists = false
-                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { isLoadingLists = false }
                 loadFollowStats()
-                tryLoadFeaturedRankos()
             }
-            
-            
+
+            // 3) now verify & refresh if changed (network aware)
+            guard !user_data.userID.isEmpty else { return }
+            featuredLoading = featuredLists.isEmpty // show skeletons only if nothing cached
+            cache.refreshIfChanged(uid: user_data.userID) { fresh in
+                // if changed, this will have rebuilt + returned fresh lists
+                if !fresh.isEmpty {
+                    featuredLists = fresh
+                    featuredLoading = false
+                    featuredLoadFailed = false
+                } else {
+                    // nothing changed and we already had cache
+                    featuredLoading = false
+                }
+            }
+
+            // rest of your tag animation + analytics...
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 let tags = user_data.userInterests
                     .split(separator: ",")
                     .map { $0.trimmingCharacters(in: .whitespaces) }
-                
                 Task {
                     for (index, tag) in tags.enumerated() {
                         try? await Task.sleep(for: .milliseconds(200 * index))
-                        _ = withAnimation(.easeOut(duration: 0.4)) {
-                            animatedTags.insert(tag)
-                        }
+                        _ = withAnimation(.easeOut(duration: 0.4)) { animatedTags.insert(tag) }
                     }
                 }
             }
-            
-            
+
             Analytics.logEvent(AnalyticsEventScreenView, parameters: [
                 AnalyticsParameterScreenName: "Profile",
                 AnalyticsParameterScreenClass: "ProfileView"
-            ])                }
+            ])
+        }
         .alert(
             "Unpin Ranko?",
             isPresented: $showUnpinAlert,
@@ -705,6 +732,24 @@ struct ProfileView: View {
             Button("Cancel", role: .cancel) { }
         } message: { slot in
             Text("Are you sure you want to remove this featured Ranko from slot \(slot)?")
+        }
+    }
+    
+    private func retryFeaturedLoading() {
+        featuredLoadFailed = false
+        featuredLoading = true
+        retryCount = 0
+
+        guard !user_data.userID.isEmpty else {
+            featuredLoading = false
+            return
+        }
+        cache.rebuildFromRemote(uid: user_data.userID) { fresh in
+            DispatchQueue.main.async {
+                self.featuredLists = fresh
+                self.featuredLoading = false
+                self.featuredLoadFailed = fresh.isEmpty
+            }
         }
     }
     
@@ -952,13 +997,6 @@ struct ProfileView: View {
         group.notify(queue: .main) {
             print("✅ Finished loading follow stats")
         }
-    }
-    
-    private func retryFeaturedLoading() {
-        featuredLoadFailed = false
-        featuredLoading = true
-        retryCount = 0
-        tryLoadFeaturedRankos()
     }
 
     private func tryLoadFeaturedRankos() {
@@ -1252,6 +1290,10 @@ struct ProfileView: View {
                 featuredLists.removeValue(forKey: slot)
             }
         }
+        
+        cache.rebuildFromRemote(uid: user_data.userID) { fresh in
+            self.featuredLists = fresh
+        }
     }
     
     private func saveUserDataToFirebase(name: String, description: String, interests: [String]) {
@@ -1278,1115 +1320,441 @@ struct ProfileView: View {
     }
 }
 
-struct ProfileView1: View {
-    @StateObject private var user_data = UserInformation.shared
-    @Namespace private var transition
+func cachedImageURL(uid: String, rankoID: String, idx: Int) -> URL {
+    FileManager.default
+        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("FeaturedCache")
+        .appendingPathComponent(uid)
+        .appendingPathComponent("\(rankoID)_img\(idx).jpg")
+}
 
-    @State private var showEditProfileImage = false
-    @State private var showEditProfileButton = false
-    @State private var loadingProfileImage = false
-    @State private var profileImage: UIImage?
-    
-    private var profileImageService = ProfileImageService()
-    
-    @State private var showSearchRankos = false
-    @State private var showUserFollowers = false
-    @State private var showUserFollowing = false
-    @State private var listViewID = UUID()
-    @State private var isLoadingLists = true
-    @State private var animatedTags: Set<String> = []
-    
-    @State private var featuredLists: [Int: RankoList] = [:]
-    @State private var featuredLoading: Bool = true
-    @State private var featuredLoadFailed: Bool = false
-    @State private var retryCount: Int = 0
-    @State private var slotToSelect: Int?
-    @State private var slotToUnpin: Int?
-    @State private var showUnpinAlert = false
-    @State private var selectedFeaturedList: RankoList?
-    
-    @State private var selectedItem: PhotosPickerItem?
-    @State private var showUserFinder = false
-    @State private var appIconCustomiserView: Bool = false
-    @State private var lists: [RankoList] = []
-    
-    @State private var topCategories: [String] = []
-    
-    static let interestIconMapping: [String: String] = [
-        "Sport": "figure.gymnastics",
-        "Animals": "pawprint.fill",
-        "Music": "music.note",
-        "Food": "fork.knife",
-        "Nature": "leaf.fill",
-        "Geography": "globe.europe.africa.fill",
-        "History": "building.columns.fill",
-        "Science": "atom",
-        "Gaming": "gamecontroller.fill",
-        "Celebrities": "star.fill",
-        "Art": "paintbrush.pointed.fill",
-        "Cars": "car.side.roof.cargo.carrier.fill",
-        "Football": "soccerball",
-        "Fruit": "apple.logo",
-        "Soda": "takeoutbag.and.cup.and.straw.fill",
-        "Mammals": "hare.fill",
-        "Flowers": "microbe.fill",
-        "Movies": "movieclapper",
-        "Instruments": "guitars.fill",
-        "Politics": "person.bust.fill",
-        "Basketball": "basketball.fill",
-        "Vegetables": "carrot.fill",
-        "Alcohol": "flame.fill",
-        "Birds": "bird.fill",
-        "Trees": "tree.fill",
-        "Shows": "tv",
-        "Festivals": "hifispeaker.2.fill",
-        "Planets": "circles.hexagonpath.fill",
-        "Tennis": "tennisball.fill",
-        "Pizza": "triangle.lefthalf.filled",
-        "Coffee": "cup.and.heat.waves.fill",
-        "Dogs": "dog.fill",
-        "Social Media": "message.fill",
-        "Albums": "record.circle",
-        "Actors": "theatermasks.fill",
-        "Travel": "airplane",
-        "Motorsport": "steeringwheel",
-        "Eggs": "oval.portrait.fill",
-        "Cats": "cat.fill",
-        "Books": "books.vertical.fill",
-        "Musicians": "music.microphone",
-        "Australian Football": "australian.football.fill",
-        "Fast Food": "takeoutbag.and.cup.and.straw.fill",
-        "Fish": "fish.fill",
-        "Board Games": "dice.fill",
-        "Numbers": "1.square.fill",
-        "Relationships": "heart.fill",
-        "American Football": "american.football.fill",
-        "Pasta": "water.waves",
-        "Reptiles": "lizard.fill",
-        "Card Games": "suit.club.fill",
-        "Letters": "a.square.fill",
-        "Baseball": "baseball.fill",
-        "Ice Cream": "snowflake",
-        "Bugs": "ladybug.fill",
-        "Memes": "camera.fill",
-        "Shapes": "triangle.fill",
-        "Emotions": "face.smiling",
-        "Ice Hockey": "figure.ice.hockey",
-        "Statues": "figure.stand",
-        "Gym": "figure.indoor.cycle",
-        "Running": "figure.run"
-    ]
-    
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                LinearGradient(gradient: Gradient(colors: [Color(hex: 0xDBC252),  Color(hex: 0xFF9864)]),
-                               startPoint: .top,
-                               endPoint: .center)
-                    .ignoresSafeArea()
-                
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        HStack {
-                            Button {
-                                showUserFinder = true
-                                print("Finding Users...")
-                            } label: {
-                                Image(systemName: "person.crop.badge.magnifyingglass.fill")
-                                    .fontWeight(.semibold)
-                                    .padding(.vertical, 2)
-                            }
-                            .foregroundColor(Color(hex: 0x7E5F46))
-                            .tint(Color(hex: 0xFEF4E7))
-                            .buttonStyle(.glassProminent)
-                            .matchedTransitionSource(
-                                id: "userFinder", in: transition
-                            )
-                            Spacer()
-                            Button {
-                                showEditProfileButton = true
-                                print("Editing Profile...")
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .fontWeight(.semibold)
-                                    .padding(.vertical, 2)
-                            }
-                            .foregroundColor(Color(hex: 0x7E5F46))
-                            .tint(Color(hex: 0xFEF4E7))
-                            .buttonStyle(.glassProminent)
-                            .matchedTransitionSource(
-                                id: "editProfileButton", in: transition
-                            )
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, -70)
-                        // Profile Picture
-                        ProfileIconView(diameter: CGFloat(100))
-                        .contextMenu {
-                            Button(role: .confirm) {
-                                showEditProfileImage = true
-                            } label: {
-                                Label("Change Profile Picture", systemImage: "person.crop.square")
-                            }
-                        }
-                        .matchedTransitionSource(
-                            id: "editProfileImage", in: transition
-                        )
-                        
-                        // Name
-                        Text(user_data.username)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(Color(hex: 0xFFFADB))
-                        
-                        // user_data.userDescription
-                        if !user_data.userDescription.isEmpty {
-                            Text(user_data.userDescription)
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(Color(hex: 0xFFFADB))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-                        }
-                        
-                        // user_data.userInterests as buttons
-                        if !user_data.userInterests.isEmpty {
-                            let tags = user_data.userInterests
-                                .split(separator: ",")
-                                .map { $0.trimmingCharacters(in: .whitespaces) }
+final class FeaturedRankoCacheService: ObservableObject {
+    static let shared = FeaturedRankoCacheService()
 
-                            HStack(spacing: 6) {
-                                ForEach(tags, id: \.self) { tag in
-                                    let icon = ProfileView.interestIconMapping[tag] ?? "tag.fill"
-
-                                    Button(action: { print("\(tag) clicked") }) {
-                                        HStack(spacing: 4) {
-                                            ZStack {
-                                                Image(systemName: icon)
-                                                    .font(.system(size: 12, weight: .heavy))
-                                                    .foregroundColor(.clear)
-                                                if animatedTags.contains(tag) {
-                                                    Image(systemName: icon)
-                                                        .font(.system(size: 12, weight: .heavy))
-                                                        .transition(.symbolEffect(.drawOn.individually))
-                                                        .padding(1)
-                                                }
-                                            }
-                                            Text(tag)
-                                                .font(.system(size: 10, weight: .heavy))
-                                        }
-                                        .cornerRadius(8)
-                                    }
-                                    .foregroundColor(Color(hex: 0x7E5F46))
-                                    .tint(Color(hex: 0xFEF4E7))
-                                    .buttonStyle(.glassProminent)
-                                    .geometryGroup()
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                        
-                        // Followers / Following / Rankos
-                        HStack(spacing: 40) {
-                            VStack {
-                                Text("\(user_data.userStatsRankos)")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(Color(hex: 0xFFFADB))
-                                Text("s")
-                                    .font(.system(size: 4, weight: .bold))
-                                    .foregroundColor(.clear)
-                                Text("Rankos")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(Color(hex: 0xFFFADB))
-                            }
-                            
-                            VStack {
-                                Text("\(user_data.userStatsFollowers)")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(Color(hex: 0xFFFADB))
-                                Text("s")
-                                    .font(.system(size: 4, weight: .bold))
-                                    .foregroundColor(.clear)
-                                Text("Followers")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(Color(hex: 0xFFFADB))
-                            }
-                            .onTapGesture {
-                                showUserFollowers = true
-                            }
-                            
-                            VStack {
-                                Text("\(user_data.userStatsFollowing)")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(Color(hex: 0xFFFADB))
-                                Text("s")
-                                    .font(.system(size: 4, weight: .bold))
-                                    .foregroundColor(.clear)
-                                Text("Following")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(Color(hex: 0xFFFADB))
-                            }
-                            .onTapGesture {
-                                showUserFollowing = true
-                            }
-                        }
-                        .padding(.top, 8)
-                        .padding(.bottom)
-                    }
-                    .padding(.top, 0)
-                    
-                    HStack {
-                        Button(action: {showSearchRankos = true}) {
-                            HStack {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 17, weight: .heavy))
-                                Text("Search Rankos")
-                                    .font(.system(size: 14, weight: .heavy))
-                            }
-                            .padding(.vertical, 3)
-                            .padding(.horizontal, 8)
-                        }
-                        .foregroundColor(Color(hex: 0x7E5F46))
-                        .tint(Color(hex: 0xFEF4E7))
-                        .buttonStyle(.glassProminent)
-                        .matchedTransitionSource(
-                            id: "searchRankos", in: transition
-                        )
-                        Button(action: {appIconCustomiserView = true}) {
-                            HStack {
-                                Image(systemName: "swirl.circle.righthalf.filled.inverse")
-                                    .font(.system(size: 17, weight: .heavy))
-                                Text("Customise App")
-                                    .font(.system(size: 14, weight: .heavy))
-                            }
-                            .padding(.vertical, 3)
-                            .padding(.horizontal, 8)
-                        }
-                        .foregroundColor(Color(hex: 0x7E5F46))
-                        .tint(Color(hex: 0xFEF4E7))
-                        .buttonStyle(.glassProminent)
-                        .matchedTransitionSource(
-                            id: "customiseApp", in: transition
-                        )
-                    }
-                    .padding(.bottom, 20)
-                    VStack {
-                        HStack {
-                            Text("Featured")
-                                .font(.system(size: 20, weight: .black))
-                                .foregroundColor(Color(hex: 0x7E5F46))
-                            Spacer()
-                        }
-                        .padding(.bottom, 5)
-
-                        VStack(spacing: 13) {
-                            let filledSlots = featuredLists.keys.sorted()
-                            let emptySlots = (1...10).filter { !featuredLists.keys.contains($0) }
-
-                            // ✅ If loading or failed, show placeholders
-                            if featuredLoading {
-                                HStack {
-                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
-                                }
-                                .background(RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color(hex: 0xFFFFFF))
-                                )
-                                .padding(.top, 40)
-                                .padding(.bottom, 120)
-                                
-                            } else if featuredLoadFailed {
-                                // ❌ If failed after 3 attempts, show retry buttons
-                                ForEach(1...10, id: \.self) { slot in
-                                    HStack {
-                                        Button {
-                                            retryFeaturedLoading()
-                                        } label: {
-                                            HStack {
-                                                Spacer()
-                                                Image(systemName: "arrow.clockwise")
-                                                    .font(.system(size: 24, weight: .black))
-                                                    .foregroundColor(Color(hex: 0x7E5F46))
-                                                Spacer()
-                                            }
-                                            .frame(height: 52)
-                                        }
-                                        .foregroundColor(Color(hex: 0xFF9864))
-                                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                                             startPoint: .top,
-                                                             endPoint: .bottom
-                                                            )
-                                        )
-                                        .buttonStyle(.glassProminent)
-                                        .disabled(false)
-                                    }
-                                }
-                            } else {
-                                // ✅ Normal loaded state
-                                ForEach(filledSlots, id: \.self) { slot in
-                                    HStack {
-                                        Button {
-                                            if let list = featuredLists[slot] {
-                                                selectedFeaturedList = list
-                                            }
-                                        } label: {
-                                            if let list = featuredLists[slot] {
-                                                if list.type == "default" {
-                                                    DefaultListIndividualGallery(listData: list, type: "featured", onUnpin: {
-                                                        slotToUnpin = slot
-                                                        showUnpinAlert = true
-                                                    })
-                                                    .contextMenu {
-                                                        Button(action: {
-                                                            slotToUnpin = slot
-                                                            showUnpinAlert = true
-                                                        }) {
-                                                            Label("Unpin", systemImage: "pin.slash")
-                                                        }
-                                                        .foregroundColor(Color(hex: 0xFF9864))
-                                                    }
-                                                } else {
-                                                    GroupListIndividualGallery(listData: list, type: "featured", onUnpin: {
-                                                        slotToUnpin = slot
-                                                        showUnpinAlert = true
-                                                    })
-                                                }
-                                            }
-                                        }
-                                        .foregroundColor(Color(hex: 0xFF9864))
-                                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                                             startPoint: .top,
-                                                             endPoint: .bottom
-                                                            )
-                                        )
-                                        .buttonStyle(.glassProminent)
-                                    }
-                                }
-
-                                ForEach(emptySlots, id: \.self) { slot in
-                                    HStack {
-                                        Button {
-                                            slotToSelect = slot
-                                        } label: {
-                                            HStack {
-                                                Spacer()
-                                                Image(systemName: "plus")
-                                                    .font(.system(size: 24, weight: .black))
-                                                    .foregroundColor(Color(hex: 0x7E5F46))
-                                                Spacer()
-                                            }
-                                            .frame(height: 52)
-                                        }
-                                        .foregroundColor(Color(hex: 0xFF9864))
-                                        .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                                             startPoint: .top,
-                                                             endPoint: .bottom
-                                                            ))
-                                        .buttonStyle(.glassProminent)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(20)
-                    .padding(.bottom, 60)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 25)
-                            .fill(
-                                LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                               startPoint: .top,
-                                               endPoint: .bottom
-                                              )
-                            )
-                    )
-                }
-                .fullScreenCover(isPresented: $showEditProfileImage) {
-                    EditProfileView(
-                        originalImage:       user_data.ProfilePicture,
-                        username:            user_data.username,
-                        userDescription:     user_data.userDescription,
-                        // → make initialTags a [String], not a single String
-                        initialTags:         user_data.userInterests
-                                                .split(separator: ",")
-                                                .map { $0.trimmingCharacters(in: .whitespaces) },
-                        onSave: { name, bioText, tags, newImg in
-                            user_data.username        = name
-                            user_data.userDescription = bioText
-                            user_data.userInterests   = tags.joined(separator: ", ")
-                            saveUserDataToFirebase(
-                                name:        name,
-                                description: bioText,
-                                interests:   tags
-                            )
-
-                            // animate tags…
-                            Task {
-                                for (index, tag) in tags.enumerated() {
-                                    try? await Task.sleep(for: .milliseconds(200 * index))
-                                    _ = withAnimation(.easeOut(duration: 0.4)) {
-                                        animatedTags.insert(tag)
-                                    }
-                                }
-                            }
-
-                            // handle image
-                            guard let img = newImg else {
-                                showEditProfileImage = false
-                                return
-                            }
-                            loadingProfileImage = true
-                            profileImage        = nil
-                            showEditProfileImage          = false
-                            uploadImageToFirebase(img)
-                        },
-                        onCancel: {
-                            showEditProfileImage = false
-                        }
-                    )
-                    .navigationTransition(
-                        .zoom(sourceID: "editProfileImage", in: transition)
-                    )
-                    .interactiveDismissDisabled(true)
-                }
-                .sheet(isPresented: $showUserFollowers) {
-                    SearchFollowersView()
-                }
-                .sheet(isPresented: $showUserFollowing) {
-                    SearchFollowingView()
-                }
-                .sheet(isPresented: $showSearchRankos) {
-                    SearchRankosView()
-                        .navigationTransition(
-                            .zoom(sourceID: "searchRankos", in: transition)
-                        )
-                }
-                .sheet(isPresented: $showUserFinder) {
-                    SearchUsersView()
-                        .navigationTransition(
-                            .zoom(sourceID: "userFinder", in: transition)
-                        )
-                }
-                .sheet(isPresented: $appIconCustomiserView) {
-                    AppPersonalisationView()
-                        .navigationTransition(
-                            .zoom(sourceID: "customiseApp", in: transition)
-                        )
-                }
-                .fullScreenCover(isPresented: $showEditProfileButton) {
-                    EditProfileView(
-                        originalImage:       user_data.ProfilePicture,
-                        username:            user_data.username,
-                        userDescription:     user_data.userDescription,
-                        // → make initialTags a [String], not a single String
-                        initialTags:         user_data.userInterests
-                                                .split(separator: ",")
-                                                .map { $0.trimmingCharacters(in: .whitespaces) },
-                        onSave: { name, bioText, tags, newImg in
-                            user_data.username        = name
-                            user_data.userDescription = bioText
-                            user_data.userInterests   = tags.joined(separator: ", ")
-                            saveUserDataToFirebase(
-                                name:        name,
-                                description: bioText,
-                                interests:   tags
-                            )
-
-                            // animate tags…
-                            Task {
-                                for (index, tag) in tags.enumerated() {
-                                    try? await Task.sleep(for: .milliseconds(200 * index))
-                                    _ = withAnimation(.easeOut(duration: 0.4)) {
-                                        animatedTags.insert(tag)
-                                    }
-                                }
-                            }
-
-                            // handle image
-                            guard let img = newImg else {
-                                showEditProfileButton = false
-                                return
-                            }
-                            loadingProfileImage = true
-                            profileImage        = nil
-                            showEditProfileButton     = false
-                            uploadImageToFirebase(img)
-                        },
-                        onCancel: {
-                            showEditProfileButton = false
-                        }
-                    )
-                    .navigationTransition(
-                        .zoom(sourceID: "editProfileButton", in: transition)
-                    )
-                    .interactiveDismissDisabled(true)
-                }
-                .sheet(item: $slotToSelect) { slot in
-                    SelectFeaturedRankosView { selected in
-                        // Dismiss sheet first
-                        DispatchQueue.main.async {
-                            slotToSelect = nil
-                        }
-
-                        // Delay slightly to ensure dismissal is finished
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            // Save to Firebase
-                            let ref = Database.database()
-                                .reference()
-                                .child("UserData")
-                                .child(user_data.userID)
-                                .child("UserRankos")
-                                .child("UserFeaturedRankos")
-                                .child("\(slot)")
-                            ref.setValue(selected.id)
-
-                            // Update local UI state
-                            featuredLists[slot] = selected
-                        }
-                    }
-                }
-                .fullScreenCover(item: $selectedFeaturedList) { list in
-                    if list.type == "default" {
-                        DefaultListPersonal(
-                          listID: list.id,
-                          onSave: {_ in 
-                              listViewID     = UUID()
-                              isLoadingLists = true
-                              DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                  isLoadingLists = false
-                                  retryFeaturedLoading()
-                                  loadFollowStats()
-                              }
-                          },
-                          onDelete: {
-                              listViewID     = UUID()
-                              isLoadingLists = true
-                              DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                  isLoadingLists = false
-                                  retryFeaturedLoading()
-                                  loadFollowStats()
-                              }
-                          }
-                        )
-                    } else if list.type == "group" {
-                        GroupListPersonal(
-                          listID: list.id,
-                          onDelete: {
-                              listViewID     = UUID()
-                              isLoadingLists = true
-                              DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                                  isLoadingLists = false
-                                  retryFeaturedLoading()
-                                  loadFollowStats()
-                              }
-                          }
-                        )
-                    }
-                    
-                }
-                .refreshable {
-                    listViewID     = UUID()
-                    isLoadingLists = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                        isLoadingLists = false
-                    }
-                    loadFollowStats()
-                    tryLoadFeaturedRankos()
-                }
-                .onAppear {
-                    listViewID     = UUID()
-                    isLoadingLists = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        isLoadingLists = false
-                    }
-                    loadFollowStats()
-                    tryLoadFeaturedRankos()
-                    if !isSimulator {
-                        loadNumberOfRankos()
-                    }
-                    
-                    let tags = user_data.userInterests
-                        .split(separator: ",")
-                        .map { $0.trimmingCharacters(in: .whitespaces) }
-                    
-                    Task {
-                        for (index, tag) in tags.enumerated() {
-                            try? await Task.sleep(for: .milliseconds(200 * index))
-                            _ = withAnimation(.easeOut(duration: 0.4)) {
-                                animatedTags.insert(tag)
-                            }
-                        }
-                    }
-                    
-                    Analytics.logEvent(AnalyticsEventScreenView, parameters: [
-                        AnalyticsParameterScreenName: "Profile",
-                        AnalyticsParameterScreenClass: "ProfileView"
-                    ])                }
-                .alert(
-                    "Unpin Ranko?",
-                    isPresented: $showUnpinAlert,
-                    presenting: slotToUnpin
-                ) { slot in
-                    Button("Yes, unpin", role: .destructive) {
-                        unpin(slot)
-                    }
-                    Button("Cancel", role: .cancel) { }
-                } message: { slot in
-                    Text("Are you sure you want to remove this featured Ranko from slot \(slot)?")
-                }
-            }
-            
-        }
-    }
-    
-    private let isSimulator: Bool = {
-        var isSim = false
-        #if targetEnvironment(simulator)
-        isSim = true
-        #endif
-        return isSim
-    }()
-    
-    
-    private func loadNumberOfRankos() {
-        guard !user_data.userID.isEmpty else { print("Skipping loadNumberOfRankos: userID is empty"); return }
-        
-        let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-                                  apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
-        let index = client.index(withName: "RankoLists")
-        var query = Query("").set(\.hitsPerPage, to: 0) // 0 results, just want count
-        query.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
-
-        index.search(query: query) { (result: Result<SearchResponse, Error>) in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let response):
-                    let totalResults = response.nbHits
-                    user_data.userStatsRankos = totalResults!
-                    let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserRankoCount")
-                    dbRef.setValue(totalResults!)
-                case .failure(let error):
-                    print("❌ Error fetching Algolia results: \(error)")
-                }
-            }
-        }
-    }
-    
-    private func uploadImageToFirebase(_ image: UIImage) {
-        loadingProfileImage = true
-        guard let data = image.jpegData(compressionQuality: 0.8) else {
-            loadingProfileImage = false
-            return
-        }
-
-        let filePath = "\(user_data.userID).jpg"
-        
-        let metadata = StorageMetadata()
-        metadata.contentType = "image/jpeg"
-        
-        let storageRef = Storage.storage()
-            .reference()
-            .child("profilePictures")
-            .child(filePath)
-
-        storageRef.putData(data, metadata: metadata) { _, error in
-            if let e = error {
-                print("Upload error:", e)
-                DispatchQueue.main.async { loadingProfileImage = false }
-                return
-            }
-            
-            let dbRef = Database.database().reference()
-                .child("UserData")
-                .child(user_data.userID)
-                .child("UserProfilePicture")
-                .child("UserProfilePicturePath")
-            dbRef.setValue(filePath) { _, _ in
-                // 3️⃣ Now download it back and cache
-                downloadAndCacheProfileImage(from: filePath)
-            }
-            
-            let now = Date()
-            let fmt = DateFormatter()
-            fmt.locale = Locale(identifier: "en_US_POSIX")
-            fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
-            fmt.dateFormat = "yyyyMMddHHmmss"
-            let ts = fmt.string(from: now)
-            Database.database().reference()
-                .child("UserData")
-                .child(user_data.userID)
-                .child("UserProfilePicture")
-                .child("UserProfilePictureModified")
-                .setValue(ts)
-        }
+    struct Index: Codable {
+        var featuredHash: String
+        var rankoHashes: [String:String]   // rankoID -> content hash (e.g., updated timestamp or sha)
+        var lastBuiltAt: String            // yyyyMMddHHmmss
+        var orderSlots: [Int:String]       // slot -> rankoID
     }
 
-    private func downloadAndCacheProfileImage(from filePath: String) {
-        let storageRef = Storage.storage()
-            .reference()
-            .child("profilePictures")
-            .child(filePath)
+    private let fm = FileManager.default
 
-        storageRef.getData(maxSize: Int64(2 * 1024 * 1024)) { data, error in
-            DispatchQueue.main.async {
-                defer { loadingProfileImage = false }
-                guard let d = data, let ui = UIImage(data: d) else {
-                    print("Download failed:", error ?? "unknown")
-                    return
-                }
-
-                // 1️⃣ Update the in-memory state
-                profileImage = ui
-                user_data.ProfilePicture = ui
-
-                // 2️⃣ Write to disk so next launch can load from cache
-                let url = getProfileImagePath()
-                do {
-                    try d.write(to: url)
-                    print("✅ Cached to disk at", url)
-                } catch {
-                    print("❌ Could not cache:", error)
-                }
-            }
-        }
-    }
-    
-    private func syncUserDataFromFirebase() {
-        guard let uid = Auth.auth().currentUser?.uid else {
-            print("❌ No current user logged in. Aborting sync.")
-            return
-        }
-        
-        let userDetails = Database.database().reference().child("UserData").child(uid).child("UserDetails")
-        let userProfilePicture = Database.database().reference().child("UserData").child(uid).child("UserProfilePicture")
-        let userStats = Database.database().reference().child("UserData").child(uid).child("UserStats")
-        
-        print("UserID: \(uid)")
-        
-        userDetails.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed To Fetch User Data From Firebase.")
-                return
-            }
-            
-            user_data.userID = value["UserID"] as? String ?? ""
-            user_data.username = value["UserName"] as? String ?? ""
-            user_data.userDescription = value["UserDescription"] as? String ?? ""
-            user_data.userPrivacy = value["UserPrivacy"] as? String ?? ""
-            user_data.userInterests = value["UserInterests"] as? String ?? ""
-            user_data.userJoined = value["UserJoined"] as? String ?? ""
-            user_data.userYear = value["UserYear"] as? Int ?? 0
-            user_data.userFoundUs = value["UserFoundUs"] as? String ?? ""
-            user_data.userLoginService = value["UserSignInMethod"] as? String ?? ""
-            
-            print("✅ Successfully Loaded User Details.")
-            
-        }
-        
-        userProfilePicture.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed To Fetch User Data From Firebase.")
-                return
-            }
-            
-            user_data.userProfilePictureFile = value["UserProfilePictureFile"] as? String ?? ""
-            let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
-            user_data.userProfilePicturePath = value["UserProfilePicturePath"] as? String ?? ""
-            
-            print("✅ Successfully Loaded Profile Picture Details.")
-            print("🤔 Checking For New Image...")
-            
-            // Only load profile image if the modified string has changed
-            if modifiedTimestamp != user_data.userProfilePictureModified {
-                print("🔁 Profile Picture Modified Date Changed, Reloading Image...")
-                user_data.userProfilePictureModified = modifiedTimestamp
-                downloadAndCacheProfileImage(from: user_data.userProfilePicturePath)
-            } else {
-                print("✅ Using Cached Profile Image From Disk.")
-                profileImage = loadImageFromDisk()
-            }
-        }
-        
-        userStats.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed To Fetch User Data From Firebase.")
-                return
-            }
-            
-            user_data.userStatsFollowers = value["UserFollowerCount"] as? Int ?? 0
-            user_data.userStatsFollowing = value["UserFollowingCount"] as? Int ?? 0
-            user_data.userStatsRankos = value["UserRankoCount"] as? Int ?? 0
-            
-            print("✅ Successfully Loaded Statistics Details.")
-            print("✅ Successfully Loaded All User Data.")
-        }
-    }
-    
-    private func loadFollowStats() {
-        guard !user_data.userID.isEmpty else { print("Skipping loadFollowStats: userID is empty"); return }
-        
-        let db = Database.database().reference()
-        let group = DispatchGroup()
-
-        group.enter()
-        db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowers")
-            .observeSingleEvent(of: .value) { snapshot in
-                DispatchQueue.main.async {
-                    self.user_data.userStatsFollowers = Int(snapshot.childrenCount)
-                    let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowerCount")
-                    dbRef.setValue(user_data.userStatsFollowers)
-                }
-                group.leave()
-            }
-
-        group.enter()
-        db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowing")
-            .observeSingleEvent(of: .value) { snapshot in
-                DispatchQueue.main.async {
-                    self.user_data.userStatsFollowing = Int(snapshot.childrenCount)
-                    let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowingCount")
-                    dbRef.setValue(user_data.userStatsFollowing)
-                }
-                group.leave()
-            }
-
-        group.notify(queue: .main) {
-            print("✅ Finished loading follow stats")
-        }
-    }
-    
-    private func retryFeaturedLoading() {
-        featuredLoadFailed = false
-        featuredLoading = true
-        retryCount = 0
-        tryLoadFeaturedRankos()
+    private func baseDir(for uid: String) -> URL {
+        let d = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return d.appendingPathComponent("FeaturedCache").appendingPathComponent(uid)
     }
 
-    private func tryLoadFeaturedRankos() {
-        guard retryCount < 3 else {
-            DispatchQueue.main.async {
-                self.featuredLoading = false
-                self.featuredLoadFailed = true
-            }
-            return
+    private func write(_ data: Data, to url: URL) throws {
+        try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: .atomic)
+    }
+
+    private func readData(_ url: URL) -> Data? {
+        guard fm.fileExists(atPath: url.path) else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
+    private func sha1(of data: Data) -> String {
+        // lightweight hash; you can swap to CryptoKit if you prefer
+        var hash = 5381
+        for b in data { hash = ((hash << 5) &+ hash) &+ Int(b) }
+        return String(hash)
+    }
+
+    // MARK: Public API
+
+    /// Load cached RankoLists (if present) without touching the network.
+    func loadCachedLists(uid: String) -> [Int: RankoList] {
+        let dir = baseDir(for: uid)
+        let indexURL = dir.appendingPathComponent("index.json")
+        guard let data = readData(indexURL),
+              let idx = try? JSONDecoder().decode(Index.self, from: data) else {
+            return [:]
         }
-        retryCount += 1
 
-        // Attempt Firebase fetch
-        guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
-            print("❌ No UID found, retrying...")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
-            return
+        var out: [Int: RankoList] = [:]
+        for (slot, rankoID) in idx.orderSlots {
+            let file = dir.appendingPathComponent("\(rankoID).json")
+            guard let j = readData(file),
+                  let dict = (try? JSONSerialization.jsonObject(with: j)) as? [String:Any],
+                  let rl = parseListData(dict: dict, id: rankoID) else { continue }
+            out[slot] = rl
         }
+        return out
+    }
 
-        let baseRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(uid)
-            .child("UserRankos")
-            .child("UserFeaturedRankos")
+    /// Build (or rebuild) the entire cache from Firebase. Deletes stale cache first.
+    func rebuildFromRemote(uid: String, completion: @escaping ([Int: RankoList]) -> Void) {
+        let userRef = Database.database().reference()
+            .child("UserData").child(uid)
+            .child("UserRankos").child("UserFeaturedRankos")
 
-        baseRef.getData { error, snapshot in
-            if let error = error {
-                print("❌ Firebase error: \(error.localizedDescription), retrying...")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
-                return
+        userRef.observeSingleEvent(of: .value) { snap in
+            guard snap.exists(), let children = snap.children.allObjects as? [DataSnapshot] else {
+                // nothing pinned
+                self.deleteAll(uid: uid)
+                completion([:]); return
             }
 
-            guard let snap = snapshot, snap.exists() else {
-                print("⚠️ No featured rankos found")
-                DispatchQueue.main.async {
-                    self.featuredLists = [:]
-                    self.featuredLoading = false
-                }
-                return
+            // slot -> rankoID
+            var orderSlots: [Int:String] = [:]
+            for c in children {
+                if let slot = Int(c.key), let rankoID = c.value as? String { orderSlots[slot] = rankoID }
             }
 
-            // ✅ Successfully connected
-            var tempLists: [Int: RankoList] = [:]
+            // serialize featured map to hash
+            let featuredRaw = orderSlots
+            let featuredData = try? JSONSerialization.data(withJSONObject: featuredRaw, options: [.sortedKeys])
+            let featuredHash = featuredData.map(self.sha1) ?? "0"
+
+            // pull each ranko JSON
             let group = DispatchGroup()
+            var slotLists: [Int: RankoList] = [:]
+            var rankoHashes: [String:String] = [:]
+            var rankoJSONForDisk: [String: Data] = [:]
 
-            for child in snap.children.allObjects as? [DataSnapshot] ?? [] {
-                if let slot = Int(child.key), let listID = child.value as? String {
-                    group.enter()
-                    fetchFeaturedList(slot: slot, listID: listID) {
-                        if let list = $0 { tempLists[slot] = list }
-                        group.leave()
+            for (slot, rid) in orderSlots {
+                group.enter()
+                let ref = Database.database().reference().child("RankoData").child(rid)
+                ref.observeSingleEvent(of: .value) { rsnap in
+                    defer { group.leave() }
+                    guard let dict = rsnap.value as? [String:Any] else { return }
+                    // hash pref: use updated time if present; else full-JSON hash
+                    let updated = ((dict["RankoDateTime"] as? [String:Any])?["updated"] as? String)
+                                ?? ((dict["RankoDetails"]  as? [String:Any])?["time_updated"] as? String)
+                                ?? ""
+                    let json = (try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys])) ?? Data()
+                    let contentHash = updated.isEmpty ? self.sha1(of: json) : updated
+
+                    rankoHashes[rid] = contentHash
+                    rankoJSONForDisk[rid] = json
+
+                    if let rl = self.parseListData(dict: dict, id: rid) {
+                        slotLists[slot] = rl
                     }
                 }
             }
 
-            group.notify(queue: .main) {
-                self.featuredLists = tempLists
-                self.featuredLoading = false
-                print("✅ Featured Rankos loaded successfully")
+            group.notify(queue: .global(qos: .userInitiated)) {
+                // purge + write
+                self.deleteAll(uid: uid)
+                let dir = self.baseDir(for: uid)
+                do {
+                    // featured_map.json
+                    if let fd = featuredData {
+                        try self.write(fd, to: dir.appendingPathComponent("featured_map.json"))
+                    }
+
+                    // per-ranko json
+                    for (rid, data) in rankoJSONForDisk {
+                        try self.write(data, to: dir.appendingPathComponent("\(rid).json"))
+                    }
+
+                    // download top-3 images for each ranko
+                    let dlGroup = DispatchGroup()
+                    for (_, rl) in slotLists {
+                        let top3 = Array(rl.items.sorted { $0.rank < $1.rank }.prefix(3))
+                        for (idx, item) in top3.enumerated() {
+                            guard !item.record.ItemImage.isEmpty else { continue }
+                            dlGroup.enter()
+                            self.downloadImageIfNeeded(pathOrURL: item.record.ItemImage) { data in
+                                defer { dlGroup.leave() }
+                                guard let data else { return }
+                                try? self.write(data, to: dir.appendingPathComponent("\(rl.id)_img\(idx+1).jpg"))
+                            }
+                        }
+                    }
+
+                    dlGroup.notify(queue: .global(qos: .userInitiated)) {
+                        // write index.json
+                        let idx = Index(
+                            featuredHash: featuredHash,
+                            rankoHashes: rankoHashes,
+                            lastBuiltAt: Self.timestamp(),
+                            orderSlots: orderSlots
+                        )
+                        if let idxData = try? JSONEncoder().encode(idx) {
+                            try? self.write(idxData, to: dir.appendingPathComponent("index.json"))
+                        }
+                        DispatchQueue.main.async { completion(slotLists) }
+                    }
+                } catch {
+                    print("❌ cache write error:", error.localizedDescription)
+                    DispatchQueue.main.async { completion(slotLists) } // still return what we have
+                }
             }
         }
     }
 
-    // ✅ Modified fetchFeaturedList to support completion
-    private func fetchFeaturedList(slot: Int, listID: String, completion: @escaping (RankoList?) -> Void) {
-        let listRef = Database.database()
-            .reference()
-            .child("RankoData")
-            .child(listID)
+    /// Compare remote vs local hashes; if any mismatch → rebuild.
+    func refreshIfChanged(uid: String, completion: @escaping ([Int: RankoList]) -> Void) {
+        // read local index first
+        let dir = baseDir(for: uid)
+        let indexURL = dir.appendingPathComponent("index.json")
+        let localIndex: Index? = {
+            guard let d = readData(indexURL) else { return nil }
+            return try? JSONDecoder().decode(Index.self, from: d)
+        }()
 
-        listRef.observeSingleEvent(of: .value) { snap in
-            guard let dict = snap.value as? [String: Any],
-                  let rl = parseListData(dict: dict, id: listID) else {
-                completion(nil)
+        let userRef = Database.database().reference()
+            .child("UserData").child(uid)
+            .child("UserRankos").child("UserFeaturedRankos")
+
+        userRef.observeSingleEvent(of: .value) { snap in
+            // compute featuredHash remote
+            var orderSlots: [Int:String] = [:]
+            if let children = snap.children.allObjects as? [DataSnapshot] {
+                for c in children {
+                    if let slot = Int(c.key), let rankoID = c.value as? String { orderSlots[slot] = rankoID }
+                }
+            }
+            let featuredData = try? JSONSerialization.data(withJSONObject: orderSlots, options: [.sortedKeys])
+            let remoteFeaturedHash = featuredData.map(self.sha1) ?? "0"
+            let localFeaturedHash = localIndex?.featuredHash ?? "_none"
+
+            // quick diff: if featured set changed → rebuild
+            if remoteFeaturedHash != localFeaturedHash {
+                self.rebuildFromRemote(uid: uid, completion: completion)
                 return
             }
-            completion(rl)
+
+            // same set: check each ranko's "updated" or content hash
+            let group = DispatchGroup()
+            var mismatch = false
+
+            for (_, rid) in orderSlots {
+                group.enter()
+                let ref = Database.database().reference().child("RankoData").child(rid)
+                ref.observeSingleEvent(of: .value) { rsnap in
+                    defer { group.leave() }
+                    guard let dict = rsnap.value as? [String:Any] else { mismatch = true; return }
+                    let updated = ((dict["RankoDateTime"] as? [String:Any])?["updated"] as? String)
+                                ?? ((dict["RankoDetails"]  as? [String:Any])?["time_updated"] as? String)
+                                ?? ""
+                    let json = (try? JSONSerialization.data(with: dict, options: [.sortedKeys])) ?? Data()
+                    let remoteHash = updated.isEmpty ? self.sha1(of: json) : updated
+                    let localHash = localIndex?.rankoHashes[rid] ?? "_none"
+                    if remoteHash != localHash { mismatch = true }
+                }
+            }
+
+            group.notify(queue: .global(qos: .userInitiated)) {
+                if mismatch {
+                    self.rebuildFromRemote(uid: uid, completion: completion)
+                } else {
+                    // no change → just serve cache
+                    let lists = self.loadCachedLists(uid: uid)
+                    DispatchQueue.main.async { completion(lists) }
+                }
+            }
         }
+    }
+
+    func deleteAll(uid: String) {
+        let dir = baseDir(for: uid)
+        if fm.fileExists(atPath: dir.path) {
+            try? fm.removeItem(at: dir)
+        }
+    }
+
+    private func downloadImageIfNeeded(pathOrURL: String, completion: @escaping (Data?) -> Void) {
+        if pathOrURL.hasPrefix("http") {
+            // direct URL
+            URLSession.shared.dataTask(with: URL(string: pathOrURL)!) { data, _, _ in
+                completion(data)
+            }.resume()
+        } else {
+            // assume Firebase Storage path
+            let ref = Storage.storage().reference(withPath: pathOrURL)
+            ref.getData(maxSize: Int64(4 * 1024 * 1024)) { data, _ in
+                completion(data)
+            }
+        }
+    }
+
+    private static func timestamp() -> String {
+        let f = DateFormatter()
+        f.locale = .init(identifier: "en_US_POSIX")
+        f.timeZone = .current
+        f.dateFormat = "yyyyMMddHHmmss"
+        return f.string(from: Date())
     }
     
     private func parseListData(dict: [String: Any], id: String) -> RankoList? {
+        // tolerant int parser
+        func intFromAny(_ any: Any?) -> Int? {
+            if let n = any as? NSNumber { return n.intValue }
+            if let d = any as? Double   { return Int(d) }
+            if let s = any as? String   { return Int(s) }
+            return nil
+        }
+
+        // parse "0xRRGGBB", "#RRGGBB", "RRGGBB", decimal, NSNumber → UInt (24-bit)
+        func parseColourUInt(_ any: Any?) -> UInt {
+            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
+            if let s = any as? String {
+                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
+                if hex.hasPrefix("#")  { hex.removeFirst() }
+                if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
+            }
+            return 0x446D7A
+        }
+
+        // ======== NEW SCHEMA PREFERRED ========
+        if let details = dict["RankoDetails"] as? [String: Any] {
+            let privacy = dict["RankoPrivacy"]   as? [String: Any]
+            let cat     = dict["RankoCategory"]  as? [String: Any]
+            let items   = dict["RankoItems"]     as? [String: Any] ?? [:]
+            let dt      = dict["RankoDateTime"]  as? [String: Any]
+
+            let listName    = (details["name"] as? String) ?? ""
+            let description = (details["description"] as? String) ?? ""
+            let type        = (details["type"] as? String) ?? "default"
+            let userCreator = (details["user_id"] as? String) ?? ""
+
+            let isPrivate   = (privacy?["private"] as? Bool) ?? false
+
+            let catName     = (cat?["name"] as? String) ?? "Unknown"
+            let catIcon     = (cat?["icon"] as? String) ?? "circle"
+            let catColour   = parseColourUInt(cat?["colour"])
+
+            let timeCreated = (dt?["created"] as? String) ?? ""
+            let timeUpdated = (dt?["updated"] as? String) ?? timeCreated
+
+            // items can be [String: Any] with inner dicts
+            let rankoItems: [RankoItem] = items.compactMap { (keyID, raw) in
+                guard let itemDict = raw as? [String: Any] else { return nil }
+                let itemID   = (itemDict["ItemID"] as? String) ?? keyID
+                guard
+                    let itemName  = itemDict["ItemName"] as? String,
+                    let itemDesc  = itemDict["ItemDescription"] as? String,
+                    let itemImage = itemDict["ItemImage"] as? String,
+                    let itemGIF    = itemDict["ItemGIF"] as? String,
+                    let itemVideo    = itemDict["ItemVideo"] as? String,
+                    let itemAudio    = itemDict["ItemAudio"] as? String
+                else { return nil }
+                let rank  = intFromAny(itemDict["ItemRank"])  ?? 0
+                let votes = intFromAny(itemDict["ItemVotes"]) ?? 0
+                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                let plays = intFromAny(itemDict["PlayCount"]) ?? 0
+                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
+            }.sorted { $0.rank < $1.rank }
+
+            return RankoList(
+                id:              id,
+                listName:        listName,
+                listDescription: description,
+                type:            type,
+                categoryName:    catName,
+                categoryIcon:    catIcon,
+                categoryColour:  catColour,
+                isPrivate:       isPrivate ? "Private" : "Public",
+                userCreator:     userCreator,
+                timeCreated:     timeCreated,
+                timeUpdated:     timeUpdated,
+                items:           rankoItems
+            )
+        }
+
+        // ======== LEGACY SCHEMA FALLBACK ========
         guard
-            let listName      = dict["RankoName"]        as? String,
-            let description   = dict["RankoDescription"] as? String,
-            let type          = dict["RankoType"]        as? String,
-            let privacy       = dict["RankoPrivacy"]     as? Bool,
-            let dateTime      = dict["RankoDateTime"]    as? String,
-            let userCreator   = dict["RankoUserID"]      as? String,
-            let itemsDict     = dict["RankoItems"]       as? [String: Any]
+            let listName    = dict["RankoName"]        as? String,
+            let description = dict["RankoDescription"] as? String,
+            let type        = dict["RankoType"]        as? String,
+            let privacy     = dict["RankoPrivacy"]     as? Bool,
+            let userCreator = dict["RankoUserID"]      as? String
         else { return nil }
 
-        let isPrivateString = privacy ? "Private" : "Public"
+        var timeCreated = ""
+        var timeUpdated = ""
+        if let dt = dict["RankoDateTime"] as? [String: Any] {
+            timeCreated = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? ""
+            timeUpdated = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? timeCreated
+        } else if let s = dict["RankoDateTime"] as? String {
+            timeCreated = s
+            timeUpdated = s
+        }
+
+        // Items
+        let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
         var rankoItems: [RankoItem] = []
 
-        for (_, value) in itemsDict {
-            guard
-                let itemDict  = value as? [String: Any],
-                let itemID    = itemDict["ItemID"]          as? String,
-                let itemName  = itemDict["ItemName"]        as? String,
-                let itemDesc  = itemDict["ItemDescription"] as? String,
-                let itemImg   = itemDict["ItemImage"]       as? String,
-                let itemGif  = itemDict["ItemGIF"]       as? String,
-                let itemVideo  = itemDict["ItemVideo"]       as? String,
-                let itemAudio  = itemDict["ItemAudio"]       as? String,
-                let itemVotes = itemDict["ItemVotes"]       as? Int,
-                let itemRank = itemDict["ItemRank"]       as? Int,
-                let playCount  = itemDict["PlayCount"]        as? Int
-            else { continue }
+        for (keyID, itemDict) in itemsDict {
+            let itemID = (itemDict["ItemID"] as? String) ?? keyID
 
-            let record = RankoRecord(
-                objectID:        itemID,
-                ItemName:        itemName,
+            // If these media fields aren’t guaranteed in legacy data, default them to ""
+            let itemGIF   = (itemDict["ItemGIF"]   as? String) ?? ""
+            let itemVideo = (itemDict["ItemVideo"] as? String) ?? ""
+            let itemAudio = (itemDict["ItemAudio"] as? String) ?? ""
+
+            guard
+                let itemName  = itemDict["ItemName"] as? String,
+                let itemDesc  = itemDict["ItemDescription"] as? String,
+                let itemImage = itemDict["ItemImage"] as? String
+            else { continue } // <- don’t return; just skip this item
+                                
+            let rank  = intFromAny(itemDict["ItemRank"])  ?? 0
+            let votes = intFromAny(itemDict["ItemVotes"]) ?? 0
+            let plays = intFromAny(itemDict["PlayCount"]) ?? 0
+
+            let rec = RankoRecord(
+                objectID: itemID,
+                ItemName: itemName,
                 ItemDescription: itemDesc,
                 ItemCategory: "",
-                ItemImage:       itemImg,
-                ItemGIF: itemGif,
+                ItemImage: itemImage,
+                ItemGIF: itemGIF,
                 ItemVideo: itemVideo,
                 ItemAudio: itemAudio
             )
-            rankoItems.append(RankoItem(id: itemID,
-                                        rank: itemRank,
-                                        votes: itemVotes,
-                                        record: record,
-                                       playCount: playCount))
+
+            rankoItems.append(
+                RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
+            )
         }
 
         rankoItems.sort { $0.rank < $1.rank }
 
+        // Category (object or legacy string)
+        var catName = "Unknown"
+        var catIcon = "circle"
+        var catColour = 0x446D7A
+        if let cat = dict["RankoCategory"] as? [String: Any] {
+            catName   = (cat["name"] as? String) ?? catName
+            catIcon   = (cat["icon"] as? String) ?? catIcon
+            catColour = {
+                if let n = cat["colour"] as? NSNumber { return n.intValue }
+                if let s = cat["colour"] as? String {
+                    var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    if let dec = Int(hex) { return dec }
+                    if hex.hasPrefix("#")  { hex.removeFirst() }
+                    if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                    return Int(hex, radix: 16) ?? 0x446D7A
+                }
+                return 0x446D7A
+            }()
+        } else if let catStr = dict["RankoCategory"] as? String {
+            catName = catStr
+        }
+
         return RankoList(
-            id:               id,
-            listName:         listName,
-            listDescription:  description,
-            type:             type,
-            categoryName: "Albums",
-            categoryIcon: "circle.circle",
-            categoryColour: 0xFFFFFF,
-            isPrivate:        isPrivateString,
-            userCreator:      userCreator,
-            timeCreated: dateTime,
-            timeUpdated: dateTime,
-            items:            rankoItems
+            id:              id,
+            listName:        listName,
+            listDescription: description,
+            type:            type,
+            categoryName:    catName,
+            categoryIcon:    catIcon,
+            categoryColour:  UInt(catColour & 0x00FF_FFFF),
+            isPrivate:       privacy ? "Private" : "Public",
+            userCreator:     userCreator,
+            timeCreated:     timeCreated,
+            timeUpdated:     timeUpdated,
+            items:           rankoItems
         )
-    }
-    
-    private func unpin(_ slot: Int) {
-        guard !user_data.userID.isEmpty else { print("Skipping unpin: userID is empty"); return }
-        
-        let ref = Database.database()
-            .reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserRankos")
-            .child("UserFeaturedRankos")
-            .child("\(slot)")
-        ref.removeValue { error, _ in
-            guard error == nil else { return }
-            DispatchQueue.main.async {
-                featuredLists.removeValue(forKey: slot)
-            }
-        }
-    }
-    
-    private func saveUserDataToFirebase(name: String, description: String, interests: [String]) {
-        guard !user_data.userID.isEmpty else {
-            print("❌ Cannot save: userID is empty")
-            return
-        }
-
-        let ref = Database.database().reference().child("UserData").child(user_data.userID).child("UserDetails")
-
-        let updates: [String: Any] = [
-            "UserName": name,
-            "UserDescription": description,
-            "UserInterests": interests.joined(separator: ", ")
-        ]
-
-        ref.updateChildValues(updates) { error, _ in
-            if let error = error {
-                print("❌ Error updating user data: \(error.localizedDescription)")
-            } else {
-                print("✅ User data updated successfully")
-            }
-        }
-    }
-
-    private func loadImageFromDisk() -> UIImage? {
-        let path = URL(string: user_data.userProfilePicturePath)!
-        if FileManager.default.fileExists(atPath: path.path) {
-            if let data = try? Data(contentsOf: path),
-               let image = UIImage(data: data) {
-                print("📂 Loaded profile image from disk.")
-                return image
-            }
-        }
-        return nil
-    }
-}
-
-// MARK: - AlgoliaRankoView
-class AlgoliaRankoView2 {
-    static let shared = AlgoliaRankoView2()
-    @StateObject private var user_data = UserInformation.shared
-
-    private let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-                                      apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
-    private let index: AIndex
-
-    private init() {
-        self.index = client.index(withName: "RankoLists")
-    }
-
-    /// Fetches only the objectIDs of public Ranko lists from Algolia
-    func fetchRankoLists(limit: Int = 20, completion: @escaping (Result<[String], Error>) -> Void) {
-        var query = Query("")
-        query.hitsPerPage = limit
-        query.filters = "RankoPrivacy:false AND RankoStatus:active" // Only public lists
-        
-        index.search(query: query) { result in
-            switch result {
-            case .success(let response):
-                let ids = response.hits.compactMap { $0.objectID.rawValue }
-                completion(.success(ids))
-            case .failure(let error):
-                completion(.failure(error))
-            }
-        }
     }
 }
 
@@ -2395,8 +1763,6 @@ struct FacetCategory: Identifiable {
     let facetName: String
     let facetCount: Int
 }
-
-
 
 struct SearchRankosView: View {
     @Environment(\.dismiss) private var dismiss
@@ -2630,7 +1996,7 @@ struct SearchRankosView: View {
                     if list.type == "default" {
                         DefaultListPersonal(listID: list.id, onSave: {_ in dismiss() }, onDelete: { dismiss() })
                     } else {
-                        GroupListPersonal(listID: list.id, onDelete: { dismiss() })
+//                        GroupListPersonal(listID: list.id, onDelete: { dismiss() })
                     }
                 }
                 .onAppear {

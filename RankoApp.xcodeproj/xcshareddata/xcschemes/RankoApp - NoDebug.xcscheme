@@ -57,7 +57,7 @@
          </CommandLineArgument>
       </CommandLineArguments>
       <StoreKitConfigurationFileReference
-         identifier = "../../RankoApp/Subscription.storekit">
+         identifier = "../../RankoApp/RankoPlatinum.storekit">
       </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction

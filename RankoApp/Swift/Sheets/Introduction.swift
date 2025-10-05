@@ -233,7 +233,6 @@ struct TrayView: View {
         let db = Database.database().reference()
         let userRef = db.child("UserData").child(Auth.auth().currentUser!.uid)
         
-        userRef.child("objectID").setValue(Auth.auth().currentUser!.uid)
         userRef.child("UserDetails").updateChildValues(userDetails)
         userRef.child("UserProfilePicture").updateChildValues(userProfilePicture)
         userRef.child("UserRankos").updateChildValues(userRankos)

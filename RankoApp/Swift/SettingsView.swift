@@ -168,57 +168,69 @@ struct SettingsView: View {
                 .navigationTransition(
                     .zoom(sourceID: "Account", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
-        .fullScreenCover(isPresented: $rankoProView) {
+        .sheet(isPresented: $rankoProView) {
             RankoPlatinumView()
                 .navigationTransition(
                     .zoom(sourceID: "Ranko Platinum", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
-        .fullScreenCover(isPresented: $notificationsView) {
-            //NotificationsView()
+        .sheet(isPresented: $notificationsView) {
             NotificationsView()
-//                .environmentObject(spotify)
                 .navigationTransition(
                     .zoom(sourceID: "Notifications", in: transition)
                 )
-                .interactiveDismissDisabled(true)
+                .interactiveDismissDisabled()
         }
         .sheet(isPresented: $preferencesView) {
             PreferencesView()
                 .navigationTransition(
                     .zoom(sourceID: "Preferences", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
         .sheet(isPresented: $privacySecurityView) {
             PrivacySecurityView()
                 .navigationTransition(
                     .zoom(sourceID: "Privacy & Security", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
-        .fullScreenCover(isPresented: $suggestionsIdeasView) {
+        .sheet(isPresented: $suggestionsIdeasView) {
             SuggestionsIdeasView()
                 .navigationTransition(
                     .zoom(sourceID: "Suggestions & Ideas", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
         .sheet(isPresented: $dataStorageView) {
             DataStorageView()
                 .navigationTransition(
                     .zoom(sourceID: "Data & Storage", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
         .sheet(isPresented: $aboutView) {
-            AboutView()
+            AboutView(onReportBug: {
+                suggestionsIdeasView = true
+            }, onPrivacyPolicy: {
+                
+            }, onTermsOfUse: {
+                
+            })
                 .navigationTransition(
                     .zoom(sourceID: "About", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
         .sheet(isPresented: $legalView) {
             LegalView()
                 .navigationTransition(
                     .zoom(sourceID: "Privacy Policy & Terms Of Use", in: transition)
                 )
+                .interactiveDismissDisabled()
         }
         
     }
@@ -295,603 +307,271 @@ func clearAllCache() {
     print("✅ All caches cleared")
 }
 
-struct SettingsView1: View {
-    @Environment(\.requestReview) private var requestReview
-    
-    @StateObject private var user_data = UserInformation.shared
-    // Store the tint as a String value (note the dot prefix to match our mapping below)
-    @State private var rankoProView: Bool
-    @State private var accountView: Bool = false
-    @State private var notificationsView: Bool = false
-    @State private var preferencesView: Bool = false
-    @State private var privacySecurityView: Bool = false
-    @State private var suggestionsIdeasView: Bool = false
-    @State private var dataStorageView: Bool = false
-    @State private var aboutView: Bool = false
-    @State private var legalView: Bool = false
-    
-    @State private var searchText: String = ""
-    @State private var activeSheet: SettingItem? = nil
-    
-    init(rankoProView: Bool = false) {
-        self._rankoProView = State(initialValue: rankoProView)
-    }
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                LinearGradient(gradient: Gradient(colors: [Color(hex: 0xDBC252), Color(hex: 0xFF9864), Color(hex: 0xFF9864), Color(hex: 0xFF9864), Color(hex: 0xFF9864), Color(hex: 0xFF9864)]),
-                               startPoint: .top,
-                               endPoint: .bottom
-                )
-                .ignoresSafeArea()
-                GeometryReader { geo in
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            // MARK: - Header
-                            HStack {
-                                Text("Settings")
-                                    .font(.system(size: 32, weight: .black))
-                                    .foregroundColor(.white)
-                                Spacer()
-                                // Profile Picture
-                                ProfileIconView(diameter: CGFloat(50))
-                            }
-                            .padding(.top, 20)
-                            .padding(.bottom, 20)
-                            .padding(.horizontal, 30)
-                            VStack(spacing: 0) {
-                                // Search Bar
-                                
-                                HStack {
-                                    Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 16, weight: .heavy))
-                                        .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                                        .padding(6)
-                                    TextField("Search Settings", text: $searchText)
-                                        .font(.system(size: 16, weight: .heavy))
-                                        .foregroundColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.6) : Color(hex: 0x7E5F46).opacity(0.9))
-                                        .autocapitalization(.none)
-                                        .disableAutocorrection(true)
-                                        .accentColor((searchText.isEmpty) ? Color(hex: 0x7E5F46).opacity(0.3) : Color(hex: 0x7E5F46).opacity(0.7))
-                                    Spacer()
-                                    if !searchText.isEmpty {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 16, weight: .heavy))
-                                            .foregroundColor(Color(hex: 0x7E5F46).opacity(0.6))
-                                            .onTapGesture {searchText = ""}
-                                    }
-                                }
-                                .padding(18)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .fill(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                                             startPoint: .top,
-                                                             endPoint: .bottom
-                                                            ))
-                                        .shadow(color: Color(hex: 0xDBC252).opacity(0.8), radius: 5, x: 0, y: 3)
-                                        .padding(8)
-                                )
-                                .cornerRadius(12)
-                                .padding(.horizontal, 10)
-                                .padding(.top, 5)
-                                .padding(.bottom, 10)
-                                
-                                // Animated settings list wrapped in animation for searchText changes
-                                VStack(spacing: 0) {
-                                    if matchingSettings.isEmpty {
-                                        VStack(spacing: 18) {
-                                            Image(systemName: "questionmark.circle.fill")
-                                                .font(.system(size: 120, weight: .heavy))
-                                                .foregroundColor(Color(hex: 0x7E5F46).opacity(0.3))
-                                                .padding(.top, 40)
-                                            Text("No Settings Found")
-                                                .font(.system(size: 20, weight: .heavy))
-                                                .foregroundColor(Color(hex: 0x7E5F46))
-                                        }
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.bottom, 30)
-                                        .transition(.opacity)
-                                    } else {
-                                        ForEach(matchingSettings) { setting in
-                                            Button {
-                                                switch setting.title {
-                                                case "Account":
-                                                    accountView = true
-                                                case "Ranko Pro":
-                                                    rankoProView = true
-                                                case "Notifications":
-                                                    notificationsView = true
-                                                case "Preferences":
-                                                    preferencesView = true
-                                                case "Privacy & Security":
-                                                    privacySecurityView = true
-                                                case "Please Leave Us A Review":
-                                                    requestReview()
-                                                case "Suggestions & Ideas":
-                                                    suggestionsIdeasView = true
-                                                case "Data & Storage":
-                                                    dataStorageView = true
-                                                case "About":
-                                                    aboutView = true
-                                                case "Privacy Policy & Terms Of Use":
-                                                    legalView = true
-                                                default:
-                                                    break
-                                                }
-                                            } label: {
-                                                HStack(spacing: 14) {
-                                                    Image(systemName: setting.icon)
-                                                        .font(.system(size: 20, weight: .black))
-                                                        .foregroundColor(Color(hex: 0x7E5F46))
-                                                        .frame(width: 32)
-                                                    Text(setting.title)
-                                                        .font(.system(size: 14, weight: .black))
-                                                        .foregroundColor(Color(hex: 0x7E5F46))
-                                                    Spacer()
-                                                    Image(systemName: "chevron.right")
-                                                        .font(.system(size: 16, weight: .black))
-                                                        .foregroundColor(Color(hex: 0x7E5F46))
-                                                }
-                                                .padding(.vertical, 16)
-                                                .padding(.horizontal, 16)
-                                            }
-                                            .foregroundColor(Color(hex: 0xFF9864))
-                                            .tint(LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFFBF1), Color(hex: 0xFEF4E7)]),
-                                                                 startPoint: .top,
-                                                                 endPoint: .bottom
-                                                                ))
-                                            .buttonStyle(.glassProminent)
-                                            .id(setting.id)
-                                            .background(Color.clear)
-                                            .transition(.opacity)
-                                            .animation(.easeInOut(duration: 0.35), value: matchingSettings.count)
-                                        }
-                                        .padding(.horizontal, 15)
-                                        .padding(.top, 6)
-                                    }
-                                    // Non-matching settings fade out and collapse
-                                    ForEach(nonMatchingSettings) { setting in
-                                        Button {
-                                            // Do nothing on tap for non-matching, invisible items
-                                        } label: {
-                                            HStack(spacing: 14) {
-                                                Image(systemName: setting.icon)
-                                                    .font(.system(size: 20, weight: .black))
-                                                    .foregroundColor(Color(hex: 0x7E5F46))
-                                                    .frame(width: 32)
-                                                Text(setting.title)
-                                                    .font(.system(size: 14, weight: .black))
-                                                    .foregroundColor(Color(hex: 0x7E5F46))
-                                                Spacer()
-                                                Image(systemName: "chevron.right")
-                                                    .font(.system(size: 16, weight: .black))
-                                                    .foregroundColor(Color(hex: 0x7E5F46))
-                                            }
-                                            .padding(.vertical, 16)
-                                            .padding(.horizontal, 8)
-                                        }
-                                        .id(setting.id)
-                                        .background(Color.clear)
-                                        .opacity(0)
-                                        .frame(height: 0)
-                                        .animation(.easeInOut(duration: 0.35), value: searchText)
-                                    }
-                                }
-                                .padding(.vertical, 5)
-                                .animation(.easeInOut(duration: 0.35), value: searchText)
-                                .cornerRadius(16)
-                                .sheet(item: $activeSheet) { setting in
-                                    VStack {
-                                        Text(setting.title)
-                                            .font(.title)
-                                            .padding()
-                                        Spacer()
-                                        Text("This is a placeholder for \(setting.title) settings.")
-                                            .foregroundColor(.gray)
-                                        Spacer()
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding(.bottom, 80)
-                            .frame(minHeight: geo.size.height)
-                            .background(
-                                RoundedRectangle(cornerRadius: 25)
-                                    .fill(
-                                        LinearGradient(gradient: Gradient(colors: [Color(hex: 0xFFF5E2), Color(hex: 0xFFF5E2)]),
-                                                       startPoint: .top,
-                                                       endPoint: .bottom
-                                                      )
-                                    )
-                            )
-                        }
-                    }
-                }
-            }
-            .navigationBarHidden(true)
-        }
-        .onAppear {
-            Analytics.logEvent(AnalyticsEventScreenView, parameters: [
-                AnalyticsParameterScreenName: "Settings",
-                AnalyticsParameterScreenClass: "SettingsView"
-            ])
-            clearAllCache()
-        }
-        .sheet(isPresented: $accountView) {
-            AccountView()
-        }
-        .fullScreenCover(isPresented: $rankoProView) {
-            ProSubscriptionView()
-        }
-        .sheet(isPresented: $notificationsView) {
-            NotificationsView()
-        }
-        .sheet(isPresented: $preferencesView) {
-            PreferencesView()
-        }
-        .sheet(isPresented: $privacySecurityView) {
-            PrivacySecurityView()
-        }
-        .sheet(isPresented: $suggestionsIdeasView) {
-            SuggestionsIdeasView()
-        }
-        .sheet(isPresented: $dataStorageView) {
-            DataStorageView()
-        }
-        .sheet(isPresented: $aboutView) {
-            AboutView()
-        }
-        .sheet(isPresented: $legalView) {
-            LegalView()
-        }
-        
-    }
-    
-    // Example settings with keywords
-    private var settings: [SettingItem] {
-        [
-            SettingItem(variable: "account", title: "Account", icon: "person.crop.circle", keywords: ["account", "profile", "sign in", "sign out", "user", "login", "logout"]),
-            SettingItem(variable: "rankoPlatinum", title: "Ranko Pro", icon: "medal.star", keywords: ["ranko", "pro", "premium"]),
-            SettingItem(variable: "notifications", title: "Notifications", icon: "bell.badge", keywords: ["notification", "alerts", "reminders", "push", "messages"]),
-            SettingItem(variable: "preferences", title: "Preferences", icon: "wrench.and.screwdriver", keywords: ["preferences", "alerts", "reminders", "push", "messages"]),
-            SettingItem(variable: "privacy", title: "Privacy & Security", icon: "lock.shield", keywords: ["privacy", "security", "password", "passcode", "auth", "protection"]),
-            SettingItem(variable: "review", title: "Please Leave Us A Review", icon: "star.fill", keywords: ["Review"]),
-            SettingItem(variable: "suggestions", title: "Suggestions & Ideas", icon: "brain.head.profile.fill", keywords: ["suggestions", "ideas", "help", "contact", "feedback"]),
-            SettingItem(variable: "dataStorage", title: "Data & Storage", icon: "externaldrive", keywords: ["data", "storage", "cache", "clear", "reset"]),
-            SettingItem(variable: "about", title: "About", icon: "info.circle", keywords: ["about", "info", "version", "app", "credits"]),
-            SettingItem(variable: "legal", title: "Privacy Policy & Terms Of Use", icon: "scroll", keywords: ["privacy policy", "terms of use", "legal"])
-        ]
-    }
-    
-    // Filtering logic to get matching settings
-    private var matchingSettings: [SettingItem] {
-        if searchText.isEmpty { return settings }
-        let lowercased = searchText.lowercased()
-        return settings.filter { setting in
-            setting.title.lowercased().contains(lowercased) ||
-            setting.keywords.contains(where: { $0.contains(lowercased) })
-        }
-    }
-    
-    // Filtering logic to get non-matching settings
-    private var nonMatchingSettings: [SettingItem] {
-        let lowercased = searchText.lowercased()
-        if lowercased.isEmpty { return [] }
-        return settings.filter { setting in
-            !(setting.title.lowercased().contains(lowercased) ||
-            setting.keywords.contains(where: { $0.contains(lowercased) })) }
-    }
-    
-    private func clearAllCache() {
-        // 1. Remove URLCache entries
-        let urlCache = URLCache.shared
-        urlCache.removeAllCachedResponses()
-        
-        // 2. Reset its capacities
-        URLCache.shared = URLCache(memoryCapacity: 0, diskCapacity: 0, diskPath: nil)
-        
-        // 3. Clear out everything in Caches directory
-        if let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            do {
-                let contents = try FileManager.default.contentsOfDirectory(at: cachesURL,
-                                                                           includingPropertiesForKeys: nil)
-                for file in contents {
-                    try FileManager.default.removeItem(at: file)
-                }
-            } catch {
-                print("⚠️ Failed to clear Caches directory:", error)
-            }
-        }
-        
-        // 4. Clear out the tmp directory
-        let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        do {
-            let tmpContents = try FileManager.default.contentsOfDirectory(at: tmpURL,
-                                                                          includingPropertiesForKeys: nil)
-            for file in tmpContents {
-                try FileManager.default.removeItem(at: file)
-            }
-        } catch {
-            print("⚠️ Failed to clear tmp directory:", error)
-        }
-        
-        print("✅ All caches cleared")
-    }
-}
 
 
-
-/// IAP View Images
-enum IAPImage: String, CaseIterable {
-    /// Raw value represents the asset image
-    case one = "IAP1"
-    case two = "IAP2"
-    case three = "IAP3"
-    case four = "IAP4"
-}
-
-
-struct ProSubscriptionView: View {
-    @State private var loadingStatus: (Bool, Bool) = (false, false)
-    @State private var snappedItem = 0.0
-    @State private var draggingItem = 0.0
-    @State var activeIndex: Int = 0
-    
-    let subscriptionFeatures: [SubscriptionFeatures] = [
-        .init(id: 14, title: "Unlimited Items & Rankos", icon: "infinity", description: "Create as many Rankos and items in Rankos as you want!"),
-        .init(id: 13, title: "Create New Blank Items", icon: "rectangle.dashed", description: "Add blank items to your Rankos!"),
-        .init(id: 12, title: "Add Custom Images to Items", icon: "photo.fill", description: "Add custom photos from your camera roll to your items!"),
-        .init(id: 11, title: "Download & Export Rankos", icon: "arrow.down.circle.fill", description: "Download your Rankos for Offline Use and also export via csv and soon other formats!"),
-        .init(id: 10, title: "New Folders & Tags", icon: "square.grid.3x1.folder.fill.badge.plus", description: "Organise all your Rankos into folders and tags, seperate a series of Rankos by categories or anything practically!"),
-        .init(id: 9, title: "Unlock Pro App Icons", icon: "apps.iphone", description: "Unlock all pro app icons in the Customise App section!"),
-        .init(id: 8, title: "Pin 20 Rankos", icon: "pin.fill", description: "Pin 20 Rankos to your Feature View for quick access and to show friends and the community!"),
-        .init(id: 7, title: "Clone Rankos", icon: "square.fill.on.square.fill", description: "Copy other users Rankos and create your very own version of their creation!"),
-        .init(id: 6, title: "Collaborate on Rankos", icon: "person.3.fill", description: "Collaborate with friends and family on Rankos!"),
-        .init(id: 5, title: "Integrate with Spotify", icon: "music.note", description: "Add your favourite artists, albums, songs, playlists and more to your Rankos. More integrations to come soon!"),
-        .init(id: 4, title: "Search Community Rankos", icon: "rectangle.and.text.magnifyingglass", description: "Search All Public Community Rankos"),
-        .init(id: 3, title: "Personal Homepage", icon: "star.bubble.fill", description: "Get community Rankos on your homepage that fit your interests and Rankos you've created"),
-        .init(id: 2, title: "Save Rankos", icon: "star.fill", description: "Save communities and friends Rankos to your library to look at again later!"),
-        .init(id: 1, title: "Archive Rankos", icon: "archivebox.fill", description: "Archive your Rankos that you don't want showing up in your library anymore without deleting them!")
-    ]
-    
-    var body: some View {
-        
-        VStack(spacing: 0) {
-            SubscriptionStoreView(productIDs: Self.productIDs, marketingContent: {
-                CustomMarketingView()
-            })
-            .subscriptionStoreControlStyle(.pagedProminentPicker, placement: .bottomBar)
-            .subscriptionStorePickerItemBackground(.ultraThinMaterial)
-            .storeButton(.visible, for: .restorePurchases)
-            .storeButton(.hidden, for: .policies)
-            .onInAppPurchaseStart { product in
-                print("Show Loading Screen")
-                print("Purchasing \(product.displayName)")
-            }
-            .onInAppPurchaseCompletion { product, result in
-                switch result {
-                case .success(let result):
-                    switch result {
-                    case .success(_): print("Success and verify purchase using verification result")
-                    case .pending: print("Pending Action")
-                    case .userCancelled: print("User Cancelled")
-                    @unknown default:
-                        fatalError()
-                    }
-                case .failure(let error):
-                    print(error.localizedDescription)
-                }
-                
-                print("Hide Loading Screen")
-            }
-            .subscriptionStatusTask(for: "4205BB53") {
-                if let result = $0.value {
-                    let premiumUser = !result.filter({ $0.state == .subscribed }).isEmpty
-                    print("User Subscribed = \(premiumUser)")
-                    
-                }
-                
-                print("[subscriptionStatusTask] Subscription status checked")
-                loadingStatus.1 = true
-            }
-            
-            /// Privacy Policy & Terms of Service
-            HStack(alignment: .center, spacing: 3) {
-                Link("Terms of Service", destination: URL(string: "https://apple.com")!)
-                
-                Text("&")
-                
-                Link("Privacy Policy", destination: URL(string: "https://apple.com")!)
-            }
-            .font(.caption)
-            .padding(.bottom, 30)
-            .padding(.top, 15)
-        }
-        .padding(.top, 50)
-        .ignoresSafeArea()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .opacity(isLoadingCompleted ? 1 : 0)
-        .background(BackdropView())
-        .overlay {
-            if !isLoadingCompleted {
-                ProgressView()
-                    .font(.largeTitle)
-            }
-        }
-        .animation(.easeInOut(duration: 0.35), value: isLoadingCompleted)
-        .storeProductsTask(for: Self.productIDs) { @MainActor collection in
-            if let products = collection.products, products.count == Self.productIDs.count {
-                try? await Task.sleep(for: .seconds(0.1))
-                print("[storeProductsTask] Products loaded successfully")
-                loadingStatus.0 = true
-            }
-        }
-        .accentColor(.white)
-        .environment(\.colorScheme, .dark)
-        .tint(.white)
-        .statusBarHidden()
-        .ignoresSafeArea()
-    }
-    
-    var isLoadingCompleted: Bool {
-        loadingStatus.0 && loadingStatus.1
-    }
-    
-    static var productIDs: [String] {
-        return ["pro_weekly", "pro_monthly", "pro_yearly"]
-    }
-    
-    /// Backdrop View
-    @ViewBuilder
-    func BackdropView() -> some View {
-        GeometryReader {
-            let size = $0.size
-            
-            /// This is a Dark image, but you can use your own image as per your needs!
-            Image("IAP4")
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(width: size.width, height: size.height)
-                .scaleEffect(1.5)
-                .blur(radius: 70, opaque: true)
-                .overlay {
-                    Rectangle()
-                        .fill(.black.opacity(0.2))
-                }
-                .ignoresSafeArea()
-        }
-    }
-    
-    /// Custom Marketing View (Header View)
-    @ViewBuilder
-    func CustomMarketingView() -> some View {
-        VStack(spacing: 15) {
-            /// Replace with your App Information
-            VStack(spacing: 18) {
-                HStack(spacing: 16) {
-                    ThreeRectanglesAnimation(rectangleWidth: 14, rectangleMaxHeight: 40, rectangleSpacing: 3, rectangleCornerRadius: 2, animationDuration: 0.8)
-                        .frame(height: 60)
-                    
-                    Text("Ranko Pro")
-                        .font(.system(size: 28, weight: .black, design: .default))
-                        .padding(.top, 25)
-                        .padding(.trailing, 20)
-                }
-                .frame(height: 60)
-            }
-            .foregroundStyle(.white)
-            ZStack {
-                ForEach(subscriptionFeatures) { item in
-                    
-                    // article view
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 18)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: 0x041913), Color(hex: 0x0D3632), Color(hex: 0x175158), Color(hex: 0x1E565F)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        VStack {
-                            HStack {
-                                Image(systemName: item.icon)
-                                    .font(.system(size: 18, weight: .heavy, design: .default))
-                                Text(item.title)
-                                    .font(.system(size: 18, weight: .heavy, design: .rounded))
-                            }
-                            Text(item.description)
-                                .font(.system(size: 12, weight: .regular, design: .default))
-                                .multilineTextAlignment(.leading)
-                                .padding(.top, 8)
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                    .frame(width: 350, height: 150)
-                    .scaleEffect(1.0 - abs(distance(item.id)) * 0.2 )
-                    .opacity(1.0 - abs(distance(item.id)) * 0.3 )
-                    .offset(x: myXOffset(item.id), y: 0)
-                    .zIndex(1.0 - abs(distance(item.id)) * 0.1)
-                    .onTapGesture {
-                        withAnimation {
-                            draggingItem = Double(item.id)
-                        }
-                    }
-                }
-            }
-            .gesture(getDragGesture())
-            .padding(.top, 50)
-        }
-        .padding(.top, -60)
-    }
-    
-    private func getDragGesture() -> some Gesture {
-        
-        DragGesture()
-            .onChanged { value in
-                draggingItem = snappedItem + value.translation.width / 400
-            }
-            .onEnded { value in
-                withAnimation {
-                    draggingItem = snappedItem + value.predictedEndTranslation.width / 400
-                    draggingItem = round(draggingItem).remainder(dividingBy: Double(subscriptionFeatures.count))
-                    snappedItem = draggingItem
-                    
-                    //Get the active Item index
-                    self.activeIndex = subscriptionFeatures.count + Int(draggingItem)
-                    if self.activeIndex > subscriptionFeatures.count || Int(draggingItem) >= 0 {
-                        self.activeIndex = Int(draggingItem)
-                    }
-                }
-            }
-    }
-    
-    func distance(_ item: Int) -> Double {
-        return (draggingItem - Double(item)).remainder(dividingBy: Double(subscriptionFeatures.count))
-    }
-    
-    func myXOffset(_ item: Int) -> Double {
-        let angle = Double.pi * 2 / Double(subscriptionFeatures.count) * distance(item)
-        return sin(angle) * 200
-    }
-}
-
-// used in HomeView
-struct SubscriptionStatusManager {
-    static func fetchSubscriptionStatus(
-        for groupID: String,
-        productIDs: [String]
-    ) async -> (isSubscribed: Bool, productID: String?) {
-        do {
-            let statuses = try await Product.SubscriptionInfo.status(for: groupID)
-
-            if let subscribedStatus = statuses.first(where: { $0.state == .subscribed }) {
-                // Get the verified renewal info
-                let verifiedRenewal = subscribedStatus.renewalInfo
-
-                switch verifiedRenewal {
-                case .verified(let renewalInfo):
-                    return (true, renewalInfo.currentProductID)
-                case .unverified(_, let error):
-                    print("❌ Renewal info unverified:", error.localizedDescription)
-                    return (true, nil)
-                }
-            }
-        } catch {
-            print("❌ Error fetching subscription info:", error.localizedDescription)
-        }
-
-        return (false, nil)
-    }
-}
-
-@MainActor
-func updateGlobalSubscriptionStatus(groupID: String, productIDs: [String]) async {
-    let result = await SubscriptionStatusManager.fetchSubscriptionStatus(for: groupID, productIDs: productIDs)
-    UserDefaults.standard.set(result.isSubscribed ? 1 : 0, forKey: "isProUser")
-    UserDefaults.standard.set(result.productID, forKey: "activeProductID")
-}
+///// IAP View Images
+//enum IAPImage: String, CaseIterable {
+//    /// Raw value represents the asset image
+//    case one = "IAP1"
+//    case two = "IAP2"
+//    case three = "IAP3"
+//    case four = "IAP4"
+//}
+//
+//
+//struct ProSubscriptionView: View {
+//    @State private var loadingStatus: (Bool, Bool) = (false, false)
+//    @State private var snappedItem = 0.0
+//    @State private var draggingItem = 0.0
+//    @State var activeIndex: Int = 0
+//    
+//    let subscriptionFeatures: [SubscriptionFeatures] = [
+//        .init(id: 14, title: "Unlimited Items & Rankos", icon: "infinity", description: "Create as many Rankos and items in Rankos as you want!"),
+//        .init(id: 13, title: "Create New Blank Items", icon: "rectangle.dashed", description: "Add blank items to your Rankos!"),
+//        .init(id: 12, title: "Add Custom Images to Items", icon: "photo.fill", description: "Add custom photos from your camera roll to your items!"),
+//        .init(id: 11, title: "Download & Export Rankos", icon: "arrow.down.circle.fill", description: "Download your Rankos for Offline Use and also export via csv and soon other formats!"),
+//        .init(id: 10, title: "New Folders & Tags", icon: "square.grid.3x1.folder.fill.badge.plus", description: "Organise all your Rankos into folders and tags, seperate a series of Rankos by categories or anything practically!"),
+//        .init(id: 9, title: "Unlock Pro App Icons", icon: "apps.iphone", description: "Unlock all pro app icons in the Customise App section!"),
+//        .init(id: 8, title: "Pin 20 Rankos", icon: "pin.fill", description: "Pin 20 Rankos to your Feature View for quick access and to show friends and the community!"),
+//        .init(id: 7, title: "Clone Rankos", icon: "square.fill.on.square.fill", description: "Copy other users Rankos and create your very own version of their creation!"),
+//        .init(id: 6, title: "Collaborate on Rankos", icon: "person.3.fill", description: "Collaborate with friends and family on Rankos!"),
+//        .init(id: 5, title: "Integrate with Spotify", icon: "music.note", description: "Add your favourite artists, albums, songs, playlists and more to your Rankos. More integrations to come soon!"),
+//        .init(id: 4, title: "Search Community Rankos", icon: "rectangle.and.text.magnifyingglass", description: "Search All Public Community Rankos"),
+//        .init(id: 3, title: "Personal Homepage", icon: "star.bubble.fill", description: "Get community Rankos on your homepage that fit your interests and Rankos you've created"),
+//        .init(id: 2, title: "Save Rankos", icon: "star.fill", description: "Save communities and friends Rankos to your library to look at again later!"),
+//        .init(id: 1, title: "Archive Rankos", icon: "archivebox.fill", description: "Archive your Rankos that you don't want showing up in your library anymore without deleting them!")
+//    ]
+//    
+//    var body: some View {
+//        
+//        VStack(spacing: 0) {
+//            SubscriptionStoreView(productIDs: Self.productIDs, marketingContent: {
+//                CustomMarketingView()
+//            })
+//            .subscriptionStoreControlStyle(.pagedProminentPicker, placement: .bottomBar)
+//            .subscriptionStorePickerItemBackground(.ultraThinMaterial)
+//            .storeButton(.visible, for: .restorePurchases)
+//            .storeButton(.hidden, for: .policies)
+//            .onInAppPurchaseStart { product in
+//                print("Show Loading Screen")
+//                print("Purchasing \(product.displayName)")
+//            }
+//            .onInAppPurchaseCompletion { product, result in
+//                switch result {
+//                case .success(let result):
+//                    switch result {
+//                    case .success(_): print("Success and verify purchase using verification result")
+//                    case .pending: print("Pending Action")
+//                    case .userCancelled: print("User Cancelled")
+//                    @unknown default:
+//                        fatalError()
+//                    }
+//                case .failure(let error):
+//                    print(error.localizedDescription)
+//                }
+//                
+//                print("Hide Loading Screen")
+//            }
+//            .subscriptionStatusTask(for: "D546B9ED") {
+//                if let result = $0.value {
+//                    let premiumUser = !result.filter({ $0.state == .subscribed }).isEmpty
+//                    print("User Subscribed = \(premiumUser)")
+//                    
+//                }
+//                
+//                print("[subscriptionStatusTask] Subscription status checked")
+//                loadingStatus.1 = true
+//            }
+//            
+//            /// Privacy Policy & Terms of Service
+//            HStack(alignment: .center, spacing: 3) {
+//                Link("Terms of Service", destination: URL(string: "https://apple.com")!)
+//                
+//                Text("&")
+//                
+//                Link("Privacy Policy", destination: URL(string: "https://apple.com")!)
+//            }
+//            .font(.caption)
+//            .padding(.bottom, 30)
+//            .padding(.top, 15)
+//        }
+//        .padding(.top, 50)
+//        .ignoresSafeArea()
+//        .frame(maxWidth: .infinity, maxHeight: .infinity)
+//        .opacity(isLoadingCompleted ? 1 : 0)
+//        .background(BackdropView())
+//        .overlay {
+//            if !isLoadingCompleted {
+//                ProgressView()
+//                    .font(.largeTitle)
+//            }
+//        }
+//        .animation(.easeInOut(duration: 0.35), value: isLoadingCompleted)
+//        .storeProductsTask(for: Self.productIDs) { @MainActor collection in
+//            if let products = collection.products, products.count == Self.productIDs.count {
+//                try? await Task.sleep(for: .seconds(0.1))
+//                print("[storeProductsTask] Products loaded successfully")
+//                loadingStatus.0 = true
+//            }
+//        }
+//        .accentColor(.white)
+//        .environment(\.colorScheme, .dark)
+//        .tint(.white)
+//        .statusBarHidden()
+//        .ignoresSafeArea()
+//    }
+//    
+//    var isLoadingCompleted: Bool {
+//        loadingStatus.0 && loadingStatus.1
+//    }
+//    
+//    static var productIDs: [String] {
+//        return ["platinum_weekly", "platinum_monthly", "platinum_yearly"]
+//    }
+//    
+//    /// Backdrop View
+//    @ViewBuilder
+//    func BackdropView() -> some View {
+//        GeometryReader {
+//            let size = $0.size
+//            
+//            /// This is a Dark image, but you can use your own image as per your needs!
+//            Image("IAP4")
+//                .resizable()
+//                .aspectRatio(contentMode: .fill)
+//                .frame(width: size.width, height: size.height)
+//                .scaleEffect(1.5)
+//                .blur(radius: 70, opaque: true)
+//                .overlay {
+//                    Rectangle()
+//                        .fill(.black.opacity(0.2))
+//                }
+//                .ignoresSafeArea()
+//        }
+//    }
+//    
+//    /// Custom Marketing View (Header View)
+//    @ViewBuilder
+//    func CustomMarketingView() -> some View {
+//        VStack(spacing: 15) {
+//            /// Replace with your App Information
+//            VStack(spacing: 18) {
+//                HStack(spacing: 16) {
+//                    ThreeRectanglesAnimation(rectangleWidth: 14, rectangleMaxHeight: 40, rectangleSpacing: 3, rectangleCornerRadius: 2, animationDuration: 0.8)
+//                        .frame(height: 60)
+//                    
+//                    Text("Ranko Pro")
+//                        .font(.system(size: 28, weight: .black, design: .default))
+//                        .padding(.top, 25)
+//                        .padding(.trailing, 20)
+//                }
+//                .frame(height: 60)
+//            }
+//            .foregroundStyle(.white)
+//            ZStack {
+//                ForEach(subscriptionFeatures) { item in
+//                    
+//                    // article view
+//                    ZStack {
+//                        RoundedRectangle(cornerRadius: 18)
+//                            .fill(
+//                                LinearGradient(
+//                                    colors: [Color(hex: 0x041913), Color(hex: 0x0D3632), Color(hex: 0x175158), Color(hex: 0x1E565F)],
+//                                    startPoint: .leading,
+//                                    endPoint: .trailing
+//                                )
+//                            )
+//                        VStack {
+//                            HStack {
+//                                Image(systemName: item.icon)
+//                                    .font(.system(size: 18, weight: .heavy, design: .default))
+//                                Text(item.title)
+//                                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+//                            }
+//                            Text(item.description)
+//                                .font(.system(size: 12, weight: .regular, design: .default))
+//                                .multilineTextAlignment(.leading)
+//                                .padding(.top, 8)
+//                        }
+//                        .padding(.horizontal, 20)
+//                    }
+//                    .frame(width: 350, height: 150)
+//                    .scaleEffect(1.0 - abs(distance(item.id)) * 0.2 )
+//                    .opacity(1.0 - abs(distance(item.id)) * 0.3 )
+//                    .offset(x: myXOffset(item.id), y: 0)
+//                    .zIndex(1.0 - abs(distance(item.id)) * 0.1)
+//                    .onTapGesture {
+//                        withAnimation {
+//                            draggingItem = Double(item.id)
+//                        }
+//                    }
+//                }
+//            }
+//            .gesture(getDragGesture())
+//            .padding(.top, 50)
+//        }
+//        .padding(.top, -60)
+//    }
+//    
+//    private func getDragGesture() -> some Gesture {
+//        
+//        DragGesture()
+//            .onChanged { value in
+//                draggingItem = snappedItem + value.translation.width / 400
+//            }
+//            .onEnded { value in
+//                withAnimation {
+//                    draggingItem = snappedItem + value.predictedEndTranslation.width / 400
+//                    draggingItem = round(draggingItem).remainder(dividingBy: Double(subscriptionFeatures.count))
+//                    snappedItem = draggingItem
+//                    
+//                    //Get the active Item index
+//                    self.activeIndex = subscriptionFeatures.count + Int(draggingItem)
+//                    if self.activeIndex > subscriptionFeatures.count || Int(draggingItem) >= 0 {
+//                        self.activeIndex = Int(draggingItem)
+//                    }
+//                }
+//            }
+//    }
+//    
+//    func distance(_ item: Int) -> Double {
+//        return (draggingItem - Double(item)).remainder(dividingBy: Double(subscriptionFeatures.count))
+//    }
+//    
+//    func myXOffset(_ item: Int) -> Double {
+//        let angle = Double.pi * 2 / Double(subscriptionFeatures.count) * distance(item)
+//        return sin(angle) * 200
+//    }
+//}
+//
+//// used in HomeView
+//struct SubscriptionStatusManager {
+//    static func fetchSubscriptionStatus(
+//        for groupID: String,
+//        productIDs: [String]
+//    ) async -> (isSubscribed: Bool, productID: String?) {
+//        do {
+//            let statuses = try await Product.SubscriptionInfo.status(for: groupID)
+//
+//            if let subscribedStatus = statuses.first(where: { $0.state == .subscribed }) {
+//                // Get the verified renewal info
+//                let verifiedRenewal = subscribedStatus.renewalInfo
+//
+//                switch verifiedRenewal {
+//                case .verified(let renewalInfo):
+//                    return (true, renewalInfo.currentProductID)
+//                case .unverified(_, let error):
+//                    print("❌ Renewal info unverified:", error.localizedDescription)
+//                    return (true, nil)
+//                }
+//            }
+//        } catch {
+//            print("❌ Error fetching subscription info:", error.localizedDescription)
+//        }
+//
+//        return (false, nil)
+//    }
+//}
 
 // MARK: - Feature Model (reuse your existing one if already in project)
 struct SubscriptionFeatures: Identifiable {
@@ -904,18 +584,20 @@ struct SubscriptionFeatures: Identifiable {
 // MARK: - RankoPlatinumView
 struct RankoPlatinumView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var purchaseController = PurchaseController.shared
+    @EnvironmentObject private var purchaseController: PurchaseController  // <-- use the shared one
     @StateObject private var user_data = UserInformation.shared
 
-    // tabs
     enum PlatinumTab: String, CaseIterable { case features = "Features", plans = "Plans" }
     @State private var currentTab: PlatinumTab = .features
 
-    // storekit
-    private let productIDs = ["pro_weekly", "pro_monthly", "pro_yearly"]
+    private let productIDs = ["platinum_weekly", "platinum_monthly", "platinum_yearly"]
     @State private var products: [Product] = []
     @State private var isSyncing = false
     @State private var purchaseInFlight: String? = nil
+
+    // loading gate so we can show a spinner before we know the state
+    @State private var entitlementsChecked = false
+    @State private var showManageSubscriptions = false
 
     // content
     private let features: [SubscriptionFeatures] = [
@@ -953,7 +635,7 @@ struct RankoPlatinumView: View {
                     .padding(.trailing, 16)
                     .padding(.top, 12)
                 }
-
+                
                 // Header
                 VStack(spacing: 14) {
                     Image("Platinum_AppIcon")
@@ -961,7 +643,7 @@ struct RankoPlatinumView: View {
                         .scaledToFit()
                         .frame(height: 120)
                         .shadow(radius: 8, y: 4)
-
+                    
                     Text("BECOME A PLATINUM MEMBER")
                         .font(.custom("Nunito-Black", size: 22))
                         .kerning(1.1)
@@ -970,7 +652,7 @@ struct RankoPlatinumView: View {
                         .padding(.horizontal, 24)
                 }
                 .padding(.top, 6)
-
+                
                 // Tabs
                 Picker("", selection: $currentTab) {
                     ForEach(PlatinumTab.allCases, id: \.self) { tab in
@@ -980,12 +662,18 @@ struct RankoPlatinumView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal, 16)
                 .padding(.top, 18)
-
+                
                 // Content
                 Group {
                     switch currentTab {
-                    case .features: featuresTab(proxy: proxy)
-                    case .plans:    plansTab()
+                    case .features:
+                        featuresTab(proxy: proxy)
+                    case .plans:
+                        if purchaseController.autoRenews ?? true {
+                            subscribedView()
+                        } else {
+                            plansTabContent()
+                        }
                     }
                 }
                 .padding(.top, 10)
@@ -993,7 +681,21 @@ struct RankoPlatinumView: View {
             .background(Color.white.ignoresSafeArea())
             .task {
                 await loadProducts()
+                await purchaseController.refreshEntitlements()
+                print("loaded products:", products.map(\.id))
             }
+            .subscriptionStatusTask(for: "D546B9ED") { _ in
+                await purchaseController.refreshEntitlements()
+            }
+            .task {
+                // fully qualify to avoid any “Transaction is ambiguous” issues
+                for await _ in StoreKit.Transaction.updates {
+                    await purchaseController.refreshEntitlements()
+                }
+            }
+        }
+        .onChange(of: purchaseController.isProUser) {
+            print("🔎 isPro=\(purchaseController.isProUser), productID=\(purchaseController.activeProductID ?? "nil"), PlatinumID=\(user_data.platinumID)")
         }
     }
 
@@ -1046,13 +748,49 @@ struct RankoPlatinumView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
                 .padding(.bottom, 28)
+                
+                VStack {
+                    Button("Manage My Subscriptions") {
+                        showManageSubscriptions = true
+                    }
+                    .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
+                }
             }
+        }
+        .onAppear {
+            print("🔎 isPro=\(purchaseController.isProUser), productID=\(purchaseController.activeProductID ?? "nil"), PlatinumID=\(user_data.platinumID)")
         }
     }
 
     // MARK: - Plans Tab
     @ViewBuilder
-    private func plansTab() -> some View {
+    private func subscribedView() -> some View {
+        VStack(spacing: 16) {
+            Button {
+                Task {
+                    if let scene = UIApplication.shared.connectedScenes
+                        .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+                        try? await AppStore.showManageSubscriptions(in: scene)
+                    }
+                }
+            } label: {
+                Text("Manage Subscription")
+                    .font(.custom("Nunito-Black", size: 15))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.black, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding()
+        .onAppear {
+            print("🔎 isPro=\(purchaseController.isProUser), productID=\(purchaseController.activeProductID ?? "nil"), PlatinumID=\(user_data.platinumID)")
+        }
+    }
+    
+    @ViewBuilder
+    private func plansTabContent() -> some View {
         VStack(spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
@@ -1062,15 +800,34 @@ struct RankoPlatinumView: View {
                             activeProductID: purchaseController.activeProductID,
                             isLoading: purchaseInFlight == product.id
                         ) {
+                            // Perform async/throwing work inside a Task
                             Task {
                                 purchaseInFlight = product.id
                                 defer { purchaseInFlight = nil }
+
+                                print("🛒 purchasing \(product.id)")
                                 do {
-                                    _ = try await product.purchase()
-                                    // listener will pick it up, but refresh for snappier UI
-                                    await purchaseController.refreshEntitlements()
+                                    let result = try await product.purchase()
+                                    print("🛒 purchase result = \(result)")
+
+                                    switch result {
+                                    case .success(let verification):
+                                        switch verification {
+                                        case .verified(let tx):          // ✅ signature verified
+                                            await PurchaseController.shared.recordPlatinum(from: tx, product: product)
+                                            await PurchaseController.shared.refreshEntitlements()
+
+                                        case .unverified(_, let err):    // ❌ signature not verified
+                                            print("❌ Unverified purchase:", err.localizedDescription)
+                                        }
+
+                                    case .userCancelled, .pending:
+                                        break
+                                    @unknown default:
+                                        break
+                                    }
                                 } catch {
-                                    print("purchase error:", error.localizedDescription)
+                                    print("🛒 purchase error:", error.localizedDescription)
                                 }
                             }
                         }
@@ -1080,7 +837,7 @@ struct RankoPlatinumView: View {
                 .padding(.top, 6)
                 .padding(.bottom, 6)
             }
-
+            
             HStack(spacing: 14) {
                 Button {
                     Task {
@@ -1094,9 +851,9 @@ struct RankoPlatinumView: View {
                         Text("Restore Purchases")
                     }
                 }
-
+                
                 Spacer()
-
+                
                 Link("Terms of Service", destination: URL(string: "https://apple.com")!)
                 Text("•").foregroundColor(.black.opacity(0.4))
                 Link("Privacy", destination: URL(string: "https://apple.com")!)
@@ -1105,14 +862,45 @@ struct RankoPlatinumView: View {
             .foregroundColor(.black.opacity(0.75))
             .padding(.horizontal, 16)
             .padding(.bottom, 18)
-            Spacer(minLength: 0)
+            
+            if purchaseController.isEntitled {
+                let current = purchaseController.activeProductID ?? "—"
+                let next = purchaseController.nextProductID
+                let renewOn = purchaseController.renewalOn
+
+                if let next, next != current, purchaseController.autoRenews == true {
+                    Text("Current: \(prettyPlanName(current)) • Will switch to \(prettyPlanName(next)) on \(renewOn?.formatted(date: .abbreviated, time: .omitted) ?? "next renewal")")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                } else if purchaseController.autoRenews == false {
+                    Text("Active — Renewal Off • Expires \(purchaseController.expiresOn?.formatted(date: .abbreviated, time: .omitted) ?? "")")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                } else {
+                    Text("Active — Renews Automatically")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+    
+    private func prettyPlanName(_ id: String) -> String {
+        switch id {
+        case "platinum_weekly":  return "Weekly"
+        case "platinum_monthly": return "Monthly"
+        case "platinum_yearly":  return "Yearly"
+        default:            return id
         }
     }
 
     // MARK: - Helpers
     private func sortedProducts(_ products: [Product]) -> [Product] {
         // keep the horizontal order: weekly, monthly, yearly (matches your IDs)
-        let order = ["pro_weekly", "pro_monthly", "pro_yearly"]
+        let order = ["platinum_weekly", "platinum_monthly", "platinum_yearly"]
         return products.sorted { a, b in
             order.firstIndex(of: a.id) ?? 99 < order.firstIndex(of: b.id) ?? 99
         }
@@ -1147,6 +935,10 @@ private struct PlanCard: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(Color.black.opacity(0.06), in: Capsule())
+            
+            Text("\(freePeriod(for: product.id)), then".uppercased())
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.black.opacity(0.6))
 
             // price
             Text(product.displayPrice)
@@ -1171,7 +963,7 @@ private struct PlanCard: View {
             Button(action: onPurchase) {
                 HStack {
                     if isLoading { ProgressView().tint(.white) }
-                    Text(isActive ? "Subscribed" : (isLoading ? "Processing…" : "Choose Plan"))
+                    Text(isLoading ? "Processing…" : "Choose Plan")
                         .font(.custom("Nunito-Black", size: 15))
                 }
                 .frame(maxWidth: .infinity)
@@ -1180,7 +972,6 @@ private struct PlanCard: View {
                             in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .foregroundColor(isActive ? .black : .white)
             }
-            .disabled(isActive || isLoading)
         }
         .padding(16)
         .frame(width: 260, height: 220)
@@ -1191,27 +982,27 @@ private struct PlanCard: View {
 
     private func planName(for id: String) -> String {
         switch id {
-        case "pro_weekly":  return "Weekly"
-        case "pro_monthly": return "Monthly"
-        case "pro_yearly":  return "Yearly"
+        case "platinum_weekly":  return "Weekly"
+        case "platinum_monthly": return "Monthly"
+        case "platinum_yearly":  return "Yearly"
         default:            return product.displayName
         }
     }
 
     private func planBlurb(for id: String) -> String {
         switch id {
-        case "pro_weekly":  return "Low-Commitment"
-        case "pro_monthly": return "Most Popular"
-        case "pro_yearly":  return "Best Value"
+        case "platinum_weekly":  return "Low-Commitment"
+        case "platinum_monthly": return "Most Popular"
+        case "platinum_yearly":  return "Best Value"
         default:            return product.description
         }
     }
     
     private func freePeriod(for id: String) -> String {
         switch id {
-        case "pro_weekly":  return "one week free"
-        case "pro_monthly": return "one month free"
-        case "pro_yearly":  return "one month free"
+        case "platinum_weekly":  return "one week free"
+        case "platinum_monthly": return "one month free"
+        case "platinum_yearly":  return "one month free"
         default:            return product.description
         }
     }
@@ -2957,17 +2748,146 @@ struct DataStorageView: View {
     }
 }
 
+private struct AboutInfo {
+    struct Creator { let name: String; let role: String }
+    struct Credits { let contributors: [String]; let techStack: [String] }
+    struct Support { let contactEmail: String; let bugReportLink: String; let faqLink: String }
+    struct Community { let instagram: String; let twitter: String; let discord: String }
+    struct Policies { let privacyPolicyURL: String; let termsOfUseURL: String }
+    struct FunFacts { let totalRankosCreated: String; let mostPopularCategory: String; let easterEgg: String }
+
+    let appName: String
+    let version: String      // latest (from Firebase)
+    let buildNumber: String  // latest (from Firebase)
+    let tagline: String
+    let mission: String
+    let creator: Creator
+    let credits: Credits
+    let support: Support
+    let community: Community
+    let policies: Policies
+    let funFacts: FunFacts
+    let lastUpdated: String
+
+    static func from(_ any: Any?) -> AboutInfo? {
+        guard let dict = any as? [String: Any] else { return nil }
+
+        func str(_ key: String, _ fallback: String = "") -> String { dict[key] as? String ?? fallback }
+        func sub(_ key: String) -> [String: Any] { dict[key] as? [String: Any] ?? [:] }
+
+        let creator = sub("Creator")
+        let credits = sub("Credits")
+        let support = sub("Support")
+        let community = sub("Community")
+        let policies = sub("Policies")
+        let fun = sub("FunFacts")
+
+        return AboutInfo(
+            appName: str("AppName", "Ranko"),
+            version: str("Version", "1.0.0"),
+            buildNumber: str("BuildNumber", "1"),
+            tagline: str("Tagline", "Rank anything. Share everything."),
+            mission: str("Mission", ""),
+            creator: .init(
+                name: creator["Name"] as? String ?? "—",
+                role: creator["Role"] as? String ?? "—"
+            ),
+            credits: .init(
+                contributors: credits["Contributors"] as? [String] ?? [],
+                techStack: credits["TechStack"] as? [String] ?? []
+            ),
+            support: .init(
+                // override email per your request
+                contactEmail: "ranko@gmail.com",
+                bugReportLink: support["BugReportLink"] as? String ?? "",
+                faqLink: support["FAQLink"] as? String ?? ""
+            ),
+            community: .init(
+                instagram: community["Instagram"] as? String ?? "",
+                twitter: community["Twitter"] as? String ?? "",
+                discord: community["Discord"] as? String ?? ""
+            ),
+            policies: .init(
+                privacyPolicyURL: policies["PrivacyPolicyURL"] as? String ?? "",
+                termsOfUseURL: policies["TermsOfUseURL"] as? String ?? ""
+            ),
+            funFacts: .init(
+                totalRankosCreated: fun["TotalRankosCreated"] as? String ?? "—",
+                mostPopularCategory: fun["MostPopularCategory"] as? String ?? "—",
+                easterEgg: fun["EasterEgg"] as? String ?? "—"
+            ),
+            lastUpdated: str("LastUpdated", "")
+        )
+    }
+}
+
+// MARK: - Reusable Section Card
+private struct SectionCard<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.custom("Nunito-Black", size: 18))
+                .foregroundColor(Color(hex: 0x514343))
+            content
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color(hex: 0x000000).opacity(0.06), radius: 10, x: 0, y: 5)
+        )
+        .padding(.horizontal, 25)
+    }
+}
+
+// MARK: - About View
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @Environment(\.displayScale) private var displayScale
     @StateObject private var user_data = UserInformation.shared
+
+    // callbacks you wanted
+    var onReportBug: () -> Void = {}
+    var onPrivacyPolicy: () -> Void = {}
+    var onTermsOfUse: () -> Void = {}
+    var onFAQ: () -> Void = {}
+
+    @State private var info: AboutInfo? = nil
+    @State private var isLoading = true
+    @State private var loadError: String? = nil
+
+    // device
+    private let device = UIDevice.current
+
+    // current app metadata (from bundle)
+    private var currentVersion: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
+    }
+    private var currentBuild: String {
+        (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "—"
+    }
+    
+    // helper to grab the current screen from context
+    private func currentScreen() -> UIScreen? {
+        // pick the key window’s scene and get its screen
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }?
+            .windowScene?
+            .screen
+    }
 
     var body: some View {
         ZStack {
-            Color(hex: 0xFFFFFF)
-                .ignoresSafeArea()
-            
+            Color(hex: 0xFFFFFF).ignoresSafeArea()
+
             VStack(alignment: .leading, spacing: 0) {
-                // Title
+                // Title Bar
                 HStack {
                     Text("About")
                         .font(.custom("Nunito-Black", size: 32))
@@ -2985,15 +2905,327 @@ struct AboutView: View {
                 }
                 .padding(.horizontal, 25)
                 .padding(.top, 40)
-                
+
                 RoundedRectangle(cornerRadius: 5)
                     .fill(Color(hex: 0x000000))
                     .frame(height: 3)
                     .opacity(0.08)
                     .padding(.horizontal, 25)
                     .padding(.top, 20)
-                Spacer()
+
+                // Content
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        if isLoading {
+                            loadingSkeleton
+                        } else if let loadError {
+                            errorView(loadError)
+                        } else if let i = info {
+                            identitySection(i)        // includes Current vs Latest
+                            deviceSection()           // new device info block
+                            supportSection(i)         // report bug/faq (custom handlers)
+                            communitySection(i)
+                            policiesSection(i)        // custom handlers
+                            creditsSection(i)
+                            funFactsSection(i)
+
+                            Text("Last updated: \(i.lastUpdated.isEmpty ? "—" : i.lastUpdated)")
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(Color(hex: 0x514343).opacity(0.6))
+                                .padding(.horizontal, 25)
+                                .padding(.top, 4)
+                                .padding(.bottom, 24)
+                        }
+                    }
+                    .padding(.top, 20)
+                }
             }
+        }
+        .onAppear(perform: fetchAboutInfo)
+    }
+
+    // MARK: - Sections
+
+    // Current (Bundle) vs Latest (Firebase)
+    private func identitySection(_ i: AboutInfo) -> some View {
+        SectionCard(title: "App Identity") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(i.appName)
+                    .font(.custom("Nunito-Black", size: 22))
+                    .foregroundColor(Color(hex: 0x514343))
+
+                Text(i.tagline)
+                    .font(.custom("Nunito-Black", size: 14))
+                    .foregroundColor(Color(hex: 0x514343).opacity(0.8))
+
+                Text(i.mission)
+                    .font(.custom("Nunito-Black", size: 13))
+                    .foregroundColor(Color(hex: 0x514343).opacity(0.8))
+                    .padding(.top, 4)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack { pill("Current Version \(currentVersion)")   ; Spacer();   pill("Current Build \(currentBuild)") }
+                    HStack { pill("Latest Version   \(i.version)")        ; Spacer();   pill("Latest Build   \(i.buildNumber)") }
+                }
+                .padding(.top, 6)
+            }
+        }
+    }
+
+    // NEW: Device Information
+    private func deviceSection() -> some View {
+        SectionCard(title: "Device Information") {
+            VStack(alignment: .leading, spacing: 6) {
+                row("Device Name", UIDevice.current.name, icon: "iphone")
+                row("Device Model", UIDevice.current.model, icon: "cpu")
+                row("Localized Model", UIDevice.current.localizedModel, icon: "globe")
+                row("System Name", UIDevice.current.systemName, icon: "gearshape.fill")
+                row("System Version", UIDevice.current.systemVersion, icon: "number.circle.fill")
+                row("Identifier", UIDevice.current.identifierForVendor?.uuidString ?? "N/A", icon: "number")
+                row("Device Type", UIDevice.current.userInterfaceIdiom == .phone ? "iPhone" : "iPad", icon: "ipad.and.iphone")
+                row("Screen Width", "\(user_data.deviceWidth) px", icon: "rectangle.compress.vertical")
+                row("Screen Height", "\(user_data.deviceHeight) px", icon: "rectangle.expand.vertical")
+                row("Screen Scale", "\(displayScale) (\(Int(displayScale))x)", icon: "magnifyingglass")
+            }
+        }
+    }
+
+    private func supportSection(_ i: AboutInfo) -> some View {
+        SectionCard(title: "Support & Feedback") {
+            VStack(alignment: .leading, spacing: 10) {
+                labeledCopyRow("Email", i.support.contactEmail, icon: "envelope.fill") {
+                    UIPasteboard.general.string = i.support.contactEmail
+                }
+                buttonRow("Report a Bug", "exclamationmark.bubble.fill") {
+                    onReportBug()
+                    dismiss()
+                }
+                buttonRow("FAQ", "questionmark.circle.fill") {
+                    onFAQ()
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private func communitySection(_ i: AboutInfo) -> some View {
+        SectionCard(title: "Community") {
+            VStack(alignment: .leading, spacing: 10) {
+                buttonRow("Instagram", "camera.fill") { openURLIfPossible(i.community.instagram) }
+                buttonRow("Twitter / X", "bird.fill") { openURLIfPossible(i.community.twitter) }
+                buttonRow("Discord", "bubble.left.and.bubble.right.fill") { openURLIfPossible(i.community.discord) }
+            }
+        }
+    }
+
+    private func policiesSection(_ i: AboutInfo) -> some View {
+        SectionCard(title: "Policies & Legal") {
+            VStack(alignment: .leading, spacing: 10) {
+                buttonRow("Privacy Policy", "lock.fill") {
+                    onPrivacyPolicy()
+                    dismiss()
+                }
+                buttonRow("Terms of Use", "doc.text.fill") {
+                    onTermsOfUse()
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private func creditsSection(_ i: AboutInfo) -> some View {
+        SectionCard(title: "Credits") {
+            VStack(alignment: .leading, spacing: 8) {
+                labeledRow("Creator", "\(i.creator.name) — \(i.creator.role)", icon: "person.fill")
+                if !i.credits.contributors.isEmpty {
+                    labeledRow("Contributors", i.credits.contributors.joined(separator: ", "),
+                               icon: "hands.sparkles.fill")
+                }
+                if !i.credits.techStack.isEmpty {
+                    labeledRow("Tech Stack", i.credits.techStack.joined(separator: " · "),
+                               icon: "cpu.fill")
+                }
+            }
+        }
+    }
+
+    private func funFactsSection(_ i: AboutInfo) -> some View {
+        SectionCard(title: "Fun Extras") {
+            VStack(alignment: .leading, spacing: 10) {
+                labeledRow("Total Rankos", i.funFacts.totalRankosCreated, icon: "chart.bar.fill")
+                labeledRow("Top Category", i.funFacts.mostPopularCategory, icon: "star.fill")
+                labeledRow("Easter Egg", i.funFacts.easterEgg, icon: "sparkles")
+            }
+        }
+    }
+
+    // MARK: - UI Helpers
+    private func pill(_ text: String) -> some View {
+        Text(text)
+            .font(.custom("Nunito-Black", size: 12))
+            .foregroundColor(Color(hex: 0x514343))
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .background(Capsule().fill(Color(hex: 0x000000).opacity(0.05)))
+    }
+
+    private func row(_ title: String, _ value: String, icon: String) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(Color(hex: 0x514343))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.custom("Nunito-Black", size: 12))
+                    .foregroundColor(Color(hex: 0x514343).opacity(0.7))
+                Text(value.isEmpty ? "—" : value)
+                    .font(.custom("Nunito-Black", size: 14))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+    }
+
+    private func labeledRow(_ title: String, _ value: String, icon: String, onTap: (() -> Void)? = nil) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(Color(hex: 0x514343))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.custom("Nunito-Black", size: 12))
+                    .foregroundColor(Color(hex: 0x514343).opacity(0.7))
+                Text(value.isEmpty ? "—" : value)
+                    .font(.custom("Nunito-Black", size: 14))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap?()
+        }
+    }
+    
+    private func labeledCopyRow(_ title: String, _ value: String, icon: String, onTap: (() -> Void)? = nil) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(Color(hex: 0x514343))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.custom("Nunito-Black", size: 12))
+                    .foregroundColor(Color(hex: 0x514343).opacity(0.7))
+                Text(value.isEmpty ? "—" : value)
+                    .font(.custom("Nunito-Black", size: 14))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            
+            Button { UIPasteboard.general.string = value } label: {
+                HStack {
+                    Image(systemName: "square.fill.on.square.fill")
+                        .font(.system(size: 14, weight: .black))
+                        .padding(.vertical, 5)
+                    Text("Copy")
+                        .font(.custom("Nunito-Black", size: 11))
+                        .foregroundColor(Color(hex: 0x514343))
+                }
+                .padding(.vertical, -5)
+                .padding(.horizontal, 5)
+            }
+            .foregroundColor(Color(hex: 0x514343))
+            .tint(Color(hex: 0xFFFFFF))
+            .buttonStyle(.glassProminent)
+            .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func buttonRow(_ label: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .bold))
+            Text(label)
+                .font(.custom("Nunito-Black", size: 14))
+            Spacer()
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 14, weight: .bold))
+        }
+        .foregroundColor(Color(hex: 0x514343))
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
+    }
+
+    private var loadingSkeleton: some View {
+        VStack(spacing: 14) {
+            ForEach(0..<3, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: 0x000000).opacity(0.05))
+                    .frame(height: 120)
+                    .padding(.horizontal, 25)
+                    .redacted(reason: .placeholder)
+            }
+        }
+        .padding(.vertical, 30)
+    }
+
+    private func errorView(_ message: String) -> some View {
+        VStack(spacing: 10) {
+            Text("couldn’t load about info")
+                .font(.custom("Nunito-Black", size: 16))
+                .foregroundColor(Color(hex: 0x514343))
+            Text(message)
+                .font(.custom("Nunito-Black", size: 12))
+                .foregroundColor(Color(hex: 0x514343).opacity(0.7))
+            Button(action: fetchAboutInfo) {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 16, weight: .bold))
+                    Text("Retry").font(.custom("Nunito-Black", size: 14))
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+            }
+            .foregroundColor(Color(hex: 0x514343))
+            .tint(Color(hex: 0xFFFFFF))
+            .buttonStyle(.glassProminent)
+            .shadow(color: Color(hex: 0x000000).opacity(0.08), radius: 4, x: 0, y: 0)
+            .padding(.top, 6)
+        }
+        .padding(.top, 30)
+    }
+
+    // MARK: - Actions
+    private func openURLIfPossible(_ urlString: String) {
+        guard let url = URL(string: urlString), !urlString.isEmpty else { return }
+        openURL(url)
+    }
+
+    // MARK: - Firebase Fetch
+    private func fetchAboutInfo() {
+        isLoading = true
+        loadError = nil
+
+        let ref = Database.database().reference()
+            .child("AppData")
+            .child("Ranko")
+            .child("InformationData")
+
+        ref.observeSingleEvent(of: .value) { snapshot in
+            let value = snapshot.value
+            if let parsed = AboutInfo.from(value) {
+                self.info = parsed
+            } else {
+                self.loadError = "invalid or missing fields"
+            }
+            self.isLoading = false
+        } withCancel: { error in
+            self.loadError = error.localizedDescription
+            self.isLoading = false
         }
     }
 }

@@ -2086,7 +2086,11 @@ struct DefaultListPersonal: View {
                 "ItemDescription": it.record.ItemDescription,
                 "ItemImage":       it.record.ItemImage,
                 "ItemRank":        it.rank,
-                "ItemVotes":       it.votes
+                "ItemVotes":       it.votes,
+                "ItemGIF":         "",
+                "ItemVideo":       "",
+                "ItemAudio":       "",
+                "PlayCount":       0
             ]
         }
 

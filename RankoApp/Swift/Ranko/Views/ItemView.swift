@@ -515,7 +515,7 @@ struct EditItemView: View {
                             Image(systemName: "textformat.size.larger").foregroundColor(.gray)
                             TextField("Name *", text: $editedName)
                                 .autocorrectionDisabled(true)
-                                .font(.custom("Nunito-Bold", size: 18))
+                                .font(.custom("Nunito-Regular", size: 18))
                                 .foregroundStyle(Color.secondary)
                                 .focused($itemNameFocused)
                                 .onChange(of: editedName) { _, v in
@@ -523,7 +523,7 @@ struct EditItemView: View {
                                 }
                             Spacer()
                             Text("\(editedName.count)/50")
-                                .font(.custom("Nunito-Bold", size: 11))
+                                .font(.custom("Nunito-Regular", size: 11))
                                 .foregroundStyle(.secondary)
                         }
                         .onAppear { itemNameFocused = true }
@@ -540,7 +540,7 @@ struct EditItemView: View {
                             Image(systemName: "textformat.size.smaller").foregroundColor(.gray)
                             TextField("Description (optional)", text: $editedDescription, axis: .vertical)
                                 .autocorrectionDisabled(true)
-                                .font(.custom("Nunito-Bold", size: 18))
+                                .font(.custom("Nunito-Regular", size: 18))
                                 .foregroundStyle(Color.secondary)
                                 .lineLimit(1...3)
                                 .onChange(of: editedDescription) { _, v in
@@ -553,7 +553,7 @@ struct EditItemView: View {
                                 }
                             Spacer()
                             Text("\(editedDescription.count)/100")
-                                .font(.custom("Nunito-Bold", size: 11))
+                                .font(.custom("Nunito-Regular", size: 11))
                                 .foregroundStyle(.secondary)
                         }
                         .padding(10)

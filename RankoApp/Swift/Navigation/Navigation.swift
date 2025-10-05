@@ -284,7 +284,7 @@ struct CurvedTabBarView: View {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         // 5) pick layout with animation
-        withAnimation { selectedLayoutName = "Default" }
+        withAnimation { selectedLayoutName = "Tier" }
 
         // 6) 0.4s pause
         try? await Task.sleep(nanoseconds: 400_000_000)
@@ -797,7 +797,7 @@ struct CurvedTabBarView: View {
                                 }
                             } label: {
                                 Text("Cancel")
-                                    .font(.custom("Nunito-Bold", size: 20))
+                                    .font(.custom("Nunito-Regular", size: 20))
                             }
                             .foregroundStyle(Color(hex: 0xFFFFFF))
                             .tint(Color(hex: 0x252A2F))
@@ -891,6 +891,7 @@ struct CurvedTabBarView: View {
                                         rankoDescription = ""
                                         rankoPrivacy = false
                                         localSelection = current.category
+                                        selectedLayoutName = "Tier"
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                                             openRankoSheet = true
                                             withAnimation {
@@ -1097,7 +1098,7 @@ struct CurvedTabBarView: View {
                                         prompt: Text("Enter Name: eg. 'Top 20 Countries I Want To Visit'")
                                             .foregroundStyle(Color(hex: 0xFFFFFF).opacity(0.5))
                                     )
-                                    .font(.custom("Nunito-Bold", size: fontSize))
+                                    .font(.custom("Nunito-Regular", size: fontSize))
                                     .foregroundColor(.white)
                                     .submitLabel(.go)
                                     .padding(.leading, hInset)
@@ -1151,7 +1152,7 @@ struct CurvedTabBarView: View {
                                         prompt: Text("Add a short description… (optional)")
                                             .foregroundStyle(Color(hex: 0xFFFFFF).opacity(0.5)), axis: .vertical
                                     )
-                                    .font(.custom("Nunito-Bold", size: fontSize))
+                                    .font(.custom("Nunito-Regular", size: fontSize))
                                     .foregroundColor(.white)
                                     .submitLabel(.go)
                                     .padding(.horizontal, fieldHInset)
@@ -1467,7 +1468,7 @@ struct CurvedTabBarView: View {
                                 VStack(spacing: 14) {
                                     // description bubble
                                     Text(step.description)
-                                        .font(.custom("Nunito-Bold", size: 16))
+                                        .font(.custom("Nunito-Regular", size: 16))
                                         .foregroundColor(.white)
                                         .multilineTextAlignment(.center)
                                         .padding(.horizontal, 20)
@@ -1734,7 +1735,7 @@ struct CurvedTabBarView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + rankoCategoryDelay) {
                         withAnimation { currentTab = "Layout" }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            withAnimation { selectedLayoutName = "Default" }
+                            withAnimation { selectedLayoutName = "Tier" }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                                 withAnimation { showCreateSheet = false }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
@@ -2274,19 +2275,19 @@ final class CategoryRepo: ObservableObject {
         var firstError: String?
 
         group.enter()
-        db.child("CategoryData").observeSingleEvent(of: .value) { snap in
+        db.child("Ranko").child("CategoryData").child("Definitions").observeSingleEvent(of: .value) { snap in
             defer { group.leave() }
             guard let dict = snap.value as? [String: [String: Any]] else {
-                firstError = "Failed to read AppData/CategoryData"; return
+                firstError = "Failed to read AppData/Ranko/CategoryData/Defintions"; return
             }
             self.categoryDataRaw = dict
         }
 
         group.enter()
-        db.child("CategoryRanko").observeSingleEvent(of: .value) { snap in
+        db.child("Ranko").child("CategoryData").child("Hierarchy").observeSingleEvent(of: .value) { snap in
             defer { group.leave() }
             guard let dict = snap.value as? [String: [String: Any]] else {
-                firstError = "Failed to read AppData/CategoryRanko"; return
+                firstError = "Failed to read AppData/Ranko/CategoryData/Hierarchy"; return
             }
             rankoRaw = dict
         }

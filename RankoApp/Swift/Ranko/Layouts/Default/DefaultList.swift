@@ -155,6 +155,7 @@ struct DefaultListView: View {
     }
     
     private struct RankoToolbarTitleStack: View {
+        @StateObject private var user_data = UserInformation.shared
         let name: String
         let description: String
         @Binding var isPrivate: Bool
@@ -256,6 +257,7 @@ struct DefaultListView: View {
                         }
                     }
                 }
+                .frame(minWidth: CGFloat(user_data.deviceWidth))
             }
             .multilineTextAlignment(.center)
         }
@@ -2101,12 +2103,6 @@ private func withTimeout<T>(seconds: Double, _ op: @escaping () async throws -> 
         let result = try await group.next()!
         group.cancelAll()
         return result
-    }
-}
-
-extension View {
-    func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

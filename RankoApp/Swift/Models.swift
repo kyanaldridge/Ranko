@@ -99,6 +99,23 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     @AppStorage("device_width") var deviceWidth: Int = 0
     @AppStorage("device_keyboardHeight") var deviceKeyboardHeight: Int = 250
     
+    @AppStorage("platinum_user") var platinumUser: Bool = false
+    @AppStorage("platinum_plan") var platinumPlan: String?
+    @AppStorage("platinum_id") var platinumID: Int = 0
+    @AppStorage("platinum_purchaseDate") var platinumPurchaseDate: Date = Date()
+    @AppStorage("platinum_expiryDate") var platinumExpireDate: Date?
+    @AppStorage("platinum_price") var platinumPrice: Double?
+    
+    @AppStorage("user_privacy_customiserAppIcon") var customiserAppIcon: String = "Nunito"
+    @AppStorage("user_privacy_customiserTheme") var customiserTheme: String = "Default"
+    @AppStorage("user_privacy_customiserFont") var customiserFont: String = "Default"
+    
+    @AppStorage("game_blindSequence_gamesPlayed") var blindSequenceGamesPlayed: Int = 0
+    @AppStorage("game_blindSequence_highScore") var blindSequenceHighScore: Int = 0
+    @AppStorage("game_blindSequence_highScoreTime") var blindSequenceHighScoreTime: Double = .infinity
+    @AppStorage("game_blindSequence_gamesPlayed") var blindSequenceMaxLevelUnlocked: Int = 1
+    @AppStorage("game_blindSequence_gamesPlayed") var blindSequenceSelectedLevel: Int = 1
+    
     @Published var ProfilePicture: UIImage? = loadCachedProfileImage()
     
     private init() {}
@@ -134,10 +151,12 @@ struct RankoRecord: Codable, Identifiable, Equatable, Hashable {
     let ItemDescription: String
     let ItemCategory: String
     let ItemImage: String
-    let ItemGIF: String
-    let ItemVideo: String
-    let ItemAudio: String
-    
+
+    // ⬇️ make media fields optional so decoding won’t require them
+    let ItemGIF: String?
+    let ItemVideo: String?
+    let ItemAudio: String?
+
     var id: String { objectID }
 }
 
@@ -149,9 +168,9 @@ struct RankoItem: Identifiable, Codable, Equatable, Hashable {
     var itemName: String { record.ItemName }
     var itemDescription: String { record.ItemDescription }
     var itemImage: String { record.ItemImage }
-    var itemGIF: String { record.ItemGIF }
-    var itemVideo: String { record.ItemVideo }
-    var itemAudio: String { record.ItemAudio }
+    var itemGIF: String   { record.ItemGIF   ?? "" }
+    var itemVideo: String { record.ItemVideo ?? "" }
+    var itemAudio: String { record.ItemAudio ?? "" }
     var playCount: Int
 }
 
