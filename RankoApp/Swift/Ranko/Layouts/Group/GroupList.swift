@@ -253,6 +253,7 @@ struct GroupListView: View {
     @State private var description: String
     @State private var isPrivate: Bool
     @State private var category: SampleCategoryChip?
+    @State private var tags: [String] = []
     
     // Sheet states
     @State private var showTabBar = true
@@ -315,6 +316,9 @@ struct GroupListView: View {
     @State private var tiers: [TierConfig] = TierConfig.starter(3)
     @State private var stagingTiers: [TierConfig] = []   // ← working copy for the sheet
     @State private var showTierEditor = false
+    
+    @State private var progressLoading: Bool = false       // ← shows the loader
+    @State private var publishError: String? = nil         // ← error messaging
     
     // Replace your old enum-based helper with this:
     private func tierConfigForRow(_ i: Int) -> TierConfig {
@@ -2603,7 +2607,66 @@ struct GroupListView: View {
         )
     }
     
-    func saveRankedListToAlgolia() {
+    @MainActor
+    private func startPublishAndDismiss() {
+        guard category != nil else {
+            publishError = "Please pick a category before saving."
+            return
+        }
+        progressLoading = true
+        Task {
+            do {
+                try await publishRanko()
+                progressLoading = false
+                dismiss()
+            } catch {
+                progressLoading = false
+                publishError = error.localizedDescription
+            }
+        }
+    }
+    
+    func normalizeHexString(_ value: String) -> String {
+        var s = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("0x") || s.hasPrefix("0X") { s.removeFirst(2) }
+        if s.hasPrefix("#") { s.removeFirst() }
+        // keep only hex digits
+        s = s.filter { "0123456789abcdefABCDEF".contains($0) }
+        guard let intVal = UInt32(s, radix: 16) else { return "0x446D7A" }
+        return String(format: "0x%06X", intVal)
+    }
+    
+    private func publishRanko() async throws {
+        // 1) upload all personal images first (hard gate)
+        try await uploadPersonalImagesAsync()
+
+        // 2) now that uploads succeeded, rewrite ItemImage URLs for the affected items
+        let urlBase = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(rankoID)%2F"
+
+        for idx in groupedItems.indices {
+            let itemID = groupedItems[idx].id
+            guard pendingPersonalImages[itemID] != nil else { continue }
+
+            let newURL = "\(urlBase)\(itemID).jpg?alt=media&token="
+            let oldRecord = groupedItems[idx].record
+            let updatedRecord = oldRecord.withItemImage(newURL)
+            let updatedItem = groupedItems[idx].withRecord(updatedRecord)
+
+            groupedItems[idx] = updatedItem
+        }
+
+        // 3) proceed with both saves
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { try await saveRankedListToAlgoliaAsync() }
+            group.addTask { try await saveRankedListToFirebaseAsync() }
+            try await group.waitForAll()
+        }
+
+        // 4) clear cache on success
+        pendingPersonalImages.removeAll()
+    }
+    
+    func saveRankedListToAlgoliaAsync() async throws {
         guard let category = category else {
             print("❌ Cannot save: no category selected")
             return
@@ -2633,26 +2696,19 @@ struct GroupListView: View {
             RankoVotes:       0
         )
 
-        // 3) Upload to Algolia
-        let group = DispatchGroup()
-
-        group.enter()
-        listsIndex.saveObject(listRecord) { result in
-            switch result {
-            case .success:
-                print("✅ List uploaded to Algolia")
-            case .failure(let error):
-                print("❌ Error uploading list: \(error)")
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            listsIndex.saveObject(listRecord) { result in
+                switch result {
+                case .success:
+                    cont.resume()
+                case .failure(let err):
+                    cont.resume(throwing: err)
+                }
             }
-            group.leave()
-        }
-
-        group.notify(queue: .main) {
-            print("🎉 Upload to Algolia completed")
         }
     }
 
-    func saveRankedListToFirebase() {
+    func saveRankedListToFirebaseAsync() {
         // 1) Make sure we actually have a category
         guard let category = category else {
             print("❌ Cannot save: no category selected")
@@ -2737,6 +2793,98 @@ struct GroupListView: View {
                 print("❌ Error saving list to user: \(err.localizedDescription)")
             } else {
                 print("✅ List saved successfully to user")
+            }
+        }
+
+        // Category object (use hex string like "0xFFCF00")
+        let colourString: String = normalizeHexString(category.colour)
+
+        let categoryDict: [String: Any] = [
+            "colour": colourString,
+            "icon":   category.icon,
+            "name":   category.name
+        ]
+
+        // Details (fill tags/region/lang with smart defaults if you don't have UI for them yet)
+        let normalizedTags: [String] = tags.isEmpty ? ["ranko", category.name.lowercased()] : tags
+
+        let rankoDetails: [String: Any] = [
+            "id":          rankoID,
+            "name":        rankoName,
+            "description": description,
+            "type":        "default",
+            "user_id":     user_data.userID,
+            "tags":        normalizedTags,
+            "region":      "AUS",
+            "language":    "en",
+            "downloaded":  true
+        ]
+
+        // Privacy block (match your example)
+        let rankoPrivacy: [String: Any] = [
+            "private":   isPrivate,
+            "cloneable": true,
+            "comments":  true,
+            "likes":     true,
+            "shares":    true,
+            "saves":     true,
+            "status":    "active"
+        ]
+
+        // Statistics (start at 0; your sample shows some nonzero values — adjust if you keep history)
+        let rankoStats: [String: Any] = [
+            "views":  0,
+            "saves":  0,
+            "shares": 0,
+            "clones": 0
+        ]
+
+        // Full payload shaped like your sample
+        let payload: [String: Any] = [
+            "RankoDetails":   rankoDetails,
+            "RankoCategory":  categoryDict,
+            "RankoPrivacy":   rankoPrivacy,
+            "RankoDateTime":  ["updated": rankoDateTime, "created": rankoDateTime],   // <- exact keys
+            "RankoStatistics": rankoStats,
+            "RankoLikes":     [:], // empty map to start
+            "RankoComments":  [:], // empty map to start
+            "RankoItems":     rankoItemsDict
+        ]
+
+        // write the Ranko and mirror minimal info under the user
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await setValueAsync(
+                    db.child("RankoData").child(self.rankoID),
+                    value: payload
+                )
+            }
+            group.addTask {
+                // keep a lightweight pointer under the user (you can mirror more later)
+                try await setValueAsync(
+                    db.child("UserData").child(user_data.userID)
+                      .child("UserRankos").child("UserActiveRankos")
+                      .child(self.rankoID),
+                    value: category.name
+                )
+            }
+            try await group.waitForAll()
+        }
+        
+        
+        
+        
+        
+        
+        
+    }
+    
+    
+    // Wrap Firebase setValue into async/await
+    private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            ref.setValue(value) { err, _ in
+                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
             }
         }
     }
@@ -2905,7 +3053,7 @@ struct GroupListView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding([.leading, .bottom, .trailing], 8)
+                    .padding(8)
                 }
             }
             .frame(minHeight: 60)

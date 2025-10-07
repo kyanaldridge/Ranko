@@ -52,6 +52,8 @@ struct ProfileView: View {
     
     @State private var topCategories: [String] = []
     
+    @State private var rowWidth: CGFloat = 0
+    
     static let interestIconMapping: [String: String] = [
         "Sport": "figure.gymnastics",
         "Animals": "pawprint.fill",
@@ -223,9 +225,6 @@ struct ProfileView: View {
                             let tags = user_data.userInterests
                                 .split(separator: ",")
                                 .map { $0.trimmingCharacters(in: .whitespaces) }
-                            
-                            // track the measured width of the HStack
-                            @State var rowWidth: CGFloat = 0
                             
                             GeometryReader { geo in
                                 // account for your outer horizontal padding (change if you tweak padding below)
@@ -453,10 +452,15 @@ struct ProfileView: View {
                                         } label: {
                                             if let list = featuredLists[slot] {
                                                 if list.type == "default" {
-                                                    DefaultListIndividualGallery(listData: list, type: "featured", onUnpin: {
-                                                        slotToUnpin = slot
-                                                        showUnpinAlert = true
-                                                    })
+                                                    DefaultListIndividualGallery(
+                                                        listData: list,
+                                                        type: "featured",
+                                                        onUnpin: {
+                                                            slotToUnpin = slot
+                                                            showUnpinAlert = true
+                                                        },
+                                                        userID: user_data.userID
+                                                    )
                                                     .contextMenu {
                                                         Button(action: {
                                                             slotToUnpin = slot
@@ -656,15 +660,17 @@ struct ProfileView: View {
             .interactiveDismissDisabled(true)
         }
         .refreshable {
-            listViewID     = UUID()
-            if !isSimulator {
-                isLoadingLists = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                    isLoadingLists = false
+            guard !user_data.userID.isEmpty else { return }
+            featuredLoading = featuredLists.isEmpty
+            cache.refreshIfChanged(uid: user_data.userID) { fresh in
+                DispatchQueue.main.async {
+                    if !fresh.isEmpty { self.featuredLists = fresh }
+                    self.featuredLoading = false
+                    self.featuredLoadFailed = fresh.isEmpty && self.featuredLists.isEmpty
                 }
-                loadFollowStats()
-                tryLoadFeaturedRankos()
             }
+            // you can still update follow stats, etc., below if you want
+            loadFollowStats()
         }
         .onAppear {
             listViewID = UUID()
@@ -1337,6 +1343,36 @@ final class FeaturedRankoCacheService: ObservableObject {
         var lastBuiltAt: String            // yyyyMMddHHmmss
         var orderSlots: [Int:String]       // slot -> rankoID
     }
+    
+    private func rankoContentSignature(_ dict: [String: Any]) -> String {
+        // Prefer an explicit updated timestamp if it exists (cheap check)
+        let updated = ((dict["RankoDateTime"] as? [String:Any])?["updated"] as? String)
+                    ?? ((dict["RankoDetails"]  as? [String:Any])?["time_updated"] as? String)
+                    ?? ""
+
+        // Build a deterministic digest of item order + images
+        let itemsAny = dict["RankoItems"] as? [String: Any] ?? [:]
+
+        // Convert to tuples (rank, image, id) and sort by rank asc
+        var triples: [(Int, String, String)] = []
+        for (key, raw) in itemsAny {
+            guard let it = raw as? [String: Any] else { continue }
+            let rank  = (it["ItemRank"] as? NSNumber)?.intValue
+                     ?? (it["ItemRank"] as? Int)
+                     ?? Int((it["ItemRank"] as? String) ?? "") ?? 0
+            let img   = (it["ItemImage"] as? String) ?? ""
+            let id    = (it["ItemID"] as? String) ?? key
+            triples.append((rank, img, id))
+        }
+        triples.sort { $0.0 < $1.0 }
+
+        // Keep whole list (or limit if you want): join into a stable string
+        let core = triples.map { "\($0.0)|\($0.1)|\($0.2)" }.joined(separator: "||")
+
+        // Combine with updated (so if server bumps a timestamp, we still change)
+        let payload = updated.isEmpty ? core : (updated + "##" + core)
+        return sha1(of: Data(payload.utf8))
+    }
 
     private let fm = FileManager.default
 
@@ -1404,8 +1440,10 @@ final class FeaturedRankoCacheService: ObservableObject {
             }
 
             // serialize featured map to hash
-            let featuredRaw = orderSlots
-            let featuredData = try? JSONSerialization.data(withJSONObject: featuredRaw, options: [.sortedKeys])
+            let featuredRawStringKeys: [String:String] = Dictionary(
+                uniqueKeysWithValues: orderSlots.map { (String($0.key), $0.value) }
+            )
+            let featuredData = try? JSONSerialization.data(withJSONObject: featuredRawStringKeys, options: [.sortedKeys])
             let featuredHash = featuredData.map(self.sha1) ?? "0"
 
             // pull each ranko JSON
@@ -1421,18 +1459,13 @@ final class FeaturedRankoCacheService: ObservableObject {
                     defer { group.leave() }
                     guard let dict = rsnap.value as? [String:Any] else { return }
                     // hash pref: use updated time if present; else full-JSON hash
-                    let updated = ((dict["RankoDateTime"] as? [String:Any])?["updated"] as? String)
-                                ?? ((dict["RankoDetails"]  as? [String:Any])?["time_updated"] as? String)
-                                ?? ""
                     let json = (try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys])) ?? Data()
-                    let contentHash = updated.isEmpty ? self.sha1(of: json) : updated
-
-                    rankoHashes[rid] = contentHash
                     rankoJSONForDisk[rid] = json
 
-                    if let rl = self.parseListData(dict: dict, id: rid) {
-                        slotLists[slot] = rl
-                    }
+                    let contentHash = self.rankoContentSignature(dict)   // ⬅️ key change
+                    rankoHashes[rid] = contentHash
+
+                    if let rl = self.parseListData(dict: dict, id: rid) { slotLists[slot] = rl }
                 }
             }
 
@@ -1450,6 +1483,9 @@ final class FeaturedRankoCacheService: ObservableObject {
                     for (rid, data) in rankoJSONForDisk {
                         try self.write(data, to: dir.appendingPathComponent("\(rid).json"))
                     }
+                    
+                    let dir = self.baseDir(for: uid)
+                    try? self.fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
                     // download top-3 images for each ranko
                     let dlGroup = DispatchGroup()
@@ -1509,8 +1545,12 @@ final class FeaturedRankoCacheService: ObservableObject {
                     if let slot = Int(c.key), let rankoID = c.value as? String { orderSlots[slot] = rankoID }
                 }
             }
-            let featuredData = try? JSONSerialization.data(withJSONObject: orderSlots, options: [.sortedKeys])
+            let featuredRawStringKeys: [String:String] = Dictionary(
+                uniqueKeysWithValues: orderSlots.map { (String($0.key), $0.value) }
+            )
+            let featuredData = try? JSONSerialization.data(withJSONObject: featuredRawStringKeys, options: [.sortedKeys])
             let remoteFeaturedHash = featuredData.map(self.sha1) ?? "0"
+            
             let localFeaturedHash = localIndex?.featuredHash ?? "_none"
 
             // quick diff: if featured set changed → rebuild
@@ -1529,12 +1569,8 @@ final class FeaturedRankoCacheService: ObservableObject {
                 ref.observeSingleEvent(of: .value) { rsnap in
                     defer { group.leave() }
                     guard let dict = rsnap.value as? [String:Any] else { mismatch = true; return }
-                    let updated = ((dict["RankoDateTime"] as? [String:Any])?["updated"] as? String)
-                                ?? ((dict["RankoDetails"]  as? [String:Any])?["time_updated"] as? String)
-                                ?? ""
-                    let json = (try? JSONSerialization.data(with: dict, options: [.sortedKeys])) ?? Data()
-                    let remoteHash = updated.isEmpty ? self.sha1(of: json) : updated
-                    let localHash = localIndex?.rankoHashes[rid] ?? "_none"
+                    let remoteHash = self.rankoContentSignature(dict)  // ⬅️ key change
+                    let localHash  = localIndex?.rankoHashes[rid] ?? "_none"
                     if remoteHash != localHash { mismatch = true }
                 }
             }
@@ -1560,12 +1596,11 @@ final class FeaturedRankoCacheService: ObservableObject {
 
     private func downloadImageIfNeeded(pathOrURL: String, completion: @escaping (Data?) -> Void) {
         if pathOrURL.hasPrefix("http") {
-            // direct URL
-            URLSession.shared.dataTask(with: URL(string: pathOrURL)!) { data, _, _ in
+            guard let url = URL(string: pathOrURL) else { completion(nil); return }
+            URLSession.shared.dataTask(with: url) { data, _, _ in
                 completion(data)
             }.resume()
         } else {
-            // assume Firebase Storage path
             let ref = Storage.storage().reference(withPath: pathOrURL)
             ref.getData(maxSize: Int64(4 * 1024 * 1024)) { data, _ in
                 completion(data)
@@ -1755,6 +1790,46 @@ final class FeaturedRankoCacheService: ObservableObject {
             timeUpdated:     timeUpdated,
             items:           rankoItems
         )
+    }
+}
+
+struct OfflineRankoImage: View {
+    let uid: String
+    let rankoID: String
+    /// 1-based position by rank (1 = top item, 2 = second, 3 = third)
+    let topIndex: Int
+    /// The original remote string (URL or storage path) to fall back to when online
+    let remote: String
+
+    var body: some View {
+        if let local = localURL(),
+           FileManager.default.fileExists(atPath: local.path),
+           let img = UIImage(contentsOfFile: local.path) {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFill()
+        } else {
+            // Fallback to your existing remote loader. Examples:
+            // AsyncImage(url: URL(string: remote)) { phase in ... }
+            // or Kingfisher/SDWebImage component you already use:
+            AsyncImage(url: URL(string: remote)) { phase in
+                switch phase {
+                case .empty:
+                    Color.gray.opacity(0.15)
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                case .failure:
+                    Color.gray.opacity(0.25)
+                @unknown default:
+                    Color.gray.opacity(0.25)
+                }
+            }
+        }
+    }
+
+    private func localURL() -> URL? {
+        guard topIndex >= 1 && topIndex <= 3 else { return nil }
+        return cachedImageURL(uid: uid, rankoID: rankoID, idx: topIndex)
     }
 }
 
@@ -2401,7 +2476,7 @@ struct SelectFeaturedRankosView: View {
                                     onSelect(list)
                                 } label: {
                                     if list.type == "default" {
-                                        DefaultListIndividualGallery(listData: list, type: "", onUnpin: {})
+                                        DefaultListIndividualGallery(listData: list, type: "", onUnpin: {}, userID: user_data.userID)
                                     } else {
                                         GroupListIndividualGallery(listData: list, type: "", onUnpin: {})
                                     }
@@ -3751,7 +3826,7 @@ struct ProfileSpectateView: View {
                                             if let list = featuredLists[slot] {
                                                 if list.type == "default" {
                                                     DefaultListIndividualGallery(listData: list, type: "featured", onUnpin: {
-                                                    })
+                                                    }, userID: user_data.userID)
                                                 } else {
                                                     GroupListIndividualGallery(listData: list, type: "featured", onUnpin: {
                                                     })
@@ -4729,26 +4804,26 @@ struct MissionToast: View {
 struct AppPersonalisationView: View {
     @Environment(\.dismiss) var dismiss
     // Game Stats
-    @AppStorage("totalBlindSequenceGamesPlayed") private var blindSequenceGames = 12
-    @AppStorage("BlindSequenceHighScore") private var blindSequenceScore = 25
-    @AppStorage("memoryGamesPlayed") private var memoryGames = 15
-    @AppStorage("memoryHighScore") private var memoryScore = 28
-    @AppStorage("speedTapGames") private var speedTapGames = 8
-    @AppStorage("speedTapScore") private var speedTapScore = 42
-    @AppStorage("colorMatchGames") private var colorMatchGames = 23
-    @AppStorage("colorMatchScore") private var colorMatchScore = 35
-    @AppStorage("patternTraceGames") private var patternTraceGames = 12
-    @AppStorage("patternTraceScore") private var patternTraceScore = 18
+    @State private var blindSequenceGames = 12
+    @State private var blindSequenceScore = 25
+    @State private var memoryGames = 15
+    @State private var memoryScore = 28
+    @State private var speedTapGames = 8
+    @State private var speedTapScore = 42
+    @State private var colorMatchGames = 23
+    @State private var colorMatchScore = 35
+    @State private var patternTraceGames = 12
+    @State private var patternTraceScore = 18
     
-    @AppStorage("dailyStreak") private var dailyStreak = 7
-    @AppStorage("consecutiveWins") private var consecutiveWins = 5
-    @AppStorage("perfectRounds") private var perfectRounds = 12
-    @AppStorage("isProUser") var subscribed: Int = 1
+    @State private var dailyStreak = 7
+    @State private var consecutiveWins = 5
+    @State private var perfectRounds = 12
+    @State var subscribed: Int = 1
     
     // Unlock States
-    @AppStorage("selectedTheme") private var selectedThemeName = "Classic"
-    @AppStorage("selectedFont") private var selectedFontName = "System"
-    @AppStorage("selectedIcon") private var selectedIconName: String?
+    @State private var selectedThemeName = "Classic"
+    @State private var selectedFontName = "System"
+    @State private var selectedIconName: String?
     
     // State Variables
     @State private var currentTheme: AppTheme = .default

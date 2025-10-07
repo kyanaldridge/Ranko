@@ -31,16 +31,16 @@
 	</array>
 	<key>UIAppFonts</key>
 	<array>
-		<string>Pacifico-Regular</string>
-		<string>FjallaOne-Regular</string>
-		<string>ShareTech-Regular</string>
-		<string>Jost-SemiBold</string>
-		<string>Jost-Regular</string>
-		<string>Jost-Black</string>
-		<string>BebasNeue-Regular</string>
-		<string>Oswald-Bold</string>
-		<string>Oswald-Regular</string>
-		<string>Oswald-Medium</string>
+		<string>Pacifico-Regular.ttf</string>
+		<string>FjallaOne-Regular.ttf</string>
+		<string>ShareTech-Regular.ttf</string>
+		<string>Jost-SemiBold.ttf</string>
+		<string>Jost-Regular.ttf</string>
+		<string>Jost-Black.ttf</string>
+		<string>BebasNeue-Regular.ttf</string>
+		<string>Oswald-Bold.ttf</string>
+		<string>Oswald-Regular.ttf</string>
+		<string>Oswald-Medium.ttf</string>
 		<string>Nunito-Black.ttf</string>
 		<string>Nunito-Regular.ttf</string>
 		<string>Nunito-SemiBold.ttf</string>

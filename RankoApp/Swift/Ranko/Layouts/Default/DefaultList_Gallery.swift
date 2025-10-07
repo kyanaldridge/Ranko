@@ -14,7 +14,8 @@ struct DefaultListIndividualGallery: View {
     let listData: RankoList
     let type: String
     let onUnpin: (() -> Void)?
-    
+    let userID: String   // ⬅️ new
+
     private var sortedItems: [RankoItem] {
         listData.items.sorted { $0.rank < $1.rank }
     }
@@ -36,9 +37,7 @@ struct DefaultListIndividualGallery: View {
             }
             Spacer()
             if type == "featured" {
-                Button {
-                    onUnpin?()
-                } label: {
+                Button { onUnpin?() } label: {
                     Image(systemName: "pin.fill")
                         .font(.custom("Nunito-Black", size: 12))
                         .foregroundColor(Color(hex: 0x514343))
@@ -48,23 +47,19 @@ struct DefaultListIndividualGallery: View {
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 4)
-        // white background
         .background(.clear)
         .padding(.vertical, 1)
     }
 
     private var overlappingImages: some View {
         HStack(spacing: -12) {
-            ForEach(sortedItems.prefix(3)) { item in
-                AsyncImage(url: URL(string: item.itemImage)) { phase in
-                    if let img = phase.image {
-                        img
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Color.gray.opacity(0.2)
-                    }
-                }
+            // we only ever save the top-3 by RANK to disk
+            let top3 = Array(sortedItems.prefix(3))
+            ForEach(Array(top3.enumerated()), id: \.offset) { (idx, item) in
+                OfflineFirstThumb(
+                    localURL: cachedImageURL(uid: userID, rankoID: listData.id, idx: idx + 1),
+                    remoteString: item.itemImage // your existing remote value
+                )
                 .frame(width: 40, height: 40)
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Color(hex: 0xFFFFFF), lineWidth: 2))
@@ -73,35 +68,50 @@ struct DefaultListIndividualGallery: View {
         }
     }
 
-    // replicate your existing timeAgo helper
     private func timeAgo(from dt: String) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "Australia/Sydney")
         formatter.dateFormat = "yyyyMMddHHmmss"
-
-        guard let date = formatter.date(from: dt) else {
-            print("Failed to parse date from string: \(dt)")
-            return ""
-        }
-
-        let now = Date()
-        let secondsAgo = Int(now.timeIntervalSince(date))
-
+        guard let date = formatter.date(from: dt) else { return "" }
+        let secondsAgo = Int(Date().timeIntervalSince(date))
         switch secondsAgo {
-        case 0..<60:
-            return "\(secondsAgo)s ago"
-        case 60..<3600:
-            return "\(secondsAgo / 60)m ago"
-        case 3600..<86400:
-            return "\(secondsAgo / 3600)h ago"
-        case 86400..<604800:
-            return "\(secondsAgo / 86400)d ago"
-        case 604800..<31536000:
-            return "\(secondsAgo / 604800)w ago"
-        default:
-            return "\(secondsAgo / 31536000)y ago"
+        case 0..<60: return "\(secondsAgo)s ago"
+        case 60..<3600: return "\(secondsAgo / 60)m ago"
+        case 3600..<86400: return "\(secondsAgo / 3600)h ago"
+        case 86400..<604800: return "\(secondsAgo / 86400)d ago"
+        case 604800..<31536000: return "\(secondsAgo / 604800)w ago"
+        default: return "\(secondsAgo / 31536000)y ago"
         }
     }
+}
 
+/// A tiny helper view that prefers a local file if it exists; otherwise falls back to the remote URL.
+private struct OfflineFirstThumb: View {
+    let localURL: URL
+    let remoteString: String
+
+    var body: some View {
+        if FileManager.default.fileExists(atPath: localURL.path),
+           let ui = UIImage(contentsOfFile: localURL.path) {
+            Image(uiImage: ui)
+                .resizable()
+                .scaledToFill()
+        } else if let url = URL(string: remoteString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                case .empty:
+                    Color.gray.opacity(0.2)
+                case .failure:
+                    Color.gray.opacity(0.25)
+                @unknown default:
+                    Color.gray.opacity(0.25)
+                }
+            }
+        } else {
+            Color.gray.opacity(0.25)
+        }
+    }
 }

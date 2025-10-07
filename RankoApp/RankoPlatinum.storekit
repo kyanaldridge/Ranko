@@ -49,11 +49,7 @@
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "E2F1F13B",
-          "introductoryOffer" : {
-            "internalID" : "2BB404C8",
-            "paymentMode" : "free",
-            "subscriptionPeriod" : "P1W"
-          },
+          "introductoryOffer" : null,
           "localizations" : [
             {
               "description" : "Subscribe for One Week",
@@ -81,11 +77,7 @@
           "familyShareable" : false,
           "groupNumber" : 2,
           "internalID" : "8D799B25",
-          "introductoryOffer" : {
-            "internalID" : "E38EFB64",
-            "paymentMode" : "free",
-            "subscriptionPeriod" : "P1M"
-          },
+          "introductoryOffer" : null,
           "localizations" : [
             {
               "description" : "Subscribe for One Month",
@@ -113,12 +105,7 @@
           "familyShareable" : false,
           "groupNumber" : 3,
           "internalID" : "55A847D7",
-          "introductoryOffer" : {
-            "displayPrice" : "0.99",
-            "internalID" : "9630B244",
-            "paymentMode" : "free",
-            "subscriptionPeriod" : "P1M"
-          },
+          "introductoryOffer" : null,
           "localizations" : [
             {
               "description" : "Subscribe for One Year",

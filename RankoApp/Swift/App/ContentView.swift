@@ -15,7 +15,7 @@ struct ContentView: View {
     @StateObject private var user_data = UserInformation.shared
 
     var body: some View {
-        if user_data.logStatus {
+        if user_data.userLoginStatus {
             MainTabView()
         } else {
             Login()

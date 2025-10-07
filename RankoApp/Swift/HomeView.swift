@@ -93,10 +93,6 @@ struct HomeView: View {
     @State private var toastDismissWorkItem: DispatchWorkItem?
     @State private var selectedList: RankoList?
     @State private var clonedList: RankoList?
-    
-    // ✅ NEW: app storage for timestamp + ID queue
-    @AppStorage("homeLastRefreshTimestamp") private var homeLastRefreshTimestamp: String = ""   // "yyyyMMddHHmmss"
-    @AppStorage("storedRankoIDsJSON") private var storedRankoIDsJSON: String = "[]"            // JSON array of strings
 
     // ✅ NEW: in-memory feed state
     @State private var feedLists: [RankoList] = []
@@ -136,12 +132,12 @@ struct HomeView: View {
     private var storedIDs: [String] {
         get {
             (try? JSONDecoder().decode([String].self,
-                                       from: Data(storedRankoIDsJSON.utf8))) ?? []
+                                       from: Data(user_data.lastRefreshRankoIds.utf8))) ?? []
         }
         nonmutating set { // ← key change
             if let data = try? JSONEncoder().encode(newValue),
                let json = String(data: data, encoding: .utf8) {
-                storedRankoIDsJSON = json
+                user_data.lastRefreshRankoIds = json
             }
         }
     }
@@ -153,7 +149,7 @@ struct HomeView: View {
                 switch result {
                 case .success(let ids):
                     self.storedIDs = ids
-                    self.homeLastRefreshTimestamp = self.nowString()
+                    self.user_data.lastRefreshTimestamp = self.nowString()
                 case .failure(let error):
                     print("❌ Algolia fetch failed:", error)
                     self.storedIDs = [] // keep consistent
@@ -393,7 +389,7 @@ struct HomeView: View {
     private func ensureQueueAndInitialBatch() {
         // update the timestamp (if needed) every time HomeView opens
         let needsRefresh: Bool = {
-            guard let last = parseTS(homeLastRefreshTimestamp) else { return true }
+            guard let last = parseTS(user_data.lastRefreshTimestamp) else { return true }
             let delta = Date().timeIntervalSince(last)
             return delta >= (3 * 3600) // 3 hours
         }()
@@ -558,6 +554,7 @@ struct HomeView: View {
         // MARK: – reset "listViewID" whenever HomeView comes back on screen
         .onAppear {
             clearAllCache()
+            
             user_data.userID = Auth.auth().currentUser?.uid ?? "0"
             listViewID = UUID()
             

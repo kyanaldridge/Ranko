@@ -194,7 +194,7 @@ struct Login: View {
                 }
                 // On successful sign in, update the log status.
                 user_data.userLoginService = "Apple"
-                user_data.logStatus = true
+                user_data.userLoginStatus = true
                 isLoading = false
                 user_data.userID = Auth.auth().currentUser!.uid
                 Analytics.logEvent(AnalyticsEventLogin, parameters: [
@@ -225,7 +225,7 @@ struct Login: View {
             Auth.auth().signIn(with: credential) { _, error in
                 if let error = error { showError(error.localizedDescription); return }
                 user_data.userLoginService = "Google"
-                user_data.logStatus = true
+                user_data.userLoginStatus = true
                 isLoading = false
                 user_data.userID = Auth.auth().currentUser!.uid
             }

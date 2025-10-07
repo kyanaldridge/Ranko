@@ -54,7 +54,9 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     @AppStorage("user_joined") var userJoined: String = ""
     @AppStorage("user_year") var userYear: Int = 0
     @AppStorage("user_found_us") var userFoundUs: String = ""
+    @AppStorage("user_loginStatus") var userLoginStatus: Bool = false
     @AppStorage("user_login_service") var userLoginService: String = ""
+    @AppStorage("user_ranko_categories") var userRankoCategories: String = ""
     
     // MARK: - UserProfilePicture
     @AppStorage("user_profile_picture_file") var userProfilePictureFile: String = ""
@@ -65,9 +67,6 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     @AppStorage("user_stats_followers") var userStatsFollowers: Int = 0
     @AppStorage("user_stats_following") var userStatsFollowing: Int = 0
     @AppStorage("user_stats_rankos") var userStatsRankos: Int = 0
-    
-    @AppStorage("log_Status") var logStatus: Bool = false
-    @AppStorage("user_ranko_categories") var userRankoCategories: String = ""
     
     // MARK: - NOTIFICATIONS -
     @AppStorage("user_notification_rankoLikes") var notificationRankoLikes: Bool = true
@@ -99,22 +98,39 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     @AppStorage("device_width") var deviceWidth: Int = 0
     @AppStorage("device_keyboardHeight") var deviceKeyboardHeight: Int = 250
     
-    @AppStorage("platinum_user") var platinumUser: Bool = false
-    @AppStorage("platinum_plan") var platinumPlan: String?
-    @AppStorage("platinum_id") var platinumID: Int = 0
-    @AppStorage("platinum_purchaseDate") var platinumPurchaseDate: Date = Date()
+    @AppStorage("platinum_user") var platinumUser: Bool = false //whether user is subscribed to any of the three plans
+    @AppStorage("platinum_plan") var platinumPlan: String? //the plan the user is on autoRenewPreference
+    @AppStorage("platinum_id") var platinumID: Int?
+    @AppStorage("platinum_originalId") var platinumOriginalID: Int?
+    @AppStorage("platinum_purchaseDate") var platinumPurchaseDate: Date?
     @AppStorage("platinum_expiryDate") var platinumExpireDate: Date?
+    @AppStorage("platinum_revocationDate") var platinumRevocationDate: Date?
     @AppStorage("platinum_price") var platinumPrice: Double?
+    @AppStorage("platinum_renewalState") var platinumRenewalState: Int?
+    @AppStorage("platinum_willAutoRenew") var platinumWillAutoRenew: Bool = false
+    @AppStorage("platinum_renewalDate") var platinumRenewalDate: Date?
+    @AppStorage("platinum_expirationReason") var platinumExpirationReason: String?
+    @AppStorage("platinum_isInBillingRetry") var platinumIsInBillingRetry: Bool = false
+    @AppStorage("platinum_status") var platinumStatus: String = "Not Active"
     
-    @AppStorage("user_privacy_customiserAppIcon") var customiserAppIcon: String = "Nunito"
-    @AppStorage("user_privacy_customiserTheme") var customiserTheme: String = "Default"
-    @AppStorage("user_privacy_customiserFont") var customiserFont: String = "Default"
+    @AppStorage("user_customiser_appIcon") var appIcon: String = "Nunito"
+    @AppStorage("user_customiser_appTheme") var appTheme: String = "Default"
+    @AppStorage("user_customiser_appFont") var appFont: String = "Default"
     
     @AppStorage("game_blindSequence_gamesPlayed") var blindSequenceGamesPlayed: Int = 0
     @AppStorage("game_blindSequence_highScore") var blindSequenceHighScore: Int = 0
     @AppStorage("game_blindSequence_highScoreTime") var blindSequenceHighScoreTime: Double = .infinity
-    @AppStorage("game_blindSequence_gamesPlayed") var blindSequenceMaxLevelUnlocked: Int = 1
-    @AppStorage("game_blindSequence_gamesPlayed") var blindSequenceSelectedLevel: Int = 1
+    @AppStorage("game_blindSequence_maxLevelUnlocked") var blindSequenceMaxLevelUnlocked: Int = 1
+    @AppStorage("game_blindSequence_selectedLevel") var blindSequenceSelectedLevel: Int = 1
+    
+    @AppStorage("appIcon_default_unlocked") var defaultAppIconUnlocked: Bool = true
+    @AppStorage("appIcon_medal_unlocked") var medalAppIconUnlocked: Bool = false
+    @AppStorage("appIcon_trophy_unlocked") var trophyAppIconUnlocked: Bool = false
+    @AppStorage("appIcon_crown_unlocked") var crownAppIconUnlocked: Bool = false
+    @AppStorage("appIcon_star_unlocked") var starAppIconUnlocked: Bool = false
+    
+    @AppStorage("user_lastRefresh_timestamp") var lastRefreshTimestamp: String = ""
+    @AppStorage("user_lastRefresh_rankoIds") var lastRefreshRankoIds: String = "[]"
     
     @Published var ProfilePicture: UIImage? = loadCachedProfileImage()
     

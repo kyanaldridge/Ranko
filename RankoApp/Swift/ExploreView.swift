@@ -59,9 +59,9 @@ struct ExploreView: View {
     @State private var activeIndex: Int? = 12
     
     let buttons: [MenuItemButtons] = [
-        .init(title: "Search Rankos", icon: "magnifyingglass", size: 13, message: "Search and filter through all public Rankos from the community – Coming Soon!", color: Color(hex:0xB085FA)),
-        .init(title: "Random Picker", icon: "dice.fill", size: 14, message: "Pick a category, set filters, and let Ranko choose random items for you – Coming Soon!", color: Color(hex:0xFF999A)),
-        .init(title: "Store", icon: "cart.fill", size: 12, message: "A future Store may let you trade in-game currency for items, themes, and app icons – Stay tuned!", color: Color(hex:0xF1CD41))
+        .init(title: "Search Rankos", icon: "magnifyingglass", size: 13, message: "Search and filter through all public Rankos from the community – Coming Soon!", color: Color(hex: 0x6D400F)),
+        .init(title: "Random Picker", icon: "dice.fill", size: 14, message: "Pick a category, set filters, and let Ranko choose random items for you – Coming Soon!", color: Color(hex: 0x6D400F)),
+        .init(title: "Store", icon: "cart.fill", size: 12, message: "A future Store may let you trade in-game currency for items, themes, and app icons – Stay tuned!", color: Color(hex: 0x6D400F))
     ]
     
     let miniGames: [MiniGame] = [
@@ -71,10 +71,6 @@ struct ExploreView: View {
         .init(name: "Guessr", image: "Guessr", color: Color(hex: 0xFFFFFF), unlocked: "no", message: "Uncover clues, guess early, and score big – the Guessr mini-game is coming soon!"),
         .init(name: "Coming Soon", image: "ComingSoon", color: Color(hex: 0xFFFFFF), unlocked: "no", message: "More features and exciting mini-games are on the way – stay tuned!")
     ]
-    
-    // ✅ NEW: app storage for timestamp + ID queue
-    @AppStorage("homeLastRefreshTimestamp") private var homeLastRefreshTimestamp: String = ""   // "yyyyMMddHHmmss"
-    @AppStorage("storedRankoIDsJSON") private var storedRankoIDsJSON: String = "[]"            // JSON array of strings
 
     // ✅ NEW: in-memory feed state
     @State private var feedLists: [RankoList] = []
@@ -115,12 +111,12 @@ struct ExploreView: View {
     private var storedIDs: [String] {
         get {
             (try? JSONDecoder().decode([String].self,
-                                       from: Data(storedRankoIDsJSON.utf8))) ?? []
+                                       from: Data(user_data.lastRefreshRankoIds.utf8))) ?? []
         }
         nonmutating set { // ← key change
             if let data = try? JSONEncoder().encode(newValue),
                let json = String(data: data, encoding: .utf8) {
-                storedRankoIDsJSON = json
+                user_data.lastRefreshRankoIds = json
             }
         }
     }
@@ -132,7 +128,7 @@ struct ExploreView: View {
                 switch result {
                 case .success(let ids):
                     self.storedIDs = ids
-                    self.homeLastRefreshTimestamp = self.nowString()
+                    self.user_data.lastRefreshTimestamp = self.nowString()
                 case .failure(let error):
                     print("❌ Algolia fetch failed:", error)
                     self.storedIDs = [] // keep consistent
@@ -371,7 +367,7 @@ struct ExploreView: View {
     private func ensureQueueAndInitialBatch() {
         // update the timestamp (if needed) every time HomeView opens
         let needsRefresh: Bool = {
-            guard let last = parseTS(homeLastRefreshTimestamp) else { return true }
+            guard let last = parseTS(user_data.lastRefreshTimestamp) else { return true }
             let delta = Date().timeIntervalSince(last)
             return delta >= (3 * 3600) // 3 hours
         }()
@@ -420,7 +416,7 @@ struct ExploreView: View {
                                                 .foregroundColor(Color(hex: 0xFFFFFF))
                                         }
                                     }
-                                    .tint(button.color)
+                                    .tint(Color(hex: 0x292A30))
                                     .buttonStyle(.glassProminent)
                                     .matchedTransitionSource(
                                         id: "menuButtons", in: transition
@@ -648,8 +644,8 @@ struct ExploreView: View {
                 }
                 
                 Analytics.logEvent(AnalyticsEventScreenView, parameters: [
-                    AnalyticsParameterScreenName: "Home",
-                    AnalyticsParameterScreenClass: "HomeView"
+                    AnalyticsParameterScreenName: "Explore",
+                    AnalyticsParameterScreenClass: "ExploreView"
                 ])
             }
         }
@@ -662,7 +658,7 @@ struct ExploreView: View {
 
             // 2) (optional) force a brand-new 100 from Algolia by clearing the queue:
             // storedIDs = []
-            // homeLastRefreshTimestamp = ""
+            // user_data.lastRefreshTimestamp = ""
 
             // 3) rebuild from scratch (this will load the first 6)
             ensureQueueAndInitialBatch()

@@ -271,6 +271,69 @@ struct SettingsView: View {
     }
 }
 
+struct AppStorageSnapshot: Identifiable {
+    let id = UUID()
+
+    // URLCache info
+    let memoryUsage: Int
+    let memoryCapacity: Int
+    let diskUsage: Int
+    let diskCapacity: Int
+
+    // optionally include the URLs of cached responses we can iterate
+    let cachedRequestURLs: [URL]
+
+    // UserDefaults snapshot
+    let userDefaults: [String: Any]
+
+    // AppStorage / other
+    let documentsDirectoryFiles: [String]
+    let cachesDirectoryFiles: [String]
+}
+
+struct CacheInspector {
+    static func snapshot() -> AppStorageSnapshot {
+        let cache = URLCache.shared
+
+        // ⚠️ We can’t get at the raw cached *data* without knowing each request,
+        // but we can query size info and loop through some stored responses if we have the requests.
+        // For demonstration we’ll walk through UserDefaults to find URL-like keys.
+
+        let cachedURLs: [URL] = []
+
+        // NOTE: This doesn’t list *everything* in URLCache (Apple doesn’t expose it);
+        // you can only look up specific requests.
+        // If you keep your own list of URLs you fetched, you can check each:
+        /*
+        for url in myKnownURLs {
+            let req = URLRequest(url: url)
+            if cache.cachedResponse(for: req) != nil {
+                cachedURLs.append(url)
+            }
+        }
+        */
+
+        // grab your defaults
+        let defaultsDict = UserDefaults.standard.dictionaryRepresentation()
+
+        // look at the app sandbox folders
+        let fm = FileManager.default
+        let docURLs = (try? fm.contentsOfDirectory(atPath: NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? "")) ?? []
+        let cacheURLs = (try? fm.contentsOfDirectory(atPath: NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first ?? "")) ?? []
+
+        return AppStorageSnapshot(
+            memoryUsage: cache.currentMemoryUsage,
+            memoryCapacity: cache.memoryCapacity,
+            diskUsage: cache.currentDiskUsage,
+            diskCapacity: cache.diskCapacity,
+            cachedRequestURLs: cachedURLs,
+            userDefaults: defaultsDict,
+            documentsDirectoryFiles: docURLs,
+            cachesDirectoryFiles: cacheURLs
+        )
+    }
+}
+
 func clearAllCache() {
     // 1. Remove URLCache entries
     let urlCache = URLCache.shared
@@ -307,271 +370,166 @@ func clearAllCache() {
     print("✅ All caches cleared")
 }
 
+enum SubscriptionDebugger {
+    static func printAll() async {
+        let user = UserInformation.shared
+        print("🧾 ===== SUBSCRIPTION DEBUG @ \(fmt(Date())) =====")
 
+        var sawAny = false
+        let platinumPlans: Set<String> = ["platinum_weekly","platinum_monthly","platinum_yearly"]
 
-///// IAP View Images
-//enum IAPImage: String, CaseIterable {
-//    /// Raw value represents the asset image
-//    case one = "IAP1"
-//    case two = "IAP2"
-//    case three = "IAP3"
-//    case four = "IAP4"
-//}
-//
-//
-//struct ProSubscriptionView: View {
-//    @State private var loadingStatus: (Bool, Bool) = (false, false)
-//    @State private var snappedItem = 0.0
-//    @State private var draggingItem = 0.0
-//    @State var activeIndex: Int = 0
-//    
-//    let subscriptionFeatures: [SubscriptionFeatures] = [
-//        .init(id: 14, title: "Unlimited Items & Rankos", icon: "infinity", description: "Create as many Rankos and items in Rankos as you want!"),
-//        .init(id: 13, title: "Create New Blank Items", icon: "rectangle.dashed", description: "Add blank items to your Rankos!"),
-//        .init(id: 12, title: "Add Custom Images to Items", icon: "photo.fill", description: "Add custom photos from your camera roll to your items!"),
-//        .init(id: 11, title: "Download & Export Rankos", icon: "arrow.down.circle.fill", description: "Download your Rankos for Offline Use and also export via csv and soon other formats!"),
-//        .init(id: 10, title: "New Folders & Tags", icon: "square.grid.3x1.folder.fill.badge.plus", description: "Organise all your Rankos into folders and tags, seperate a series of Rankos by categories or anything practically!"),
-//        .init(id: 9, title: "Unlock Pro App Icons", icon: "apps.iphone", description: "Unlock all pro app icons in the Customise App section!"),
-//        .init(id: 8, title: "Pin 20 Rankos", icon: "pin.fill", description: "Pin 20 Rankos to your Feature View for quick access and to show friends and the community!"),
-//        .init(id: 7, title: "Clone Rankos", icon: "square.fill.on.square.fill", description: "Copy other users Rankos and create your very own version of their creation!"),
-//        .init(id: 6, title: "Collaborate on Rankos", icon: "person.3.fill", description: "Collaborate with friends and family on Rankos!"),
-//        .init(id: 5, title: "Integrate with Spotify", icon: "music.note", description: "Add your favourite artists, albums, songs, playlists and more to your Rankos. More integrations to come soon!"),
-//        .init(id: 4, title: "Search Community Rankos", icon: "rectangle.and.text.magnifyingglass", description: "Search All Public Community Rankos"),
-//        .init(id: 3, title: "Personal Homepage", icon: "star.bubble.fill", description: "Get community Rankos on your homepage that fit your interests and Rankos you've created"),
-//        .init(id: 2, title: "Save Rankos", icon: "star.fill", description: "Save communities and friends Rankos to your library to look at again later!"),
-//        .init(id: 1, title: "Archive Rankos", icon: "archivebox.fill", description: "Archive your Rankos that you don't want showing up in your library anymore without deleting them!")
-//    ]
-//    
-//    var body: some View {
-//        
-//        VStack(spacing: 0) {
-//            SubscriptionStoreView(productIDs: Self.productIDs, marketingContent: {
-//                CustomMarketingView()
-//            })
-//            .subscriptionStoreControlStyle(.pagedProminentPicker, placement: .bottomBar)
-//            .subscriptionStorePickerItemBackground(.ultraThinMaterial)
-//            .storeButton(.visible, for: .restorePurchases)
-//            .storeButton(.hidden, for: .policies)
-//            .onInAppPurchaseStart { product in
-//                print("Show Loading Screen")
-//                print("Purchasing \(product.displayName)")
-//            }
-//            .onInAppPurchaseCompletion { product, result in
-//                switch result {
-//                case .success(let result):
-//                    switch result {
-//                    case .success(_): print("Success and verify purchase using verification result")
-//                    case .pending: print("Pending Action")
-//                    case .userCancelled: print("User Cancelled")
-//                    @unknown default:
-//                        fatalError()
-//                    }
-//                case .failure(let error):
-//                    print(error.localizedDescription)
-//                }
-//                
-//                print("Hide Loading Screen")
-//            }
-//            .subscriptionStatusTask(for: "D546B9ED") {
-//                if let result = $0.value {
-//                    let premiumUser = !result.filter({ $0.state == .subscribed }).isEmpty
-//                    print("User Subscribed = \(premiumUser)")
-//                    
-//                }
-//                
-//                print("[subscriptionStatusTask] Subscription status checked")
-//                loadingStatus.1 = true
-//            }
-//            
-//            /// Privacy Policy & Terms of Service
-//            HStack(alignment: .center, spacing: 3) {
-//                Link("Terms of Service", destination: URL(string: "https://apple.com")!)
-//                
-//                Text("&")
-//                
-//                Link("Privacy Policy", destination: URL(string: "https://apple.com")!)
-//            }
-//            .font(.caption)
-//            .padding(.bottom, 30)
-//            .padding(.top, 15)
-//        }
-//        .padding(.top, 50)
-//        .ignoresSafeArea()
-//        .frame(maxWidth: .infinity, maxHeight: .infinity)
-//        .opacity(isLoadingCompleted ? 1 : 0)
-//        .background(BackdropView())
-//        .overlay {
-//            if !isLoadingCompleted {
-//                ProgressView()
-//                    .font(.largeTitle)
-//            }
-//        }
-//        .animation(.easeInOut(duration: 0.35), value: isLoadingCompleted)
-//        .storeProductsTask(for: Self.productIDs) { @MainActor collection in
-//            if let products = collection.products, products.count == Self.productIDs.count {
-//                try? await Task.sleep(for: .seconds(0.1))
-//                print("[storeProductsTask] Products loaded successfully")
-//                loadingStatus.0 = true
-//            }
-//        }
-//        .accentColor(.white)
-//        .environment(\.colorScheme, .dark)
-//        .tint(.white)
-//        .statusBarHidden()
-//        .ignoresSafeArea()
-//    }
-//    
-//    var isLoadingCompleted: Bool {
-//        loadingStatus.0 && loadingStatus.1
-//    }
-//    
-//    static var productIDs: [String] {
-//        return ["platinum_weekly", "platinum_monthly", "platinum_yearly"]
-//    }
-//    
-//    /// Backdrop View
-//    @ViewBuilder
-//    func BackdropView() -> some View {
-//        GeometryReader {
-//            let size = $0.size
-//            
-//            /// This is a Dark image, but you can use your own image as per your needs!
-//            Image("IAP4")
-//                .resizable()
-//                .aspectRatio(contentMode: .fill)
-//                .frame(width: size.width, height: size.height)
-//                .scaleEffect(1.5)
-//                .blur(radius: 70, opaque: true)
-//                .overlay {
-//                    Rectangle()
-//                        .fill(.black.opacity(0.2))
-//                }
-//                .ignoresSafeArea()
-//        }
-//    }
-//    
-//    /// Custom Marketing View (Header View)
-//    @ViewBuilder
-//    func CustomMarketingView() -> some View {
-//        VStack(spacing: 15) {
-//            /// Replace with your App Information
-//            VStack(spacing: 18) {
-//                HStack(spacing: 16) {
-//                    ThreeRectanglesAnimation(rectangleWidth: 14, rectangleMaxHeight: 40, rectangleSpacing: 3, rectangleCornerRadius: 2, animationDuration: 0.8)
-//                        .frame(height: 60)
-//                    
-//                    Text("Ranko Pro")
-//                        .font(.system(size: 28, weight: .black, design: .default))
-//                        .padding(.top, 25)
-//                        .padding(.trailing, 20)
-//                }
-//                .frame(height: 60)
-//            }
-//            .foregroundStyle(.white)
-//            ZStack {
-//                ForEach(subscriptionFeatures) { item in
-//                    
-//                    // article view
-//                    ZStack {
-//                        RoundedRectangle(cornerRadius: 18)
-//                            .fill(
-//                                LinearGradient(
-//                                    colors: [Color(hex: 0x041913), Color(hex: 0x0D3632), Color(hex: 0x175158), Color(hex: 0x1E565F)],
-//                                    startPoint: .leading,
-//                                    endPoint: .trailing
-//                                )
-//                            )
-//                        VStack {
-//                            HStack {
-//                                Image(systemName: item.icon)
-//                                    .font(.system(size: 18, weight: .heavy, design: .default))
-//                                Text(item.title)
-//                                    .font(.system(size: 18, weight: .heavy, design: .rounded))
-//                            }
-//                            Text(item.description)
-//                                .font(.system(size: 12, weight: .regular, design: .default))
-//                                .multilineTextAlignment(.leading)
-//                                .padding(.top, 8)
-//                        }
-//                        .padding(.horizontal, 20)
-//                    }
-//                    .frame(width: 350, height: 150)
-//                    .scaleEffect(1.0 - abs(distance(item.id)) * 0.2 )
-//                    .opacity(1.0 - abs(distance(item.id)) * 0.3 )
-//                    .offset(x: myXOffset(item.id), y: 0)
-//                    .zIndex(1.0 - abs(distance(item.id)) * 0.1)
-//                    .onTapGesture {
-//                        withAnimation {
-//                            draggingItem = Double(item.id)
-//                        }
-//                    }
-//                }
-//            }
-//            .gesture(getDragGesture())
-//            .padding(.top, 50)
-//        }
-//        .padding(.top, -60)
-//    }
-//    
-//    private func getDragGesture() -> some Gesture {
-//        
-//        DragGesture()
-//            .onChanged { value in
-//                draggingItem = snappedItem + value.translation.width / 400
-//            }
-//            .onEnded { value in
-//                withAnimation {
-//                    draggingItem = snappedItem + value.predictedEndTranslation.width / 400
-//                    draggingItem = round(draggingItem).remainder(dividingBy: Double(subscriptionFeatures.count))
-//                    snappedItem = draggingItem
-//                    
-//                    //Get the active Item index
-//                    self.activeIndex = subscriptionFeatures.count + Int(draggingItem)
-//                    if self.activeIndex > subscriptionFeatures.count || Int(draggingItem) >= 0 {
-//                        self.activeIndex = Int(draggingItem)
-//                    }
-//                }
-//            }
-//    }
-//    
-//    func distance(_ item: Int) -> Double {
-//        return (draggingItem - Double(item)).remainder(dividingBy: Double(subscriptionFeatures.count))
-//    }
-//    
-//    func myXOffset(_ item: Int) -> Double {
-//        let angle = Double.pi * 2 / Double(subscriptionFeatures.count) * distance(item)
-//        return sin(angle) * 200
-//    }
-//}
-//
-//// used in HomeView
-//struct SubscriptionStatusManager {
-//    static func fetchSubscriptionStatus(
-//        for groupID: String,
-//        productIDs: [String]
-//    ) async -> (isSubscribed: Bool, productID: String?) {
-//        do {
-//            let statuses = try await Product.SubscriptionInfo.status(for: groupID)
-//
-//            if let subscribedStatus = statuses.first(where: { $0.state == .subscribed }) {
-//                // Get the verified renewal info
-//                let verifiedRenewal = subscribedStatus.renewalInfo
-//
-//                switch verifiedRenewal {
-//                case .verified(let renewalInfo):
-//                    return (true, renewalInfo.currentProductID)
-//                case .unverified(_, let error):
-//                    print("❌ Renewal info unverified:", error.localizedDescription)
-//                    return (true, nil)
-//                }
-//            }
-//        } catch {
-//            print("❌ Error fetching subscription info:", error.localizedDescription)
-//        }
-//
-//        return (false, nil)
-//    }
-//}
+        for await result in StoreKit.Transaction.currentEntitlements {
+            switch result {
+            case .verified(let tx):
+                guard tx.productType == .autoRenewable,
+                      platinumPlans.contains(tx.productID) else { continue }
+                sawAny = true
+                await updateAndPrint(for: tx, user: user)   // 👈 writes happen on MainActor inside
+                print("------------------------------------------------")
+            case .unverified(let tx, let err):
+                print("⚠️ unverified \(tx.productID): \(err.localizedDescription)")
+            }
+        }
+
+        if !sawAny {
+            await MainActor.run {
+                user.platinumUser = false
+                user.platinumStatus = "Not Active"
+            }
+            print("ℹ️ no active platinum entitlement found")
+        }
+
+        print("✅ ===== END SUBSCRIPTION DEBUG =================")
+    }
+
+    // ⬇️ gather off-main, then assign on-main
+    private static func updateAndPrint(for tx: StoreKit.Transaction,
+                                       user: UserInformation) async {
+        // Compute everything we need (off main thread is fine)
+        let product = await product(for: tx.productID)
+        var renewalState = 0
+        var willAutoRenew = false
+        var renewalDate: Date?
+        var expirationReason: String?
+        var isInBillingRetry = false
+
+        if let sub = product?.subscription {
+            do {
+                if let s = try await sub.status.first {
+                    renewalState = s.state.rawValue
+                    if case .verified(let r) = s.renewalInfo {
+                        willAutoRenew = r.willAutoRenew
+                        renewalDate = r.renewalDate
+                        print("1")
+                        expirationReason = r.expirationReason.map { String(describing: $0) }
+                        isInBillingRetry = r.isInBillingRetry
+                    }
+                }
+            } catch {
+                print("⚠️ couldn’t fetch subscription.status(): \(error)")
+            }
+        }
+        
+        let renewalStateVal      = renewalState
+        let willAutoRenewVal     = willAutoRenew
+        let renewalDateVal       = renewalDate
+        let expirationReasonVal  = expirationReason
+        let isInBillingRetryVal  = isInBillingRetry
+
+        // Now write to @AppStorage on the main actor
+        await MainActor.run {
+            user.platinumPlan = tx.productID
+            user.platinumID = Int(tx.id)
+            user.platinumOriginalID = Int(tx.originalID)
+            user.platinumPurchaseDate = tx.purchaseDate
+            user.platinumExpireDate = tx.expirationDate
+            user.platinumRevocationDate = tx.revocationDate
+
+            if #available(iOS 17.4, *), let t = tx.price {
+                user.platinumPrice = (t as NSDecimalNumber).doubleValue
+            }
+
+            // ✅ use the immutable copies here
+            user.platinumRenewalState     = renewalStateVal
+            user.platinumWillAutoRenew    = willAutoRenewVal
+            user.platinumRenewalDate      = renewalDateVal
+            user.platinumExpirationReason = expirationReasonVal
+            user.platinumIsInBillingRetry = isInBillingRetryVal
+
+            // keep this on main too
+            user.platinumUser = willAutoRenewVal
+
+            // status calc…
+            if let exp = tx.expirationDate, exp < Date() {
+                user.platinumStatus = "Expired"
+            } else if tx.revocationDate != nil {
+                user.platinumStatus = "Revoked"
+            } else {
+                user.platinumStatus = "Active"
+            }
+        }
+        
+        print("id: \(tx.id)")
+        print("expirationDate: \(tx.expirationDate ?? nil)")
+        print("price: \(tx.price ?? nil)")
+        print("productID: \(tx.productID)")
+        print("productType: \(tx.productType)")
+        print("purchaseDate: \(tx.purchaseDate)")
+        print("advancedCommerceInfo: \(tx.advancedCommerceInfo ?? nil)")
+        print("appAccountToken: \(tx.appAccountToken ?? nil)")
+        print("appBundleID: \(tx.appBundleID)")
+        print("appTransactionID: \(tx.appTransactionID)")
+        print("currency: \(tx.currency ?? nil)")
+        print("deviceVerification: \(tx.deviceVerification)")
+        print("deviceVerificationNonce: \(tx.deviceVerificationNonce)")
+        print("environment: \(tx.environment)")
+        print("isUpgraded: \(tx.isUpgraded)")
+        print("jsonRepresentation: \(tx.jsonRepresentation)")
+        print("offer: \(tx.offer ?? nil)")
+        print("originalID: \(tx.originalID)")
+        print("originalPurchaseDate: \(tx.originalPurchaseDate)")
+        print("ownershipType: \(tx.ownershipType)")
+        print("reason: \(tx.reason)")
+        print("revocationDate: \(tx.revocationDate ?? nil)")
+        print("revocationReason: \(tx.revocationReason ?? nil)")
+        print("signedDate: \(tx.signedDate)")
+        print("storefront: \(tx.storefront)")
+        print("subscriptionGroupID: \(tx.subscriptionGroupID ?? nil)")
+        print("debugDescription: \(tx.debugDescription)")
+        print("hashValue: \(tx.hashValue)")
+        print("webOrderLineItemID: \(String(describing: tx.webOrderLineItemID))")
+        
+        user.platinumUser = user.platinumWillAutoRenew
+
+        // Printing can stay off-main
+        print("""
+        🏷️ plan: \(user.platinumPlan ?? "nil")
+        id/original: \(user.platinumID ?? 0)/\(user.platinumOriginalID ?? 0)
+        purchased: \(fmt(tx.purchaseDate))
+        expires: \(fmt(tx.expirationDate))
+        revoked: \(fmt(tx.revocationDate))
+        price: \(user.platinumPrice ?? -1)
+        renewalState: \(user.platinumRenewalState ?? 0)
+        willAutoRenew: \(user.platinumWillAutoRenew)
+        renewalDate: \(fmt(user.platinumRenewalDate))
+        expirationReason: \(user.platinumExpirationReason ?? "nil")
+        inBillingRetry: \(user.platinumIsInBillingRetry)
+        status: \(user.platinumStatus)
+        """)
+    }
+
+    private static func product(for id: String) async -> Product? {
+        do { return try await Product.products(for: [id]).first }
+        catch { print("⚠️ product lookup failed for \(id):", error); return nil }
+    }
+
+    private static func fmt(_ date: Date?) -> String {
+        guard let d = date else { return "nil" }
+        let df = ISO8601DateFormatter()
+        df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return df.string(from: d)
+    }
+}
 
 // MARK: - Feature Model (reuse your existing one if already in project)
 struct SubscriptionFeatures: Identifiable {
@@ -584,188 +542,162 @@ struct SubscriptionFeatures: Identifiable {
 // MARK: - RankoPlatinumView
 struct RankoPlatinumView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var purchaseController: PurchaseController  // <-- use the shared one
-    @StateObject private var user_data = UserInformation.shared
-
+    @StateObject private var user = UserInformation.shared      // 👈 use your UserInformation
+    
     enum PlatinumTab: String, CaseIterable { case features = "Features", plans = "Plans" }
     @State private var currentTab: PlatinumTab = .features
-
-    private let productIDs = ["platinum_weekly", "platinum_monthly", "platinum_yearly"]
+    
+    private let productIDs = ["platinum_weekly","platinum_monthly","platinum_yearly"]
     @State private var products: [Product] = []
     @State private var isSyncing = false
-    @State private var purchaseInFlight: String? = nil
-
-    // loading gate so we can show a spinner before we know the state
-    @State private var entitlementsChecked = false
+    @State private var purchaseInFlight: String?
     @State private var showManageSubscriptions = false
-
-    // content
+    
+    // sample features
     private let features: [SubscriptionFeatures] = [
         .init(id: 14, title: "Unlimited Items & Rankos", icon: "infinity", description: "Create as many Rankos and items as you want."),
         .init(id: 13, title: "Create New Blank Items", icon: "rectangle.dashed", description: "Add blank items to your Rankos."),
         .init(id: 12, title: "Add Custom Images", icon: "photo.fill", description: "Attach camera-roll images to items."),
-        .init(id: 11, title: "Download & Export", icon: "arrow.down.circle.fill", description: "Offline Rankos + CSV export (more soon)."),
-        .init(id: 10, title: "Folders & Tags", icon: "square.grid.3x1.folder.fill.badge.plus", description: "Organise Rankos by folders and tags."),
-        .init(id: 9,  title: "Pro App Icons", icon: "apps.iphone", description: "Unlock premium app icons."),
-        .init(id: 8,  title: "Pin 20 Rankos", icon: "pin.fill", description: "Quick-access your favourites."),
-        .init(id: 7,  title: "Clone Rankos", icon: "square.fill.on.square.fill", description: "Copy community Rankos and remix."),
-        .init(id: 6,  title: "Collaborate", icon: "person.3.fill", description: "Build Rankos together in real time."),
-        .init(id: 5,  title: "Spotify Integration", icon: "music.note", description: "Add artists, albums, tracks, playlists."),
-        .init(id: 4,  title: "Search Community", icon: "rectangle.and.text.magnifyingglass", description: "Find public Rankos fast."),
-        .init(id: 3,  title: "Personal Homepage", icon: "star.bubble.fill", description: "See Rankos tailored to you."),
-        .init(id: 2,  title: "Save Rankos", icon: "star.fill", description: "Bookmark to your library."),
-        .init(id: 1,  title: "Archive Rankos", icon: "archivebox.fill", description: "Hide without deleting.")
+        .init(id: 11, title: "Download & Export", icon: "arrow.down.circle.fill", description: "Offline Rankos + CSV export."),
+        .init(id: 10, title: "Folders & Tags", icon: "square.grid.3x1.folder.fill.badge.plus", description: "Organise Rankos by folders and tags.")
     ]
-
+    
     var body: some View {
-        ScrollViewReader { proxy in
-            VStack(spacing: 0) {
-                // Top bar
-                HStack {
-                    Spacer(minLength: 0)
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .black))
-                            .padding(10)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                    .foregroundColor(.black.opacity(0.75))
-                    .padding(.trailing, 16)
-                    .padding(.top, 12)
+        VStack(spacing: 0) {
+            // dismiss button
+            HStack {
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .black))
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
+                .foregroundColor(.black.opacity(0.75))
+                .padding(.trailing, 16)
+                .padding(.top, 12)
+            }
+            
+            // header
+            VStack(spacing: 14) {
+                Image("Platinum_AppIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 120)
+                    .shadow(radius: 8, y: 4)
                 
-                // Header
-                VStack(spacing: 14) {
-                    Image("Platinum_AppIcon")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 120)
-                        .shadow(radius: 8, y: 4)
-                    
-                    Text("BECOME A PLATINUM MEMBER")
-                        .font(.custom("Nunito-Black", size: 22))
-                        .kerning(1.1)
-                        .foregroundColor(.black)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
+                Text("BECOME A PLATINUM MEMBER")
+                    .font(.custom("Nunito-Black", size: 22))
+                    .kerning(1.1)
+                    .foregroundColor(.black)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+            .padding(.top, 6)
+            
+            // tabs
+            Picker("", selection: $currentTab) {
+                ForEach(PlatinumTab.allCases, id: \.self) { tab in
+                    Text(tab.rawValue).tag(tab)
                 }
-                .padding(.top, 6)
-                
-                // Tabs
-                Picker("", selection: $currentTab) {
-                    ForEach(PlatinumTab.allCases, id: \.self) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.top, 18)
-                
-                // Content
-                Group {
-                    switch currentTab {
-                    case .features:
-                        featuresTab(proxy: proxy)
-                    case .plans:
-                        if purchaseController.autoRenews ?? true {
-                            subscribedView()
-                        } else {
-                            plansTabContent()
-                        }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            
+            // content
+            Group {
+                switch currentTab {
+                case .features:
+                    featuresTab()
+                case .plans:
+                    if user.platinumUser {
+                        subscribedView()
+                    } else {
+                        plansTab()
                     }
                 }
-                .padding(.top, 10)
             }
-            .background(Color.white.ignoresSafeArea())
-            .task {
-                await loadProducts()
-                await purchaseController.refreshEntitlements()
-                print("loaded products:", products.map(\.id))
-            }
-            .subscriptionStatusTask(for: "D546B9ED") { _ in
-                await purchaseController.refreshEntitlements()
-            }
-            .task {
-                // fully qualify to avoid any “Transaction is ambiguous” issues
-                for await _ in StoreKit.Transaction.updates {
-                    await purchaseController.refreshEntitlements()
-                }
-            }
+            .padding(.top, 10)
+            
         }
-        .onChange(of: purchaseController.isProUser) {
-            print("🔎 isPro=\(purchaseController.isProUser), productID=\(purchaseController.activeProductID ?? "nil"), PlatinumID=\(user_data.platinumID)")
+        .background(Color.white.ignoresSafeArea())
+        .task {
+            print("RankoPlatinumView Appears")
+            await loadProducts()
+            await SubscriptionDebugger.printAll()       // 👈 refresh on appear
+        }
+        .task {
+            print("Detected Change in Subscriptions")
+            for await _ in StoreKit.Transaction.updates {
+                await SubscriptionDebugger.printAll()   // 👈 refresh on subscription change
+            }
         }
     }
-
-    // MARK: - Features Tab
-    @ViewBuilder
-    private func featuresTab(proxy: ScrollViewProxy) -> some View {
+    
+    // MARK: - Features
+    private func featuresTab() -> some View {
         ScrollView {
-            LazyVStack(spacing: 12, pinnedViews: []) {
+            VStack(spacing: 16) {
                 ForEach(features) { f in
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: f.icon)
                             .font(.system(size: 18, weight: .bold))
                             .frame(width: 36, height: 36)
-                            .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.black.opacity(0.06), lineWidth: 1))
-                            .padding(.top, 2)
-
+                            .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+                        
                         VStack(alignment: .leading, spacing: 4) {
                             Text(f.title)
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
                             Text(f.description)
                                 .font(.system(size: 14))
                                 .foregroundColor(.black.opacity(0.65))
-                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Spacer(minLength: 0)
+                        Spacer()
                     }
                     .padding(14)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.black.opacity(0.07), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 4)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 14))
+                    .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 3)
                     .padding(.horizontal, 16)
                 }
-
-                // Look At Plans button
+                
                 Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) {
-                        currentTab = .plans
-                    }
+                    withAnimation { currentTab = .plans }
                 } label: {
                     Text("LOOK AT PLANS")
                         .font(.custom("Nunito-Black", size: 16))
-                        .kerning(0.8)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(Color.black, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(Color.black, in: RoundedRectangle(cornerRadius: 14))
                         .foregroundColor(.white)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
                 .padding(.bottom, 28)
                 
-                VStack {
-                    Button("Manage My Subscriptions") {
-                        showManageSubscriptions = true
-                    }
-                    .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
+                Button("Manage My Subscriptions") {
+                    showManageSubscriptions = true
                 }
+                .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
+                .padding(.bottom, 20)
             }
         }
-        .onAppear {
-            print("🔎 isPro=\(purchaseController.isProUser), productID=\(purchaseController.activeProductID ?? "nil"), PlatinumID=\(user_data.platinumID)")
-        }
     }
-
-    // MARK: - Plans Tab
-    @ViewBuilder
+    
+    // MARK: - Subscribed View
     private func subscribedView() -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
+            Text("You’re currently subscribed to **\(prettyPlanName(user.platinumPlan))**")
+                .font(.system(size: 16))
+            
+            if let expire = user.platinumExpireDate {
+                Text("Expires on \(expire.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            
             Button {
                 Task {
                     if let scene = UIApplication.shared.connectedScenes
@@ -783,48 +715,32 @@ struct RankoPlatinumView: View {
             }
             .padding(.horizontal, 16)
         }
-        .padding()
-        .onAppear {
-            print("🔎 isPro=\(purchaseController.isProUser), productID=\(purchaseController.activeProductID ?? "nil"), PlatinumID=\(user_data.platinumID)")
-        }
+        .padding(.top, 24)
     }
     
-    @ViewBuilder
-    private func plansTabContent() -> some View {
-        VStack(spacing: 12) {
+    // MARK: - Plans
+    private func plansTab() -> some View {
+        VStack(spacing: 14) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(sortedProducts(products), id: \.id) { product in
-                        PlanCard(
-                            product: product,
-                            activeProductID: purchaseController.activeProductID,
-                            isLoading: purchaseInFlight == product.id
-                        ) {
-                            // Perform async/throwing work inside a Task
+                        PlanCard(product: product,
+                                 isActive: user.platinumPlan == product.id,
+                                 isLoading: purchaseInFlight == product.id) {
                             Task {
                                 purchaseInFlight = product.id
                                 defer { purchaseInFlight = nil }
-
-                                print("🛒 purchasing \(product.id)")
+                                
                                 do {
                                     let result = try await product.purchase()
-                                    print("🛒 purchase result = \(result)")
-
-                                    switch result {
-                                    case .success(let verification):
-                                        switch verification {
-                                        case .verified(let tx):          // ✅ signature verified
-                                            await PurchaseController.shared.recordPlatinum(from: tx, product: product)
-                                            await PurchaseController.shared.refreshEntitlements()
-
-                                        case .unverified(_, let err):    // ❌ signature not verified
-                                            print("❌ Unverified purchase:", err.localizedDescription)
+                                    print("🛒 purchase result:", result)
+                                    
+                                    if case .success(let verification) = result {
+                                        if case .verified = verification {
+                                            // simply refresh entitlements & fill AppStorage
+                                            print("Detected Successful Payment")
+                                            await SubscriptionDebugger.printAll()
                                         }
-
-                                    case .userCancelled, .pending:
-                                        break
-                                    @unknown default:
-                                        break
                                     }
                                 } catch {
                                     print("🛒 purchase error:", error.localizedDescription)
@@ -835,100 +751,71 @@ struct RankoPlatinumView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
-                .padding(.bottom, 6)
             }
             
-            HStack(spacing: 14) {
-                Button {
-                    Task {
-                        isSyncing = true
-                        defer { isSyncing = false }
-                        do { try await AppStore.sync() } catch { print("sync error:", error.localizedDescription) }
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        if isSyncing { ProgressView().scaleEffect(0.8) }
-                        Text("Restore Purchases")
+            Button {
+                Task {
+                    isSyncing = true
+                    defer { isSyncing = false }
+                    try? await AppStore.sync()
+                    print("Detected Restore in Purchases")
+                    await SubscriptionDebugger.printAll()
+                }
+            } label: {
+                if isSyncing { ProgressView() }
+                Text("Restore Purchases")
+            }
+            .padding(.top, 6)
+            
+            Button {
+                Task {
+                    if let scene = UIApplication.shared.connectedScenes
+                        .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+                        try? await AppStore.showManageSubscriptions(in: scene)
                     }
                 }
-                
-                Spacer()
-                
-                Link("Terms of Service", destination: URL(string: "https://apple.com")!)
-                Text("•").foregroundColor(.black.opacity(0.4))
-                Link("Privacy", destination: URL(string: "https://apple.com")!)
+            } label: {
+                Text("Manage Subscription")
+                    .font(.custom("Nunito-Black", size: 15))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.black, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundColor(.white)
             }
-            .font(.footnote)
-            .foregroundColor(.black.opacity(0.75))
             .padding(.horizontal, 16)
-            .padding(.bottom, 18)
-            
-            if purchaseController.isEntitled {
-                let current = purchaseController.activeProductID ?? "—"
-                let next = purchaseController.nextProductID
-                let renewOn = purchaseController.renewalOn
-
-                if let next, next != current, purchaseController.autoRenews == true {
-                    Text("Current: \(prettyPlanName(current)) • Will switch to \(prettyPlanName(next)) on \(renewOn?.formatted(date: .abbreviated, time: .omitted) ?? "next renewal")")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                } else if purchaseController.autoRenews == false {
-                    Text("Active — Renewal Off • Expires \(purchaseController.expiresOn?.formatted(date: .abbreviated, time: .omitted) ?? "")")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                } else {
-                    Text("Active — Renews Automatically")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                }
-            }
         }
     }
     
-    private func prettyPlanName(_ id: String) -> String {
+    private func prettyPlanName(_ id: String?) -> String {
         switch id {
-        case "platinum_weekly":  return "Weekly"
+        case "platinum_weekly": return "Weekly"
         case "platinum_monthly": return "Monthly"
-        case "platinum_yearly":  return "Yearly"
-        default:            return id
+        case "platinum_yearly": return "Yearly"
+        default: return "—"
         }
     }
-
-    // MARK: - Helpers
+    
     private func sortedProducts(_ products: [Product]) -> [Product] {
-        // keep the horizontal order: weekly, monthly, yearly (matches your IDs)
-        let order = ["platinum_weekly", "platinum_monthly", "platinum_yearly"]
-        return products.sorted { a, b in
-            order.firstIndex(of: a.id) ?? 99 < order.firstIndex(of: b.id) ?? 99
-        }
+        let order = ["platinum_weekly","platinum_monthly","platinum_yearly"]
+        return products.sorted { order.firstIndex(of: $0.id) ?? 99 < order.firstIndex(of: $1.id) ?? 99 }
     }
-
+    
     @MainActor
     private func loadProducts() async {
-        do {
-            let result = try await Product.products(for: Set(productIDs))
-            self.products = sortedProducts(result)
-        } catch {
-            print("products load error:", error.localizedDescription)
-        }
+        do { products = try await Product.products(for: Set(productIDs)) }
+        catch { print("❌ loadProducts error:", error) }
     }
 }
 
 // MARK: - PlanCard
 private struct PlanCard: View {
     let product: Product
-    let activeProductID: String?
+    let isActive: Bool
     let isLoading: Bool
     let onPurchase: () -> Void
-
-    var isActive: Bool { activeProductID == product.id }
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // badge / name
             Text(planName(for: product.id).uppercased())
                 .font(.custom("Nunito-Black", size: 13))
                 .foregroundColor(.black.opacity(0.7))
@@ -939,27 +826,19 @@ private struct PlanCard: View {
             Text("\(freePeriod(for: product.id)), then".uppercased())
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.black.opacity(0.6))
-
-            // price
+            
             Text(product.displayPrice)
                 .font(.system(size: 28, weight: .black))
                 .foregroundColor(.black)
-
-            // period
+            
             if let period = product.subscription?.subscriptionPeriod {
                 Text("per \(period.unit.localizedUnit)")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.black.opacity(0.6))
             }
-
-            // blurb
-            Text(planBlurb(for: product.id))
-                .font(.system(size: 13))
-                .foregroundColor(.black.opacity(0.7))
-                .fixedSize(horizontal: false, vertical: true)
-
+            
             Spacer(minLength: 0)
-
+            
             Button(action: onPurchase) {
                 HStack {
                     if isLoading { ProgressView().tint(.white) }
@@ -969,32 +848,22 @@ private struct PlanCard: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(isActive ? Color.black.opacity(0.15) : Color.black,
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            in: RoundedRectangle(cornerRadius: 12))
                 .foregroundColor(isActive ? .black : .white)
             }
         }
         .padding(16)
         .frame(width: 260, height: 220)
-        .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.black.opacity(0.08), lineWidth: 1))
+        .background(.white, in: RoundedRectangle(cornerRadius: 18))
         .shadow(color: .black.opacity(0.05), radius: 12, x: 0, y: 8)
     }
-
+    
     private func planName(for id: String) -> String {
         switch id {
         case "platinum_weekly":  return "Weekly"
         case "platinum_monthly": return "Monthly"
         case "platinum_yearly":  return "Yearly"
-        default:            return product.displayName
-        }
-    }
-
-    private func planBlurb(for id: String) -> String {
-        switch id {
-        case "platinum_weekly":  return "Low-Commitment"
-        case "platinum_monthly": return "Most Popular"
-        case "platinum_yearly":  return "Best Value"
-        default:            return product.description
+        default:                 return product.displayName
         }
     }
     
@@ -1003,12 +872,11 @@ private struct PlanCard: View {
         case "platinum_weekly":  return "one week free"
         case "platinum_monthly": return "one month free"
         case "platinum_yearly":  return "one month free"
-        default:            return product.description
+        default:                 return ""
         }
     }
 }
 
-// MARK: - Period helper
 private extension Product.SubscriptionPeriod.Unit {
     var localizedUnit: String {
         switch self {
@@ -1242,7 +1110,7 @@ struct AccountView: View {
     
     // ✅ Dummy Logout Function
     private func logOutUser() {
-        user_data.logStatus = false
+        user_data.userLoginStatus = false
         print("User logged out.")
         
         try? Auth.auth().signOut()
@@ -1279,7 +1147,7 @@ struct AccountView: View {
         user_data.preferencesAutocorrectDisabled = true
         user_data.ProfilePicture = nil
         user_data.userRankoCategories = ""
-        user_data.logStatus = false
+        user_data.userLoginStatus = false
     }
     
     // ✅ Dummy Delete Account Function
@@ -1325,7 +1193,7 @@ struct AccountView: View {
               user_data.preferencesAutocorrectDisabled = true
               user_data.ProfilePicture = nil
               user_data.userRankoCategories = ""
-              user_data.logStatus = false
+              user_data.userLoginStatus = false
           }
         }
     }
@@ -3368,7 +3236,7 @@ struct LegalView: View {
 //                                                print("User Profile Picture: \(user_data.userProfilePicture)")
 //                                                print("User Found Us: \(user_data.userFoundUs)")
 //                                                print("User Joined: \(user_data.userJoined)")
-//                                                print("User Log Status: \(user_data.logStatus)")
+//                                                print("User Log Status: \(user_data.userLoginStatus)")
 //                                                print("_________________________________________")
 //                                                if let user = Auth.auth().currentUser {
 //                                                    print("More Information")
@@ -3407,7 +3275,7 @@ struct LegalView: View {
 //                                            user_data.userProfilePicture = "default-profilePicture.jpg"
 //                                            user_data.userFoundUs = ""
 //                                            user_data.userJoined = ""
-//                                            user_data.logStatus = false
+//                                            user_data.userLoginStatus = false
 //                                        } label: {
 //                                            Text("Log Out")
 //                                                .frame(maxWidth: .infinity)
@@ -3554,7 +3422,7 @@ struct LegalView: View {
 //                                user_data.userFoundUs = "People"
 //                                user_data.userJoined = "2025-06-12-12-34-56"
 //                                user_data.userProfilePicture = "https://thumbs.dreamstime.com/b/space-rocket-vector-illustration-blasting-off-sky-32237994.jpg"
-//                                user_data.logStatus = true
+//                                user_data.userLoginStatus = true
 //                            } label: {
 //                                HStack {
 //                                    Image(systemName: "person.crop.circle.fill")

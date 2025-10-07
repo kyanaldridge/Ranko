@@ -1225,11 +1225,6 @@ struct BlindSequenceSettings: View {
     
     @StateObject private var user_data = UserInformation.shared
     @Environment(\.dismiss) var dismiss
-    
-    @AppStorage("unlocked_Medal_AppIcon") private var unlockedMedal: Bool = false
-    @AppStorage("unlocked_Trophy_AppIcon") private var unlockedTrophy: Bool = false
-    @AppStorage("unlocked_Crown_AppIcon") private var unlockedCrown: Bool = false
-    @AppStorage("unlocked_Star_AppIcon") private var unlockedStar: Bool = false
 
     @State private var showConfirmReset = false
 
@@ -1241,10 +1236,10 @@ struct BlindSequenceSettings: View {
 
             Button(action: {
                 showConfirmReset = true
-                unlockedMedal = false
-                unlockedTrophy = false
-                unlockedCrown = false
-                unlockedStar = false
+                user_data.medalAppIconUnlocked = false
+                user_data.trophyAppIconUnlocked = false
+                user_data.crownAppIconUnlocked = false
+                user_data.starAppIconUnlocked = false
             }) {
                 Text("Reset Stats")
                     .foregroundColor(.white)
@@ -1265,6 +1260,8 @@ struct BlindSequenceSettings: View {
                 user_data.blindSequenceGamesPlayed = 0
                 user_data.blindSequenceHighScore = 0
                 user_data.blindSequenceHighScoreTime = .infinity
+                user_data.blindSequenceMaxLevelUnlocked = 1
+                user_data.blindSequenceSelectedLevel = 1
             }
         } message: {
             Text("This will erase all gameplay records.")

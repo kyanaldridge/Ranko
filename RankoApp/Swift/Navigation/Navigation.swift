@@ -2395,7 +2395,6 @@ struct SampleCategoryChipButtonView: View {
 struct CustomTabBar: View {
     @State private var trayViewOpen: Bool
     // Use the same stored string for the tint.
-    @AppStorage("app_colour") private var appColourString: String = ".orange"
     @StateObject private var user_data = UserInformation.shared
     var activeForeground: Color = .white
 
