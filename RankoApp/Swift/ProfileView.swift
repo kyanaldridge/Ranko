@@ -167,10 +167,10 @@ struct ProfileView: View {
                                 HStack(spacing: 20) {
                                     VStack {
                                         Text("\(user_data.userStatsRankos)")
-                                            .font(.custom("Nunito-ExtraBold", size: 14))
+                                            .font(.custom("Nunito-SemiBold", size: 14))
                                             .foregroundColor(Color(hex: 0x514343))
                                         Text("Rankos")
-                                            .font(.custom("Nunito-ExtraBold", size: 13))
+                                            .font(.custom("Nunito-SemiBold", size: 13))
                                             .foregroundColor(Color(hex: 0x514343))
                                     }
                                     .onTapGesture {
@@ -178,10 +178,10 @@ struct ProfileView: View {
                                     }
                                     VStack {
                                         Text("\(user_data.userStatsFollowers)")
-                                            .font(.custom("Nunito-ExtraBold", size: 14))
+                                            .font(.custom("Nunito-SemiBold", size: 14))
                                             .foregroundColor(Color(hex: 0x514343))
                                         Text("Followers")
-                                            .font(.custom("Nunito-ExtraBold", size: 13))
+                                            .font(.custom("Nunito-SemiBold", size: 13))
                                             .foregroundColor(Color(hex: 0x514343))
                                     }
                                     .onTapGesture {
@@ -189,10 +189,10 @@ struct ProfileView: View {
                                     }
                                     VStack {
                                         Text("\(user_data.userStatsFollowing)")
-                                            .font(.custom("Nunito-ExtraBold", size: 14))
+                                            .font(.custom("Nunito-SemiBold", size: 14))
                                             .foregroundColor(Color(hex: 0x514343))
                                         Text("Following")
-                                            .font(.custom("Nunito-ExtraBold", size: 13))
+                                            .font(.custom("Nunito-SemiBold", size: 13))
                                             .foregroundColor(Color(hex: 0x514343))
                                     }
                                     .onTapGesture {
@@ -212,7 +212,7 @@ struct ProfileView: View {
                                     .multilineTextAlignment(.leading)
                             } else {
                                 Text("✏️ Add a bio to display more personality to your profile...")
-                                    .font(.custom("Nunito-ExtraBold", size: 13))
+                                    .font(.custom("Nunito-SemiBold", size: 13))
                                     .foregroundColor(Color(hex: 0x514343))
                                     .multilineTextAlignment(.leading)
                             }
@@ -477,7 +477,7 @@ struct ProfileView: View {
                                                         }))
                                                     )
                                                 } else {
-                                                    GroupListIndividualGallery(listData: list, type: "featured", onUnpin: {
+                                                    TierListIndividualGallery(listData: list, type: "featured", onUnpin: {
                                                         slotToUnpin = slot
                                                         showUnpinAlert = true
                                                     })
@@ -575,7 +575,7 @@ struct ProfileView: View {
         .fullScreenCover(item: $selectedFeaturedList) { list in
             if list.type == "default" {
                 DefaultListPersonal(
-                  listID: list.id,
+                  rankoID: list.id,
                   onSave: { _ in
                       listViewID     = UUID()
                       isLoadingLists = true
@@ -596,18 +596,27 @@ struct ProfileView: View {
                   }
                 )
             } else if list.type == "group" {
-//                GroupListPersonal(
-//                  listID: list.id,
-//                  onDelete: {
-//                      listViewID     = UUID()
-//                      isLoadingLists = true
-//                      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-//                          isLoadingLists = false
-//                          retryFeaturedLoading()
-//                          loadFollowStats()
-//                      }
-//                  }
-//                )
+                TierListPersonal(
+                  rankoID: list.id,
+                  onSave: { _ in
+                      listViewID     = UUID()
+                      isLoadingLists = true
+                      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                          isLoadingLists = false
+                          retryFeaturedLoading()
+                          loadFollowStats()
+                      }
+                  },
+                  onDelete: {
+                      listViewID     = UUID()
+                      isLoadingLists = true
+                      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                          isLoadingLists = false
+                          retryFeaturedLoading()
+                          loadFollowStats()
+                      }
+                  }
+                )
             }
             
         }
@@ -1050,9 +1059,9 @@ struct ProfileView: View {
             let group = DispatchGroup()
 
             for child in snap.children.allObjects as? [DataSnapshot] ?? [] {
-                if let slot = Int(child.key), let listID = child.value as? String {
+                if let slot = Int(child.key), let rankoID = child.value as? String {
                     group.enter()
-                    fetchFeaturedList(slot: slot, listID: listID) {
+                    fetchFeaturedList(slot: slot, rankoID: rankoID) {
                         if let list = $0 { tempLists[slot] = list }
                         group.leave()
                     }
@@ -1068,15 +1077,15 @@ struct ProfileView: View {
     }
 
     // ✅ Modified fetchFeaturedList to support completion
-    private func fetchFeaturedList(slot: Int, listID: String, completion: @escaping (RankoList?) -> Void) {
+    private func fetchFeaturedList(slot: Int, rankoID: String, completion: @escaping (RankoList?) -> Void) {
         let listRef = Database.database()
             .reference()
             .child("RankoData")
-            .child(listID)
+            .child(rankoID)
 
         listRef.observeSingleEvent(of: .value) { snap in
             guard let dict = snap.value as? [String: Any],
-                  let rl = parseListData(dict: dict, id: listID) else {
+                  let rl = parseListData(dict: dict, id: rankoID) else {
                 completion(nil)
                 return
             }
@@ -1839,418 +1848,598 @@ struct FacetCategory: Identifiable {
     let facetCount: Int
 }
 
+private enum SortMode: String, CaseIterable, Identifiable {
+    case custom = "Custom"
+    case alphabetical = "Alphabetical"
+    case category = "Category"
+    case dateCreated = "DateTimeCreated"
+    case dateUpdated = "DateTimeUpdated"
+    var id: String { rawValue }
+}
+
+private enum GroupMode: String, CaseIterable, Identifiable {
+    case none = "None"
+    case type = "Type"
+    case category = "Category"
+    var id: String { rawValue }
+}
+
+// MARK: - User sort model parsed from /UserData/{uid}/UserSortRankos
+
+private struct CategoryMeta: Hashable {
+    let name: String
+    let icon: String
+    let colour: UInt
+}
+
+private enum CustomNode: Hashable {
+    case folder(name: String, ids: [String])
+    case item(id: String)
+}
+
+private struct UserSortModel {
+    // Custom
+    var customTree: [CustomNode] = []
+    // Alphabetical: map "LABEL - UUID" -> uuid
+    var alphabetical: [String: String] = [:]
+    // Category buckets + display order
+    var categoryBuckets: [String: [String]] = [:]              // name -> [rankoIDs]
+    var categoryOrder: [CategoryMeta] = []                     // sorted order for headers
+    // Created/Updated keys "timestamp - UUID"
+    var createdKeys: [String] = []
+    var updatedKeys: [String] = []
+    // Type buckets
+    var typeBuckets: [String: [String]] = [:]                  // e.g. "default", "tier"
+}
+
+// MARK: - Section model for grouped display
+
+private struct SectionModel: Identifiable {
+    let id = UUID()
+    let title: String
+    let titleIcon: String?
+    let titleColor: Color
+    let rows: [RankoList]
+}
+
+// MARK: - View
+
 struct SearchRankosView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var user_data = UserInformation.shared
     @FocusState private var searchFocused: Bool
-    
+
+    // Data
     @State private var allLists: [RankoList] = []
-    @State private var selectedFacet: String? = nil
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
-    @State private var rankoQuery: String = ""
+
+    // Query
     @State private var searchField: String = ""
+    @State private var rankoQuery: String = ""
+
+    // Filters / Sort / Group
+    @State private var showFilters = false
+    @State private var sortMode: SortMode = .dateUpdated
+    @State private var groupMode: GroupMode = .none
+    @State private var selectedTypes = Set<String>()        // e.g. ["default", "group"/"tier"]
+    @State private var selectedCategories = Set<String>()   // category names
+
+    // External selections
     @State private var selectedList: RankoList?
-    @State private var currentPage: Int = 1
-    @State private var showCategoryOverlay: Bool = false
+
+    // UserSort model
+    @State private var userSort = UserSortModel()
+
+    // MARK: - Derived
     
-    private let itemsPerPage = 10
-    
-    // All filtering logic
-    private var filteredLists: [RankoList] {
-        allLists.filter { list in
-            (selectedFacet == nil || list.categoryName == selectedFacet) &&
-            (rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased()))
-        }
-    }
-    
-    // Paginated results - only show current page
-    private var paginatedLists: [RankoList] {
-        let startIndex = (currentPage - 1) * itemsPerPage
-        let endIndex = min(startIndex + itemsPerPage, filteredLists.count)
-        
-        guard startIndex < filteredLists.count else { return [] }
-        return Array(filteredLists[startIndex..<endIndex])
-    }
-    
-    private var totalPages: Int {
-        max(1, Int(ceil(Double(filteredLists.count) / Double(itemsPerPage))))
-    }
-    
-    // Dynamic categories for overlay
-    private var availableCategories: [String] {
-        let baseResults = allLists.filter { list in
-            rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased())
-        }
-        
-        let categories = Set(baseResults.map { $0.categoryName })
-        return Array(categories).sorted()
-    }
-    
-    private func categoryCount(for category: String) -> Int {
-        let baseResults = allLists.filter { list in
-            rankoQuery.isEmpty || list.listName.lowercased().contains(rankoQuery.lowercased())
-        }
-        return baseResults.filter { $0.categoryName == category }.count
-    }
-    
-    // Fallback color helper
-    private func chipColor(for name: String) -> Color {
-        categoryChipIconColors[name] ?? Color.gray
+    private enum TopTab: String, CaseIterable, Identifiable {
+        case search = "Search"
+        case filter = "Filter"
+        var id: String { rawValue }
     }
 
-    var body: some View {
-        TabView {
-            NavigationStack {
-                ZStack {
-                    // MAIN CONTENT
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            // Loading / Error states
-                            if isLoading {
-                                VStack(spacing: 10) {
-                                    ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
-                                    Text("Loading Rankos...")
-                                        .font(.custom("Nunito-Black", size: 16))
-                                        .foregroundColor(Color(hex: 0xA2A2A1))
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 50)
-                            } else {
-                                // Results info
-                                HStack {
-                                    Text("\(filteredLists.count) results")
-                                        .font(.custom("Nunito-Black", size: 14))
-                                        .foregroundColor(Color(hex: 0x514343))
-                                    
-                                    if selectedFacet != nil {
-                                        Button("Clear filter") {
-                                            withAnimation(.easeInOut(duration: 0.25)) {
-                                                selectedFacet = nil
-                                                currentPage = 1
-                                            }
-                                        }
-                                        .font(.custom("Nunito-Black", size: 12))
-                                        .foregroundColor(.blue)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Button(action: {
-                                        withAnimation(.easeInOut(duration: 0.3)) {
-                                            showCategoryOverlay.toggle()
-                                        }
-                                    }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "line.3.horizontal.decrease.circle")
-                                            Text("Filter")
-                                        }
-                                        .font(.custom("Nunito-Black", size: 12))
-                                        .foregroundColor(Color(hex: 0x514343))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(Color(hex: 0xF5F5F5))
-                                        )
-                                    }
-                                }
-                                .padding(.horizontal, 15)
-                                .padding(.vertical, 8)
-                                
-                                if let error = errorMessage {
-                                    Text(error).foregroundColor(.red).padding()
-                                }
-                                
-                                // Paginated results
-                                LazyVStack(spacing: 8) {
-                                    ForEach(paginatedLists) { list in
-                                        Button {
-                                            selectedList = list
-                                        } label: {
-                                            RankoMiniView(listData: list, type: "", onUnpin: {})
-                                        }
-                                        .foregroundColor(Color(hex: 0xFF9864))
-                                        .tint(Color(hex: 0xFFFFFF))
-                                        .buttonStyle(.glassProminent)
-                                        .shadow(color: Color(hex:0x000000).opacity(0.1), radius: 8, x: 0, y: -2)
-                                    }
-                                }
-                                .padding(.horizontal, 15)
-                                
-                                // Pagination controls
-                                if totalPages > 1 {
-                                    HStack(spacing: 20) {
-                                        Button("Previous") {
-                                            if currentPage > 1 {
-                                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                    currentPage -= 1
-                                                }
-                                            }
-                                        }
-                                        .disabled(currentPage <= 1)
-                                        .foregroundColor(currentPage <= 1 ? .gray : .blue)
-                                        
-                                        Text("Page \(currentPage) of \(totalPages)")
-                                            .font(.custom("Nunito-Black", size: 14))
-                                            .foregroundColor(Color(hex: 0x514343))
-                                        
-                                        Button("Next") {
-                                            if currentPage < totalPages {
-                                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                    currentPage += 1
-                                                }
-                                            }
-                                        }
-                                        .disabled(currentPage >= totalPages)
-                                        .foregroundColor(currentPage >= totalPages ? .gray : .blue)
-                                    }
-                                    .padding(.vertical, 20)
-                                }
-                            }
-                        }
-                    }
-                    
-                    // CATEGORY OVERLAY
-                    if showCategoryOverlay {
-                        CategoryOverlayView(
-                            categories: availableCategories,
-                            selectedCategory: selectedFacet,
-                            categoryCount: categoryCount,
-                            chipColor: chipColor,
-                            onCategorySelected: { category in
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    selectedFacet = selectedFacet == category ? nil : category
-                                    currentPage = 1 // Reset to first page when filtering
-                                    showCategoryOverlay = false
-                                }
-                            },
-                            onDismiss: {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    showCategoryOverlay = false
-                                }
-                            }
-                        )
-                    }
+    @State private var topTab: TopTab = .search
+
+    private var allTypes: [String] {
+        let set = Set(allLists.map { $0.type.lowercased() })
+        return Array(set).sorted()
+    }
+
+    private var allCategories: [CategoryMeta] {
+        // Use live RankoList for completeness; fall back to categoryOrder when needed
+        let metas = Dictionary(grouping: allLists, by: { $0.categoryName })
+            .map { (name, lists) -> CategoryMeta in
+                // pick first as source of icon/colour
+                let first = lists.first!
+                return CategoryMeta(
+                    name: name,
+                    icon: first.categoryIcon,
+                    colour: first.categoryColour
+                )
+            }
+        // Merge known order from userSort.categoryOrder (optional nicety)
+        let orderNames = userSort.categoryOrder.map { $0.name }
+        return metas.sorted {
+            let i0 = orderNames.firstIndex(of: $0.name) ?? .max
+            let i1 = orderNames.firstIndex(of: $1.name) ?? .max
+            return (i0, $0.name) < (i1, $1.name)
+        }
+    }
+
+    private var filteredBase: [RankoList] {
+        allLists.filter { list in
+            // text query
+            (rankoQuery.isEmpty || list.listName.range(of: rankoQuery, options: .caseInsensitive) != nil)
+            // type filter
+            && (selectedTypes.isEmpty || selectedTypes.contains(list.type.lowercased()))
+            // category filter
+            && (selectedCategories.isEmpty || selectedCategories.contains(list.categoryName))
+        }
+    }
+
+    private var displayed: [SectionModel] {
+        // 1) sort
+        let sorted: [RankoList]
+        switch sortMode {
+        case .custom:
+            sorted = sortByCustom(filteredBase)
+        case .alphabetical:
+            sorted = filteredBase.sorted { $0.listName.localizedCaseInsensitiveCompare($1.listName) == .orderedAscending }
+        case .category:
+            // stable: category name, then name
+            sorted = filteredBase.sorted {
+                if $0.categoryName != $1.categoryName { return $0.categoryName < $1.categoryName }
+                return $0.listName.localizedCaseInsensitiveCompare($1.listName) == .orderedAscending
+            }
+        case .dateCreated:
+            sorted = filteredBase.sorted { (Int($0.timeCreated) ?? 0) > (Int($1.timeCreated) ?? 0) }
+        case .dateUpdated:
+            sorted = filteredBase.sorted { (Int($0.timeUpdated) ?? 0) > (Int($1.timeUpdated) ?? 0) }
+        }
+
+        // 2) group
+        switch groupMode {
+        case .none:
+            return [SectionModel(
+                title: "\(sorted.count) results",
+                titleIcon: nil,
+                titleColor: Color(hex: 0x514343),
+                rows: sorted
+            )]
+        case .type:
+            let buckets = Dictionary(grouping: sorted, by: { $0.type.lowercased() })
+            let order = ["default", "tier"] // nice order; "group" == tier lists in your data
+            return buckets
+                .sorted { (l, r) in
+                    let i0 = order.firstIndex(of: l.key) ?? .max
+                    let i1 = order.firstIndex(of: r.key) ?? .max
+                    return (i0, l.key) < (i1, r.key)
                 }
-                // SEARCH IN NAV BAR
-                .searchable(text: $searchField, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Rankos")
-                .searchFocused($searchFocused)
-                .scrollDismissesKeyboard(.immediately)
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        searchFocused = true
-                    }
+                .map { (key, rows) in
+                    SectionModel(
+                        title: key.capitalized.replacingOccurrences(of: "Group", with: "Tier"),
+                        titleIcon: "square.stack.3d.down.right", // neutral icon
+                        titleColor: Color(hex: 0x514343),
+                        rows: rows
+                    )
                 }
-                .onChange(of: searchField) { _, newVal in
-                    rankoQuery = newVal
-                    currentPage = 1 // Reset to first page when searching
-                }
-                // NAV BAR CONFIG
-                .navigationTitle("Search Rankos")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbarRole(.navigationStack)
-                .toolbarBackground(.visible, for: .navigationBar)
-                .toolbarBackground(Color(.systemBackground), for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button(action: { dismiss() }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .black))
-                        }
-                        .tint(Color(hex: 0x514343))
-                    }
-                    ToolbarItem(placement: .principal) {
-                        Text("Search Rankos")
-                            .font(.custom("Nunito-Black", size: 24))
-                            .foregroundColor(Color(hex: 0x514343))
-                            .accessibilityAddTraits(.isHeader)
-                    }
-                }
-                .fullScreenCover(item: $selectedList) { list in
-                    if list.type == "default" {
-                        DefaultListPersonal(listID: list.id, onSave: {_ in dismiss() }, onDelete: { dismiss() })
+        case .category:
+            let buckets = Dictionary(grouping: sorted, by: { $0.categoryName })
+            // prefer your stored order if available
+            let orderNames = userSort.categoryOrder.map { $0.name }
+            return buckets
+                .map { (name, rows) -> (CategoryMeta, [RankoList]) in
+                    // pick meta: from userSort if present else from a row
+                    if let meta = userSort.categoryOrder.first(where: { $0.name == name }) {
+                        return (meta, rows)
                     } else {
-//                        GroupListPersonal(listID: list.id, onDelete: { dismiss() })
+                        let any = rows.first!
+                        return (CategoryMeta(name: name, icon: any.categoryIcon, colour: any.categoryColour), rows)
                     }
                 }
-                .onAppear {
-                    if !isSimulator {
-                        loadOptimizedData()
+                .sorted { lhs, rhs in
+                    let i0 = orderNames.firstIndex(of: lhs.0.name) ?? .max
+                    let i1 = orderNames.firstIndex(of: rhs.0.name) ?? .max
+                    return (i0, lhs.0.name) < (i1, rhs.0.name)
+                }
+                .map { (meta, rows) in
+                    SectionModel(
+                        title: meta.name,
+                        titleIcon: meta.icon,
+                        titleColor: Color(hex: meta.colour),
+                        rows: rows
+                    )
+                }
+        }
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                ScrollView {
+                    if topTab == .search {
+                        // 🔎 SEARCH CONTENT
+                        VStack(spacing: 0) {
+                            if let error = errorMessage {
+                                Text(error).foregroundColor(.red).padding()
+                            }
+                            LazyVStack(spacing: 10, pinnedViews: [.sectionHeaders]) {
+                                ForEach(displayed) { section in
+                                    Section {
+                                        VStack(spacing: 8) {
+                                            ForEach(section.rows) { list in
+                                                Button { selectedList = list } label: {
+                                                    RankoMiniView(listData: list, type: "", onUnpin: {})
+                                                }
+                                                .buttonStyle(.glass)
+                                                .padding(.horizontal, 15)
+                                            }
+                                        }
+                                        .padding(.bottom, 6)
+                                    } header: {
+                                        HStack(spacing: 8) {
+                                            if let icon = section.titleIcon { Image(systemName: icon) }
+                                            Text(section.title)
+                                                .font(.custom("Nunito-Black", size: 16))
+                                        }
+                                        .foregroundColor(section.titleColor)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 15)
+                                        .padding(.vertical, 8)
+                                        .background(Color(.systemBackground).opacity(0.95))
+                                    }
+                                }
+                            }
+                            .padding(.top, 4)
+                        }
+                    } else {
+                        // 🧰 FILTER CONTENT (inline)
+                        FilterSortGroupInline(
+                            sortMode: $sortMode,
+                            groupMode: $groupMode,
+                            allTypes: allTypes,
+                            allCategories: allCategories,
+                            selectedTypes: $selectedTypes,
+                            selectedCategories: $selectedCategories,
+                            onDone: { topTab = .search }
+                        )
+                        .padding(.top, 8)
                     }
                 }
             }
-            .tabItem { Label("", systemImage: "magnifyingglass") }
+            // 🔝 put tab bar + chips under the nav title
+            .safeAreaInset(edge: .top) {
+                VStack(spacing: 8) {
+                    topTabBar
+                    chipsBar
+                }
+                .background(.regularMaterial)
+                .overlay(Divider(), alignment: .bottom)
+                .zIndex(1)
+            }
+            .searchable(text: $searchField, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Rankos")
+            .searchFocused($searchFocused)
+            .scrollDismissesKeyboard(.immediately)
+            .onChange(of: searchField) { _, v in rankoQuery = v }
+            .navigationTitle("Search Rankos")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarRole(.navigationStack)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark").font(.system(size: 16, weight: .black))
+                    }
+                    .tint(Color(hex: 0x514343))
+                }
+            }
+            .fullScreenCover(item: $selectedList) { list in
+                if list.type == "default" {
+                    DefaultListPersonal(rankoID: list.id, onSave: { _ in dismiss() }, onDelete: { dismiss() })
+                } else {
+                    TierListPersonal(rankoID: list.id, onSave: { _ in dismiss() }, onDelete: { dismiss() })
+                }
+            }
+            .onAppear {
+                if !isSimulator {
+                    loadOptimizedData()
+                    loadUserSortModel()
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { searchFocused = true }
+            }
         }
         .interactiveDismissDisabled(true)
     }
     
-    struct CategoryOverlayView: View {
-        let categories: [String]
-        let selectedCategory: String?
-        let categoryCount: (String) -> Int
-        let chipColor: (String) -> Color
-        let onCategorySelected: (String) -> Void
-        let onDismiss: () -> Void
-        
-        var body: some View {
-            ZStack {
-                // Background overlay
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        onDismiss()
+    private var topTabBar: some View {
+        HStack(spacing: 8) {
+            ForEach(TopTab.allCases) { tab in
+                Button {
+                    topTab = tab
+                } label: {
+                    Text(tab.rawValue)
+                        .font(.custom("Nunito-Black", size: 13))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            Capsule().fill(topTab == tab ? Color.accentColor : Color(.secondarySystemBackground))
+                        )
+                        .foregroundColor(topTab == tab ? .white : Color(hex: 0x514343))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.top, 8)
+    }
+    
+    private var chipsBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button {
+                    // quick feedback
+                } label: {
+                    HStack(spacing: 4) { Text("\(filteredBase.count) Results") }
+                        .font(.custom("Nunito-Black", size: 12))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                }
+                .buttonStyle(.glass)
+                .tint(Color(hex: 0x514343))
+
+                // open filter tab quickly
+                Button { topTab = .filter } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                        Text("Filter")
                     }
-                
-                // Category selection panel
-                VStack(spacing: 0) {
-                    Spacer()
-                    
-                    VStack(spacing: 16) {
-                        // Header
-                        HStack {
-                            Text("Filter by Category")
-                                .font(.custom("Nunito-Black", size: 18))
-                                .foregroundColor(Color(hex: 0x514343))
-                            Spacer()
-                            Button(action: onDismiss) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
-                        
-                        // Categories grid
-                        ScrollView {
-                            LazyVGrid(columns: [
-                                GridItem(.flexible()),
-                                GridItem(.flexible())
-                            ], spacing: 12) {
-                                ForEach(categories, id: \.self) { category in
-                                    let isSelected = selectedCategory == category
-                                    let count = categoryCount(category)
-                                    
-                                    Button {
-                                        onCategorySelected(category)
-                                    } label: {
-                                        HStack(spacing: 8) {
-                                            Image(systemName: FilterChip.icon(named: category, in: defaultFilterChips) ?? "circle.fill")
-                                                .font(.system(size: 14))
-                                            
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(category)
-                                                    .font(.custom("Nunito-Black", size: 13))
-                                                Text("\(count)")
-                                                    .font(.custom("Nunito-Black", size: 10))
-                                                    .opacity(0.7)
-                                            }
-                                            
-                                            Spacer()
-                                            
-                                            if isSelected {
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .font(.system(size: 16))
-                                                    .foregroundColor(.white)
-                                            }
-                                        }
-                                        .foregroundStyle(isSelected ? .white : chipColor(category))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 12)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .fill(isSelected ? chipColor(category) : chipColor(category).opacity(0.15))
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                        }
-                        .frame(maxHeight: 400)
-                        
-                        Spacer(minLength: 20)
+                    .font(.custom("Nunito-Black", size: 12))
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                }
+                .buttonStyle(.glass)
+                .tint(Color(hex: 0x514343))
+
+                if !selectedTypes.isEmpty || !selectedCategories.isEmpty || !rankoQuery.isEmpty {
+                    Button {
+                        rankoQuery = ""; searchField = ""
+                        selectedTypes.removeAll()
+                        selectedCategories.removeAll()
+                        sortMode = .dateUpdated
+                        groupMode = .none
+                    } label: {
+                        HStack(spacing: 4) { Image(systemName: "xmark.circle.fill"); Text("Clear Filters") }
+                            .font(.custom("Nunito-Black", size: 12))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
                     }
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color(.systemBackground))
-                            .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: -5)
-                    )
+                    .buttonStyle(.glass)
+                    .tint(Color(hex: 0x514343))
+
+                    if !rankoQuery.isEmpty {
+                        chip(text: "“\(rankoQuery)”") { rankoQuery = ""; searchField = "" }
+                    }
+                    ForEach(Array(selectedTypes), id: \.self) { t in
+                        chip(text: "Type: \(t.capitalized.replacingOccurrences(of: "Group", with: "Tier"))") {
+                            selectedTypes.remove(t)
+                        }
+                    }
+                    ForEach(Array(selectedCategories), id: \.self) { c in
+                        chip(text: "Category: \(c)") { selectedCategories.remove(c) }
+                    }
                 }
             }
+            .padding(.horizontal, 15)
+            .padding(.bottom, 8)
         }
     }
     
-    struct RankoMiniView: View {
-        let listData: RankoList
-        let type: String
-        let onUnpin: (() -> Void)?
+    private struct FilterSortGroupInline: View {
+        @Binding var sortMode: SortMode
+        @Binding var groupMode: GroupMode
+
+        let allTypes: [String]
+        let allCategories: [CategoryMeta]
+        @Binding var selectedTypes: Set<String>
+        @Binding var selectedCategories: Set<String>
+
+        var onDone: () -> Void
 
         var body: some View {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(listData.listName)
+            VStack(alignment: .leading, spacing: 16) {
+                // Sort By
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Sort By")
+                            .font(.custom("Nunito-Black", size: 14))
+                            .foregroundColor(Color(hex: 0x514343))
+                        Picker("Sort", selection: $sortMode) {
+                            ForEach(SortMode.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.inline)
+                    }
+                }
+
+                // Group By
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Group By")
+                            .font(.custom("Nunito-Black", size: 14))
+                            .foregroundColor(Color(hex: 0x514343))
+                        Picker("Group", selection: $groupMode) {
+                            ForEach(GroupMode.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                }
+
+                // Filter By – Type
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Filter • Type")
+                            .font(.custom("Nunito-Black", size: 14))
+                            .foregroundColor(Color(hex: 0x514343))
+
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+                            ForEach(allTypes, id: \.self) { t in
+                                SelectChip(
+                                    title: t.capitalized.replacingOccurrences(of: "Group", with: "Tier"),
+                                    isOn: selectedTypes.contains(t),
+                                    action: {
+                                        if selectedTypes.contains(t) { selectedTypes.remove(t) }
+                                        else { selectedTypes.insert(t) }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Filter By – Category
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Filter • Category")
+                            .font(.custom("Nunito-Black", size: 14))
+                            .foregroundColor(Color(hex: 0x514343))
+
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
+                            ForEach(allCategories, id: \.self) { cat in
+                                SelectChipWithIcon(
+                                    title: cat.name,
+                                    icon: cat.icon,
+                                    color: Color(hex: cat.colour),
+                                    isOn: selectedCategories.contains(cat.name),
+                                    action: {
+                                        if selectedCategories.contains(cat.name) { selectedCategories.remove(cat.name) }
+                                        else { selectedCategories.insert(cat.name) }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HStack {
+                    Button("Clear") {
+                        selectedTypes.removeAll()
+                        selectedCategories.removeAll()
+                        sortMode = .dateUpdated
+                        groupMode = .none
+                    }
+                    Spacer()
+                    Button("Done") { onDone() }
                         .font(.custom("Nunito-Black", size: 16))
-                        .foregroundColor(Color(hex: 0x514343))
-                        .multilineTextAlignment(.leading)
-                    HStack(spacing: 6) {
-                        FeaturedCategoryBadge(name: listData.categoryName, icon: listData.categoryIcon, colour: listData.categoryColour)
-                        Text("• \(timeAgo(from: String(listData.timeUpdated)))")
-                            .font(.custom("Nunito-Black", size: 9))
-                            .foregroundColor(Color(hex: 0x514343))
-                    }
                 }
-                Spacer()
-                if type == "featured" {
-                    Button {
-                        onUnpin?()
-                    } label: {
-                        Image(systemName: "pin.fill")
-                            .font(.custom("Nunito-Black", size: 12))
-                            .foregroundColor(Color(hex: 0x514343))
-                            .padding(.trailing, 6)
-                    }
-                }
+                .padding(.top, 4)
             }
-            .padding(.vertical, 5)
-            .padding(.leading, 10)
-            .padding(.trailing, 4)
-            .background(.clear)
-            .padding(.vertical, 1)
+            .padding(.horizontal, 15)
+            .padding(.bottom, 24)
         }
+    }
 
-        private func timeAgo(from dt: String) -> String {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone(identifier: "Australia/Sydney")
-            formatter.dateFormat = "yyyyMMddHHmmss"
+    // MARK: - Header + chips
 
-            guard let date = formatter.date(from: dt) else {
-                return ""
-            }
-
-            let now = Date()
-            let secondsAgo = Int(now.timeIntervalSince(date))
-
-            switch secondsAgo {
-            case 0..<60:
-                return "\(secondsAgo)s ago"
-            case 60..<3600:
-                return "\(secondsAgo / 60)m ago"
-            case 3600..<86400:
-                return "\(secondsAgo / 3600)h ago"
-            case 86400..<604800:
-                return "\(secondsAgo / 86400)d ago"
-            case 604800..<31536000:
-                return "\(secondsAgo / 604800)w ago"
-            default:
-                return "\(secondsAgo / 31536000)y ago"
+    private var headerBar: some View {
+        VStack(spacing: 8) {
+            // Active filters summary chips
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Button {
+                        print("Found \(filteredBase.count) Results")
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("\(filteredBase.count) Results")
+                        }
+                        .font(.custom("Nunito-Black", size: 12))
+                    }
+                    .buttonStyle(.glass)
+                    .tint(Color(hex: 0x514343))
+                    
+                    Button {
+                        showFilters = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                            Text("Filter")
+                        }
+                        .font(.custom("Nunito-Black", size: 12))
+                    }
+                    .buttonStyle(.glass)
+                    .tint(Color(hex: 0x514343))
+                    
+                    if !selectedTypes.isEmpty || !selectedCategories.isEmpty || !rankoQuery.isEmpty {
+                        Button {
+                            rankoQuery = ""; searchField = ""
+                            selectedTypes.removeAll()
+                            selectedCategories.removeAll()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark.circle.fill")
+                                Text("Clear Filters")
+                            }
+                            .font(.custom("Nunito-Black", size: 12))
+                        }
+                        .buttonStyle(.glass)
+                        .tint(Color(hex: 0x514343))
+                        if !rankoQuery.isEmpty {
+                            chip(text: "“\(rankoQuery)”") { rankoQuery = ""; searchField = "" }
+                        }
+                        ForEach(Array(selectedTypes), id: \.self) { t in
+                            chip(text: "Type: \(t.capitalized)") { selectedTypes.remove(t) }
+                        }
+                        ForEach(Array(selectedCategories), id: \.self) { c in
+                            chip(text: "Category: \(c)") { selectedCategories.remove(c) }
+                        }
+                    }
+                }
+                .padding(15)
             }
         }
     }
 
-    // Memory-optimized data loading
+    private func chip(text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(text)
+                Image(systemName: "xmark.circle.fill")
+            }
+            .font(.custom("Nunito-Black", size: 12))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0xF5F5F5)))
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(Color(hex: 0x514343))
+    }
+
+    // MARK: - Sorting helpers
+
+    private func sortByCustom(_ input: [RankoList]) -> [RankoList] {
+        // build lookup for fast ID -> RankoList
+        let dict = Dictionary(uniqueKeysWithValues: input.map { ($0.id, $0) })
+
+        var result: [RankoList] = []
+        for node in userSort.customTree {
+            switch node {
+            case .item(let id):
+                if let r = dict[id] { result.append(r) }
+            case .folder(_, let ids):
+                for id in ids {
+                    if let r = dict[id] { result.append(r) }
+                }
+            }
+        }
+        // append any missing ones (not in custom tree) at the end (stable by name)
+        let seen = Set(result.map { $0.id })
+        let missing = input.filter { !seen.contains($0.id) }
+            .sorted { $0.listName.localizedCaseInsensitiveCompare($1.listName) == .orderedAscending }
+        return result + missing
+    }
+
+    // MARK: - Data loads (existing)
+
     private func loadOptimizedData() {
         isLoading = true
         errorMessage = nil
@@ -2258,9 +2447,8 @@ struct SearchRankosView: View {
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
                                   apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
         let index = client.index(withName: "RankoLists")
-        
-        // Get ALL results for accurate pagination
-        var query = Query("").set(\.hitsPerPage, to: 1000) // Get all results
+
+        var query = Query("").set(\.hitsPerPage, to: 1000)
         query.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
 
         index.search(query: query) { result in
@@ -2276,8 +2464,7 @@ struct SearchRankosView: View {
             }
         }
     }
-    
-    // Optimized Firebase fetching - only basic data
+
     private func fetchMinimalDataFromFirebase(using objectIDs: [String]) {
         let rankoDataRef = Database.database().reference().child("RankoData")
         let dispatchGroup = DispatchGroup()
@@ -2287,9 +2474,8 @@ struct SearchRankosView: View {
             if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
             if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
             if let s = any as? String {
-                let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let dec = Int(t) { return UInt(dec & 0x00FF_FFFF) }
-                var hex = t.lowercased()
+                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
                 if hex.hasPrefix("#")  { hex.removeFirst() }
                 if hex.hasPrefix("0x") { hex.removeFirst(2) }
                 if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
@@ -2299,13 +2485,10 @@ struct SearchRankosView: View {
 
         for objectID in objectIDs {
             dispatchGroup.enter()
-
-            // use the 1-parameter closure form to avoid the “expects 2 arguments” compile error
             rankoDataRef.child(objectID).observeSingleEvent(of: .value) { snap in
                 defer { dispatchGroup.leave() }
                 guard let root = snap.value as? [String: Any] else { return }
 
-                // --------- NEW SCHEMA ---------
                 if let details = root["RankoDetails"] as? [String: Any] {
                     let privacy = root["RankoPrivacy"]  as? [String: Any]
                     let cat     = root["RankoCategory"] as? [String: Any]
@@ -2315,8 +2498,7 @@ struct SearchRankosView: View {
                     let description = (details["description"] as? String) ?? ""
                     let type        = (details["type"] as? String) ?? "default"
                     let userID      = (details["user_id"] as? String) ?? ""
-
-                    let isPrivateBool = (privacy?["private"] as? Bool) ?? false
+                    let isPrivate   = (privacy?["private"] as? Bool) ?? false
 
                     let catName   = (cat?["name"] as? String) ?? "Unknown"
                     let catIcon   = (cat?["icon"] as? String) ?? "circle"
@@ -2332,35 +2514,31 @@ struct SearchRankosView: View {
                         type: type,
                         categoryName: catName,
                         categoryIcon: catIcon,
-                        categoryColour: catColour,                  // ✅ UInt
-                        isPrivate: isPrivateBool ? "Private" : "Public",
+                        categoryColour: catColour,
+                        isPrivate: isPrivate ? "Private" : "Public",
                         userCreator: userID,
                         timeCreated: created,
                         timeUpdated: updated,
-                        items: []                                    // minimal fetch
+                        items: []
                     )
-
                     DispatchQueue.main.async { fetchedLists.append(rankoList) }
                     return
                 }
 
-                // --------- LEGACY SCHEMA FALLBACK ---------
+                // legacy fallback
                 let name        = root["RankoName"] as? String ?? "(untitled)"
                 let description = root["RankoDescription"] as? String ?? ""
                 let type        = root["RankoType"] as? String ?? "default"
-
-                let isPrivateBool: Bool = {
+                let isPriv: Bool = {
                     if let b = root["RankoPrivacy"] as? Bool { return b }
                     if let s = root["RankoPrivacy"] as? String { return s.lowercased() == "private" }
                     return false
                 }()
-
                 let userID = root["RankoUserID"] as? String ?? ""
 
                 var created = "19700101000000"
                 var updated = "19700101000000"
                 if let dt = root["RankoDateTime"] as? [String: Any] {
-                    // legacy keys may be RankoCreated/RankoUpdated
                     created = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? created
                     updated = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? created
                 } else if let s = root["RankoDateTime"] as? String {
@@ -2385,24 +2563,296 @@ struct SearchRankosView: View {
                     type: type,
                     categoryName: catName,
                     categoryIcon: catIcon,
-                    categoryColour: catColour,                      // ✅ UInt
-                    isPrivate: isPrivateBool ? "Private" : "Public",
+                    categoryColour: catColour,
+                    isPrivate: isPriv ? "Private" : "Public",
                     userCreator: userID,
                     timeCreated: created,
                     timeUpdated: updated,
                     items: []
                 )
-
                 DispatchQueue.main.async { fetchedLists.append(rankoList) }
             }
         }
 
         dispatchGroup.notify(queue: .main) {
-            self.allLists = fetchedLists.sorted {
-                Int($0.timeUpdated) ?? 0 > Int($1.timeUpdated) ?? 0
-            }
-            
+            // default load order: most recently updated
+            self.allLists = fetchedLists.sorted { (Int($0.timeUpdated) ?? 0) > (Int($1.timeUpdated) ?? 0) }
             self.isLoading = false
+        }
+    }
+
+    // MARK: - Load UserSortRankos
+
+    private func loadUserSortModel() {
+        let ref = Database.database().reference()
+            .child("UserData")
+            .child(user_data.userID)
+            .child("UserSortRankos")
+
+        ref.observeSingleEvent(of: .value) { snap in
+            guard let dict = snap.value as? [String: Any] else { return }
+            var model = UserSortModel()
+
+            // Custom
+            if let custom = dict["Custom"] as? [String: Any] {
+                let keys = custom.keys.sorted() // 000001..., preserves intended order
+                for k in keys {
+                    if let itemID = custom[k] as? String {
+                        model.customTree.append(.item(id: itemID))
+                    } else if let folder = custom[k] as? [String: Any] {
+                        let name = (folder["name"] as? String) ?? "Folder"
+                        let ids  = (folder["rankos"] as? [String]) ?? []
+                        model.customTree.append(.folder(name: name, ids: ids))
+                    }
+                }
+            }
+
+            // Alphabetical
+            if let alpha = dict["Alphabetical"] as? [String: String] {
+                model.alphabetical = alpha
+            }
+
+            // Category
+            if let category = dict["Category"] as? [String: Any] {
+                if let buckets = category["CategoryData"] as? [String: [String]] {
+                    model.categoryBuckets = buckets
+                }
+                if let order = category["CategorySort"] as? [[String: Any]] {
+                    model.categoryOrder = order.map {
+                        CategoryMeta(
+                            name: ($0["name"] as? String) ?? "Unknown",
+                            icon: ($0["icon"] as? String) ?? "circle",
+                            colour: parseUInt(($0["colour"]))
+                        )
+                    }
+                }
+            }
+
+            // Dates
+            if let created = dict["DateTimeCreated"] as? [String: Any] {
+                model.createdKeys = created.keys.sorted() // "timestamp - id"
+            }
+            if let updated = dict["DateTimeUpdated"] as? [String: Any] {
+                model.updatedKeys = updated.keys.sorted()
+            }
+
+            // Types
+            if let types = dict["Type"] as? [String: [String]] {
+                model.typeBuckets = types
+            }
+
+            self.userSort = model
+        }
+    }
+
+    private func parseUInt(_ any: Any?) -> UInt {
+        if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+        if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
+        if let s = any as? String {
+            var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
+            if hex.hasPrefix("#")  { hex.removeFirst() }
+            if hex.hasPrefix("0x") { hex.removeFirst(2) }
+            if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
+        }
+        return 0x446D7A
+    }
+}
+
+// MARK: - Filter / Sort / Group Sheet
+
+private struct FilterSortGroupSheet: View {
+    @Binding var sortMode: SortMode
+    @Binding var groupMode: GroupMode
+
+    let allTypes: [String]
+    let allCategories: [CategoryMeta]
+    @Binding var selectedTypes: Set<String>
+    @Binding var selectedCategories: Set<String>
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // Sort
+                Section("Sort By") {
+                    Picker("Sort", selection: $sortMode) {
+                        ForEach(SortMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                }
+
+                // Group
+                Section("Group By") {
+                    Picker("Group", selection: $groupMode) {
+                        ForEach(GroupMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                // Filter
+                Section("Filter By") {
+                    DisclosureGroup("Type") {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
+                            ForEach(allTypes, id: \.self) { t in
+                                SelectChip(
+                                    title: t.capitalized.replacingOccurrences(of: "Group", with: "Tier"),
+                                    isOn: selectedTypes.contains(t),
+                                    action: {
+                                        if selectedTypes.contains(t) { selectedTypes.remove(t) }
+                                        else { selectedTypes.insert(t) }
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+
+                    DisclosureGroup("Category") {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
+                            ForEach(allCategories, id: \.self) { cat in
+                                SelectChipWithIcon(
+                                    title: cat.name,
+                                    icon: cat.icon,
+                                    color: Color(hex: cat.colour),
+                                    isOn: selectedCategories.contains(cat.name),
+                                    action: {
+                                        if selectedCategories.contains(cat.name) { selectedCategories.remove(cat.name) }
+                                        else { selectedCategories.insert(cat.name) }
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+            }
+            .navigationTitle("Filter, Sort & Group")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Clear") {
+                        selectedTypes.removeAll()
+                        selectedCategories.removeAll()
+                        sortMode = .dateUpdated
+                        groupMode = .none
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .font(.custom("Nunito-Black", size: 16))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Small UI helpers
+
+private struct SelectChip: View {
+    let title: String
+    let isOn: Bool
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.custom("Nunito-Black", size: 12))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 10).fill(isOn ? Color.accentColor : Color(.secondarySystemBackground)))
+                .foregroundColor(isOn ? .white : Color(hex: 0x514343))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct SelectChipWithIcon: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let isOn: Bool
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                Text(title)
+            }
+            .font(.custom("Nunito-Black", size: 12))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(isOn ? color : color.opacity(0.15)))
+            .foregroundColor(isOn ? .white : color)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct RankoMiniView: View {
+    let listData: RankoList
+    let type: String
+    let onUnpin: (() -> Void)?
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(listData.listName)
+                    .font(.custom("Nunito-Black", size: 16))
+                    .foregroundColor(Color(hex: 0x514343))
+                    .multilineTextAlignment(.leading)
+                
+                HStack(spacing: 6) {
+                    FeaturedCategoryBadge(name: listData.categoryName, icon: listData.categoryIcon, colour: listData.categoryColour)
+                    Text("• \(timeAgo(from: String(listData.timeUpdated)))")
+                        .font(.custom("Nunito-Black", size: 9))
+                        .foregroundColor(Color(hex: 0x514343))
+                }
+            }
+            Spacer()
+            
+            if type == "featured" {
+                Button {
+                    onUnpin?()
+                } label: {
+                    Image(systemName: "pin.fill")
+                        .font(.custom("Nunito-Black", size: 12))
+                        .foregroundColor(Color(hex: 0x514343))
+                        .padding(.trailing, 6)
+                }
+            }
+        }
+        .padding(.vertical, 5)
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .background(.clear)
+        .padding(.vertical, 1)
+    }
+    
+    private func timeAgo(from dt: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Australia/Sydney")
+        formatter.dateFormat = "yyyyMMddHHmmss"
+        
+        guard let date = formatter.date(from: dt)
+        else { return "" }
+        
+        let now = Date()
+        let secondsAgo = Int(now.timeIntervalSince(date))
+        
+        switch secondsAgo {
+        case 0..<60: return "\(secondsAgo)s ago"
+        case 60..<3600: return "\(secondsAgo / 60)m ago"
+        case 3600..<86400: return "\(secondsAgo / 3600)h ago"
+        case 86400..<604800: return "\(secondsAgo / 86400)d ago"
+        case 604800..<31536000: return "\(secondsAgo / 604800)w ago"
+        default: return "\(secondsAgo / 31536000)y ago"
         }
     }
 }
@@ -2478,7 +2928,7 @@ struct SelectFeaturedRankosView: View {
                                     if list.type == "default" {
                                         DefaultListIndividualGallery(listData: list, type: "", onUnpin: {}, userID: user_data.userID)
                                     } else {
-                                        GroupListIndividualGallery(listData: list, type: "", onUnpin: {})
+                                        TierListIndividualGallery(listData: list, type: "", onUnpin: {})
                                     }
                                 }
                                 .foregroundColor(Color(hex: 0xFF9864))
@@ -3828,7 +4278,7 @@ struct ProfileSpectateView: View {
                                                     DefaultListIndividualGallery(listData: list, type: "featured", onUnpin: {
                                                     }, userID: user_data.userID)
                                                 } else {
-                                                    GroupListIndividualGallery(listData: list, type: "featured", onUnpin: {
+                                                    TierListIndividualGallery(listData: list, type: "featured", onUnpin: {
                                                     })
                                                 }
                                             }
@@ -4209,9 +4659,9 @@ struct ProfileSpectateView: View {
             let group = DispatchGroup()
 
             for child in snap.children.allObjects as? [DataSnapshot] ?? [] {
-                if let slot = Int(child.key), let listID = child.value as? String {
+                if let slot = Int(child.key), let rankoID = child.value as? String {
                     group.enter()
-                    fetchFeaturedList(slot: slot, listID: listID) {
+                    fetchFeaturedList(slot: slot, rankoID: rankoID) {
                         if let list = $0 { tempLists[slot] = list }
                         group.leave()
                     }
@@ -4227,12 +4677,12 @@ struct ProfileSpectateView: View {
     }
 
     // ✅ Modified fetchFeaturedList to support completion
-    private func fetchFeaturedList(slot: Int, listID: String, completion: @escaping (RankoList?) -> Void) {
-        let listRef = Database.database().reference().child("RankoData").child(listID)
+    private func fetchFeaturedList(slot: Int, rankoID: String, completion: @escaping (RankoList?) -> Void) {
+        let listRef = Database.database().reference().child("RankoData").child(rankoID)
 
         listRef.observeSingleEvent(of: .value) { snap in
             guard let dict = snap.value as? [String: Any],
-                  let rl = parseListData(dict: dict, id: listID) else {
+                  let rl = parseListData(dict: dict, id: rankoID) else {
                 completion(nil)
                 return
             }
@@ -5034,7 +5484,7 @@ struct AppPersonalisationView: View {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(groupedData.enumerated()), id: \.offset) { index, group in
                                 VStack(spacing: 0) {
-                                    GroupSectionView(
+                                    TierSectionView(
                                         title: group.0,
                                         icons: group.1,
                                         themes: group.2,
@@ -5310,7 +5760,7 @@ struct AppPersonalisationView: View {
 
 // MARK: - Group Section View
 
-struct GroupSectionView: View {
+struct TierSectionView: View {
     let title: String
     let icons: [AppIcon]
     let themes: [AppTheme]

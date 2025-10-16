@@ -1,5 +1,5 @@
 //
-//  GroupList_Gallery.swift
+//  TierList_Gallery.swift
 //  RankoTestViewer
 //
 //  Created by Kyan Aldridge on 10/6/2025.
@@ -7,8 +7,8 @@
 
 import SwiftUI
 
-// MARK: - UserGroupLists
-struct GroupListIndividualGallery: View {
+// MARK: - UserTierLists
+struct TierListIndividualGallery: View {
     let listData: RankoList
     let type: String
     let onUnpin: (() -> Void)?

@@ -1,5 +1,5 @@
 //
-//  GroupList_Spectate.swift
+//  TierList_Spectate.swift
 //  RankoTestViewer
 //
 //  Created by Kyan Aldridge on 10/6/2025.

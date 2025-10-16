@@ -1539,7 +1539,7 @@ struct CurvedTabBarView: View {
                                         }
                                     } label: {
                                         Text("Skip Tutorial")
-                                            .font(.custom("Nunito-ExtraBold", size: 14))
+                                            .font(.custom("Nunito-SemiBold", size: 14))
                                             .foregroundStyle(.white.opacity(0.8))
                                             .underline()
                                             .opacity(tutorialModeButtonsDisabled ? 0.3 : 1)
@@ -1695,15 +1695,13 @@ struct CurvedTabBarView: View {
                     description: rankoDescription,
                     isPrivate: rankoPrivacy,
                     // TODO: if you want to pass the selected category, map your SampleCategoryChip → CategoryChip here.
-                    category: localSelection,
                     onSave: { _ in }
                 )
             } else if selectedLayoutName == "Tier" {
-                GroupListView(
+                TierListView(
                     rankoName: rankoName,
                     description: rankoDescription,
-                    isPrivate: rankoPrivacy,
-                    category: localSelection
+                    isPrivate: rankoPrivacy
                 )
             }
         }

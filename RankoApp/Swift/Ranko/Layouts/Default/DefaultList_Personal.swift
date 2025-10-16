@@ -37,6 +37,27 @@ private extension CGRect {
     var center: CGPoint { .init(x: midX, y: midY) }
 }
 
+#if canImport(UIKit)
+import UIKit
+private func colorToHex(_ color: Color) -> Int {
+    let ui = UIColor(color)
+    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+    ui.getRed(&r, green: &g, blue: &b, alpha: &a)
+    let R = Int(round(r * 255)), G = Int(round(g * 255)), B = Int(round(b * 255))
+    return (R << 16) | (G << 8) | B
+}
+#else
+import AppKit
+private func colorToHex(_ color: Color) -> Int {
+    let ns = NSColor(color)
+    guard let srgb = ns.usingColorSpace(.sRGB) else { return 0xFFFFFF }
+    let R = Int(round(srgb.redComponent   * 255))
+    let G = Int(round(srgb.greenComponent * 255))
+    let B = Int(round(srgb.blueComponent  * 255))
+    return (R << 16) | (G << 8) | B
+}
+#endif
+
 struct DefaultListPersonal: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var user_data = UserInformation.shared
@@ -46,22 +67,23 @@ struct DefaultListPersonal: View {
     @Namespace private var transition
     
     // Required property
-    let listID: String
+    let rankoID: String
     
     // Optional editable properties with defaults
     @State private var rankoName: String = ""
     @State private var description: String = ""
     @State private var isPrivate: Bool = false
-    @State private var category: SampleCategoryChip? = nil
-    @State private var categoryName: String = ""
-    @State private var categoryIcon: String? = nil
-    @State private var categoryColour: UInt = 0x000000
+    @State private var categoryName: String = "Unknown"
+    @State private var categoryIcon: String = "questionmark"
+    @State private var categoryColour: String = "0x000000"
     
     // Original values (to revert if needed)
     @State private var originalRankoName: String = ""
     @State private var originalDescription: String = ""
     @State private var originalIsPrivate: Bool = false
-    @State private var originalCategory: SampleCategoryChip? = nil
+    @State private var originalCategoryName: String = ""
+    @State private var originalCategoryIcon: String = ""
+    @State private var originalCategoryColour: String = ""
     
     // Sheets & states
     @State private var possiblyEdited = false
@@ -84,24 +106,6 @@ struct DefaultListPersonal: View {
     @State private var rankButtonTapped: Bool = false
     @State private var exitButtonTapped: Bool = false
     
-    @State private var addHoldButton: Bool = false
-    @State private var editHoldButton: Bool = false
-    @State private var rankHoldButton: Bool = false
-    @State private var exitHoldButton: Bool = false
-    
-    @State private var exitButtonTranslation: CGSize = .zero
-    @State private var exitButtonsTranslation: CGSize = .zero
-    
-    @State private var addButtonTranslation: CGSize = .zero
-    @State private var addButtonsTranslation: CGSize = .zero
-    
-    @State private var saveButtonHovered: Bool = false
-    @State private var deleteButtonHovered: Bool = false
-    @State private var cancelButtonHovered: Bool = false
-    
-    @State private var sampleButtonHovered: Bool = false
-    @State private var blankButtonHovered: Bool = false
-    
     @State private var exitFrame: CGRect = .zero
     @State private var saveFrame: CGRect = .zero
     @State private var deleteFrame: CGRect = .zero
@@ -122,1057 +126,729 @@ struct DefaultListPersonal: View {
     @State private var showBlankItemsFS = false
     @State private var blankDrafts: [BlankItemDraft] = [BlankItemDraft()] // start with 1
     @State private var draftError: String? = nil
-
+    
     // hold personal images picked for new items -> uploaded on publish
     @State private var pendingPersonalImages: [String: UIImage] = [:]  // itemID -> image
     
-    // MARK: - Init now only requires listID
+    // MARK: - Init now only requires rankoID
     init(
-        listID: String,
+        rankoID: String,
         rankoName: String? = nil,
         description: String? = nil,
         isPrivate: Bool? = nil,
-        category: SampleCategoryChip? = nil,
         selectedRankoItems: [RankoItem] = [],
         onSave: @escaping (RankoItem) -> Void,
         onDelete: (() -> Void)? = nil
     ) {
-        self.listID = listID
+        self.rankoID = rankoID
         self.onDelete = onDelete
         _rankoName = State(initialValue: rankoName ?? "")
         _description = State(initialValue: description ?? "")
         _isPrivate = State(initialValue: isPrivate ?? false)
-        _category = State(initialValue: category)
         _selectedRankoItems = State(initialValue: selectedRankoItems)
         _onSave = State(initialValue: onSave)
         
         _originalRankoName = State(initialValue: rankoName ?? "")
         _originalDescription = State(initialValue: description ?? "")
         _originalIsPrivate = State(initialValue: isPrivate ?? false)
-        _originalCategory = State(initialValue: category)
+        _originalCategoryName = State(initialValue: categoryName)
+        _originalCategoryIcon = State(initialValue: categoryIcon)
+        _originalCategoryColour = State(initialValue: categoryColour)
     }
     
-    var body: some View {
-        ZStack(alignment: .top) {
-            Color(hex: 0xFFFFFF)
-                .ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 6) {
-                    HStack {
-                        VStack(spacing: 6) {
-                            HStack {
-                                Text(rankoName)
-                                    .font(.custom("Nunito-Black", size: 24))
-                                    .foregroundStyle(Color(hex: 0x514343))
-                                    .kerning(-0.4)
-                                Spacer()
-                            }
-                            .padding(.top, 20)
-                            .padding(.leading, 20)
-                            
-                            HStack {
-                                Text(description.isEmpty ? "No description yet…" : description)
-                                    .lineLimit(3)
-                                    .font(.custom("Nunito-Black", size: 13))
-                                    .foregroundStyle(Color(hex: 0x514343))
-                                Spacer()
-                            }
-                            .padding(.top, 5)
-                            .padding(.leading, 20)
-                            
-                            HStack(spacing: 8) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
-                                        .font(.system(size: 12, weight: .bold, design: .default))
-                                        .foregroundColor(.white)
-                                        .padding(.leading, 10)
-                                    Text(isPrivate ? "Private" : "Public")
-                                        .font(.system(size: 12, weight: .bold, design: .default))
-                                        .foregroundColor(.white)
-                                        .padding(.trailing, 10)
-                                        .padding(.vertical, 8)
-                                }
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: 0xF2AB69))
-                                )
-                                HStack(spacing: 4) {
-                                    Image(systemName: categoryIcon ?? "circle")
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                        .padding(.leading, 10)
-                                    Text(categoryName)
-                                        .font(.system(size: 12, weight: .bold, design: .default))
-                                        .foregroundColor(.white)
-                                        .padding(.trailing, 10)
-                                        .padding(.vertical, 8)
-                                    
-                                }
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: categoryColour))
-                                        .opacity(0.6)
-                                )
-                                
-                                Spacer()
-                            }
-                            .padding(.top, 5)
-                            .padding(.leading, 20)
-                        }
-                        
-                        Spacer()
-                        
-                        Button {
-                            if possiblyEdited {
-                                showLeaveAlert = true
-                            } else {
-                                dismiss()
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 22, weight: .black))
-                                .padding(.vertical, 5)
-                        }
-                        .foregroundColor(Color(hex: 0x514343))
-                        .tint(Color(hex: 0xFFFFFF))
-                        .buttonStyle(.glassProminent)
-                        .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
-                        .alert(isPresented: $showLeaveAlert) {
-                            CustomDialog(
-                                title: "Leave Without Saving?",
-                                content: "Are you sure you want to leave your Ranko without saving? All your changes will be lost.",
-                                image: .init(
-                                    content: "figure.walk.departure",
-                                    background: .orange,
-                                    foreground: .white
-                                ),
-                                button1: .init(
-                                    content: "Leave",
-                                    background: .orange,
-                                    foreground: .white,
-                                    action: { _ in
-                                        showLeaveAlert = false
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                            dismiss()
-                                        }
-                                    }
-                                ),
-                                button2: .init(
-                                    content: "Cancel",
-                                    background: .red,
-                                    foreground: .white,
-                                    action: { _ in
-                                        showLeaveAlert = false
-                                    }
-                                )
-                            )
-                            .transition(.blurReplace.combined(with: .push(from: .bottom)))
-                        } background: {
-                            Rectangle()
-                                .fill(.primary.opacity(0.35))
-                        }
-                    }
-                    .padding(.trailing, 20)
+    private struct RankoToolbarTitleStack: View {
+        @StateObject private var user_data = UserInformation.shared
+        let name: String
+        let description: String
+        @Binding var isPrivate: Bool
+        let categoryName: String
+        let categoryIcon: String
+        let categoryColour: String
+        @Binding var showEditDetailsSheet: Bool
+        var onTapPrivacy: (() -> Void)?
+        var onTapCategory: (() -> Void)?
+
+        var body: some View {
+            VStack(spacing: 6) {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(height: 50)
+                // ranko name (top)
+                Text(name.isEmpty ? "untitled ranko" : name)
+                    .font(.custom("Nunito-Black", size: 18))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .contextMenu {
                         Button {
-                            
+                            showEditDetailsSheet = true
                         } label: {
                             Label("Edit Details", systemImage: "pencil")
                         }
-                        
-                        Divider()
-                        
+                    }
+
+                // description (middle)
+                Text(description.isEmpty ? "no description yet..." : description)
+                    .font(.custom("Nunito-Black", size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .transition(.opacity)
+                    .contextMenu {
                         Button {
-                            
+                            showEditDetailsSheet = true
                         } label: {
-                            Label("Re-Rank Items", systemImage: "chevron.up.chevron.down")
-                        }
-                        
-                        Divider()
-                        
-                        Button(role: .destructive) {
-                            
-                        } label: {
-                            Label("Delete Ranko", systemImage: "trash")
+                            Label("Edit Details", systemImage: "pencil")
                         }
                     }
-                    
-                    ZStack(alignment: .bottom) {
-                        
-                        ScrollView {
-                            VStack {
-                                ScrollView {
-                                    Group {
-                                        ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
-                                            DefaultListItemRow(item: item)
-                                                .onTapGesture {
-                                                    selectedItem = item
-                                                }
-                                                .contextMenu {
-                                                    Button(action: {
-                                                        itemToEdit = item
-                                                    }) {
-                                                        Label("Edit", systemImage: "pencil")
+
+                // privacy + category (bottom)
+                HStack(spacing: 8) {
+                    Button {
+                        // prefer explicit callback; fallback to opening the sheet
+                        if let onTapPrivacy { onTapPrivacy() } else { showEditDetailsSheet = true }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
+                                .font(.system(size: 11, weight: .black))
+                            Text(isPrivate ? "Private" : "Public")
+                                .font(.custom("Nunito-Black", size: 11))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(hex: 0xF2AB69), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundStyle(.white)
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            showEditDetailsSheet = true
+                        } label: {
+                            Label("Edit Details", systemImage: "pencil")
+                        }
+                        Button {
+                            isPrivate.toggle()
+                        } label: {
+                            Label(isPrivate ? "Make Public" : "Make Private",
+                                  systemImage: isPrivate ? "globe.americas.fill" : "lock.fill")
+                        }
+                    }
+
+                    if categoryName != "" {
+                        Button {
+                            if let onTapCategory { onTapCategory() } else { showEditDetailsSheet = true }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: categoryIcon)
+                                    .font(.system(size: 11, weight: .black))
+                                Text(categoryName)
+                                    .font(.custom("Nunito-Black", size: 11))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: categoryColour).opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .foregroundStyle(.white)
+                            .contentShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                showEditDetailsSheet = true
+                            } label: {
+                                Label("Edit Details", systemImage: "pencil")
+                            }
+                        }
+                    }
+                }
+                .frame(minWidth: CGFloat(user_data.deviceWidth))
+            }
+            .multilineTextAlignment(.center)
+        }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack(alignment: .top) {
+                Color(hex: 0xFFFFFF)
+                    .ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ZStack(alignment: .bottom) {
+                            ScrollView {
+                                VStack {
+                                    ScrollView {
+                                        Group {
+                                            ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
+                                                DefaultListItemRow(item: item)
+                                                    .onTapGesture {
+                                                        selectedItem = item
                                                     }
-                                                    .foregroundColor(.orange)
-                                                    
-                                                    Divider()
-                                                    
-                                                    Button(action: { moveToTop(item) }) {
-                                                        Label("Move to Top", systemImage: "arrow.up.to.line.compact")
+                                                    .contextMenu {
+                                                        Button(action: {
+                                                            itemToEdit = item
+                                                        }) {
+                                                            Label("Edit", systemImage: "pencil")
+                                                        }
+                                                        .foregroundColor(.orange)
+                                                        
+                                                        Divider()
+                                                        
+                                                        Button(action: { moveToTop(item) }) {
+                                                            Label("Move to Top", systemImage: "arrow.up.to.line.compact")
+                                                        }
+                                                        
+                                                        Button(action: { moveToBottom(item) }) {
+                                                            Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
+                                                        }
+                                                        
+                                                        Divider()
+                                                        
+                                                        Button(role: .destructive) {
+                                                            delete(item)
+                                                        } label: {
+                                                            Label("Delete", systemImage: "trash")
+                                                        }
                                                     }
-                                                    
-                                                    Button(action: { moveToBottom(item) }) {
-                                                        Label("Move to Bottom", systemImage: "arrow.down.to.line.compact")
+                                                    .sheet(item: $itemToEdit) { item in
+                                                        EditItemView(item: item, rankoID: rankoID) { newName, newDesc in
+                                                            let rec = item.record
+                                                            let updatedRecord = RankoRecord(
+                                                                objectID: rec.objectID,
+                                                                ItemName: newName,
+                                                                ItemDescription: newDesc,
+                                                                ItemCategory: "",
+                                                                ItemImage: rec.ItemImage,
+                                                                ItemGIF: rec.ItemAudio,
+                                                                ItemVideo: rec.ItemVideo,
+                                                                ItemAudio: rec.ItemAudio
+                                                            )
+                                                            let updatedItem = RankoItem(
+                                                                id: item.id,
+                                                                rank: item.rank,
+                                                                votes: item.votes,
+                                                                record: updatedRecord,
+                                                                playCount: item.playCount
+                                                            )
+                                                            onSave(updatedItem)
+                                                        }
                                                     }
-                                                    
-                                                    Divider()
-                                                    
-                                                    Button(role: .destructive) {
-                                                        delete(item)
-                                                    } label: {
-                                                        Label("Delete", systemImage: "trash")
-                                                    }
-                                                }
-                                                .sheet(item: $itemToEdit) { item in
-                                                    EditItemView(item: item, listID: listID) { newName, newDesc in
-                                                        let rec = item.record
-                                                        let updatedRecord = RankoRecord(
-                                                            objectID: rec.objectID,
-                                                            ItemName: newName,
-                                                            ItemDescription: newDesc,
-                                                            ItemCategory: "",
-                                                            ItemImage: rec.ItemImage,
-                                                            ItemGIF: rec.ItemAudio,
-                                                            ItemVideo: rec.ItemVideo,
-                                                            ItemAudio: rec.ItemAudio
-                                                        )
-                                                        let updatedItem = RankoItem(
-                                                            id: item.id,
-                                                            rank: item.rank,
-                                                            votes: item.votes,
-                                                            record: updatedRecord,
-                                                            playCount: item.playCount
-                                                        )
-                                                        onSave(updatedItem)
-                                                    }
-                                                }
-                                                .sheet(isPresented: $showEditItemSheet) {
-                                                    // Determine which item is centered
-                                                    EditItemView(
-                                                        item: item,
-                                                        listID: listID
-                                                    ) { newName, newDesc in
-                                                        // build updated record & item
-                                                        let rec = item.record
-                                                        let updatedRecord = RankoRecord(
-                                                            objectID: rec.objectID,
-                                                            ItemName: newName,
-                                                            ItemDescription: newDesc,
-                                                            ItemCategory: "",
-                                                            ItemImage: rec.ItemImage,
-                                                            ItemGIF: rec.ItemGIF,
-                                                            ItemVideo: rec.ItemVideo,
-                                                            ItemAudio: rec.ItemAudio
-                                                        )
-                                                        let updatedItem = RankoItem(
-                                                            id: item.id,
-                                                            rank: item.rank,
-                                                            votes: item.votes,
-                                                            record: updatedRecord,
-                                                            playCount: item.playCount
-                                                        )
-                                                        // callback to parent
-                                                        onSave(updatedItem)
-                                                    }
-                                                }
+                                            }
                                         }
+                                        .id(imageReloadToken)
+                                        .padding(.top, 70)
+                                        .padding(.bottom, 120)
+                                        .padding(.horizontal)
                                     }
-                                    .id(imageReloadToken)
-                                    .padding(.top, 25)
-                                    .padding(.bottom, 120)
-                                    .padding(.horizontal)
                                 }
                             }
                         }
                     }
                 }
-            }
-            
-            VStack {
-                Spacer()
-                HStack {
-                    GlassEffectContainer(spacing: 45) {
-                        HStack(alignment: .bottom, spacing: 10) {
-                            VStack(spacing: -5) {
-                                VStack {
-                                    VStack(spacing: 5) {
-                                        if addButtonTapped {
-                                            ZStack {
-                                                Image(systemName: "xmark")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.black)
-                                                    .foregroundStyle(Color.clear)
-                                                    .offset(addButtonTranslation)
+                VStack {
+                    Spacer()
+                    HStack {
+                        GlassEffectContainer(spacing: 45) {
+                            HStack(alignment: .bottom, spacing: 10) {
+                                VStack(spacing: -5) {
+                                    VStack {
+                                        VStack(spacing: 5) {
+                                            if addButtonTapped {
                                                 Image(systemName: "xmark")
                                                     .resizable().scaledToFit()
                                                     .frame(width: 20, height: 20)
                                                     .fontWeight(.black)
                                                     .foregroundStyle(Color(hex: 0x000000))
+                                            } else {
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "plus.square.dashed")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                        .fontWeight(.bold)
+                                                        .foregroundStyle(Color(hex: 0x000000))
+                                                    
+                                                    Text("Add")
+                                                        .font(.custom("Nunito-Black", size: 11))
+                                                        .lineLimit(1)
+                                                        .minimumScaleFactor(0.7)
+                                                        .allowsTightening(true)
+                                                }
                                             }
-                                        } else {
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "plus.square.dashed")
+                                        }
+                                        .frame(width: 60, height: 60)
+                                        .background(Color.black.opacity(0.001))
+                                        .contentShape(Circle())
+                                        // capture exit button frame
+                                        .background(
+                                            GeometryReader { gp in
+                                                Color.clear
+                                                    .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
+                                                    .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
+                                            }
+                                        )
+                                        .gesture(
+                                            LongPressGesture(minimumDuration: 0.01)
+                                                .onEnded { _ in
+                                                    if addButtonTapped {
+                                                        withAnimation { addButtonTapped = false }
+                                                    } else {
+                                                        withAnimation { addButtonTapped = true }
+                                                    }
+                                                }
+                                        )
+                                    }
+                                    .frame(width: 70, height: 70)
+                                    .background(Color.black.opacity(0.001))
+                                    .contentShape(Rectangle())
+                                    .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                    .overlay(alignment: .top) {
+                                        if addButtonTapped {
+                                            HStack {
+                                                // Delete
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "square.dashed")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                    Text("Blank")
+                                                        .font(.custom("Nunito-Black", size: 11))
+                                                }
+                                                .frame(width: 65, height: 65)
+                                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                                .background(
+                                                    GeometryReader { gp in
+                                                        Color.clear
+                                                            .onAppear { blankFrame = gp.frame(in: .named("exitbar")) }
+                                                            .onChange(of: gp.size) { _, _ in blankFrame = gp.frame(in: .named("exitbar")) }
+                                                    }
+                                                )
+                                                .simultaneousGesture(
+                                                    LongPressGesture(minimumDuration: 0.0).onEnded { _ in
+                                                        print("Blank would open")
+                                                        withAnimation { addButtonTapped = false }
+                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                        impact.prepare()
+                                                        impact.impactOccurred(intensity: 1.0)
+                                                    }
+                                                )
+                                                
+                                                // Save
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "square.dashed.inset.filled")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                    Text("Sample")
+                                                        .font(.custom("Nunito-Black", size: 11))
+                                                        .matchedTransitionSource(
+                                                            id: "sampleButton", in: transition
+                                                        )
+                                                }
+                                                .frame(width: 65, height: 65)
+                                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                                .background(
+                                                    GeometryReader { gp in
+                                                        Color.clear
+                                                            .onAppear { sampleFrame = gp.frame(in: .named("exitbar")) }
+                                                            .onChange(of: gp.size) { _, _ in sampleFrame = gp.frame(in: .named("exitbar")) }
+                                                    }
+                                                )
+                                                .simultaneousGesture(
+                                                    LongPressGesture(minimumDuration: 0.0).onEnded { _ in
+                                                        showAddItemsSheet = true
+                                                        withAnimation { addButtonTapped = false }
+                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                        impact.prepare()
+                                                        impact.impactOccurred(intensity: 1.0)
+                                                    }
+                                                )
+                                            }
+                                            .offset(y: -55)
+                                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                                            .zIndex(50)
+                                            .allowsHitTesting(true)
+                                        }
+                                    }
+                                }
+                                VStack(spacing: 5) {
+                                    Image(systemName: "switch.2")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                        .fontWeight(.bold)
+                                    
+                                    Text("Edit")
+                                        .font(.custom("Nunito-Black", size: 11))
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                        .minimumScaleFactor(0.7)
+                                        .allowsTightening(true)
+                                        .matchedTransitionSource(
+                                            id: "editButton", in: transition
+                                        )
+                                }
+                                .frame(width: 70, height: 70)
+                                .background(Color.black.opacity(0.001))
+                                .contentShape(Circle())
+                                .gesture(
+                                    LongPressGesture(minimumDuration: 0.01)
+                                        .onEnded { _ in
+                                            withAnimation { editButtonTapped = true }
+                                        }
+                                )
+                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                VStack(spacing: 5) {
+                                    Image(systemName: "arrow.up.arrow.down")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 20, height: 20)
+                                        .fontWeight(.bold)
+                                    
+                                    Text("Rank")
+                                        .font(.custom("Nunito-Black", size: 11))
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                        .minimumScaleFactor(0.7)
+                                        .allowsTightening(true)
+                                        .matchedTransitionSource(
+                                            id: "rankButton", in: transition
+                                        )
+                                }
+                                .frame(width: 70, height: 70)
+                                .background(Color.black.opacity(0.001))
+                                .contentShape(Circle())
+                                .gesture(
+                                    LongPressGesture(minimumDuration: 0.01)
+                                        .onEnded { _ in
+                                            withAnimation { rankButtonTapped = true }
+                                        }
+                                )
+                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                VStack(spacing: -5) {
+                                    VStack {
+                                        VStack(spacing: 5) {
+                                            if exitButtonTapped {
+                                                Image(systemName: "xmark")
                                                     .resizable().scaledToFit()
                                                     .frame(width: 20, height: 20)
-                                                    .fontWeight(.bold)
+                                                    .fontWeight(.black)
                                                     .foregroundStyle(Color(hex: 0x000000))
+                                            } else {
+                                                ZStack(alignment: .bottomLeading) {
+                                                    Image(systemName: "rectangle.portrait.fill")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 20, height: 20)
+                                                        .fontWeight(.bold)
+                                                        .foregroundStyle(Color(hex: 0x000000))
+                                                    Image(systemName: "figure.walk")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 15, height: 15)
+                                                        .fontWeight(.bold)
+                                                        .foregroundStyle(Color(hex: 0xFFFFFF))
+                                                        .offset(x: 2, y: -2)
+                                                }
                                                 
-                                                Text("Add")
+                                                Text("Exit")
                                                     .font(.custom("Nunito-Black", size: 11))
                                                     .lineLimit(1)
                                                     .minimumScaleFactor(0.7)
                                                     .allowsTightening(true)
                                             }
                                         }
-                                    }
-                                    .frame(width: 60, height: 60)
-                                    .background(Color.black.opacity(0.001))
-                                    .contentShape(Circle())
-                                    // capture exit button frame
-                                    .background(
-                                        GeometryReader { gp in
-                                            Color.clear
-                                                .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
-                                                .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
-                                        }
-                                    )
-                                    .gesture(
-                                        LongPressGesture(minimumDuration: 0.01)
-                                            .onEnded { _ in
-                                                if addButtonTapped {
-                                                    withAnimation { addButtonTapped = false }
-                                                } else {
-                                                    withAnimation { addButtonTapped = true }
-                                                    addHoldButton = true
-                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { addHoldButton = false }
-                                                }
+                                        .frame(width: 60, height: 60)
+                                        .background(Color.black.opacity(0.001))
+                                        .contentShape(Circle())
+                                        // capture exit button frame
+                                        .background(
+                                            GeometryReader { gp in
+                                                Color.clear
+                                                    .onAppear { exitFrame = gp.frame(in: .named("exitbar")) }
+                                                    .onChange(of: gp.size) { _, _ in exitFrame = gp.frame(in: .named("exitbar")) }
                                             }
-                                            .sequenced(before:
-                                                        DragGesture()
-                                                .onChanged { value in
-                                                    guard addButtonTapped else { return }
-                                                    
-                                                    // ensure we have frames
-                                                    let hasFrames = addFrame != .zero && sampleFrame != .zero && blankFrame != .zero
-                                                    guard hasFrames else { return }
-                                                    
-                                                    // define origin/targets in the same space
-                                                    let origin = addFrame.center
-                                                    let sampleVec = sampleFrame.center - origin
-                                                    let blankVec  = blankFrame.center - origin
-                                                    let sampleLen = sampleVec.length
-                                                    let blankLen  = blankVec.length
-                                                    guard sampleLen > 1, blankLen > 1 else { return }
-                                                    
-                                                    // unit directions
-                                                    let uSample = sampleVec.normalized
-                                                    let uBlank  = blankVec.normalized
-                                                    
-                                                    // current drag as a vector
-                                                    let v = CGPoint(x: value.translation.width, y: value.translation.height)
-                                                    
-                                                    // projections onto each ray
-                                                    let pSample = v.dot(uSample)
-                                                    let pBlank  = v.dot(uBlank)
-                                                    
-                                                    // choose which ray we're moving along (favor positive progress)
-                                                    let chooseSample: Bool
-                                                    if pSample <= 0 && pBlank <= 0 {
-                                                        chooseSample = pSample >= pBlank // both negative: pick the "less negative"
-                                                    } else if pSample > 0 && pBlank <= 0 {
-                                                        chooseSample = true
-                                                    } else if pBlank > 0 && pSample <= 0 {
-                                                        chooseSample = false
-                                                    } else {
-                                                        chooseSample = pSample >= pBlank
-                                                    }
-                                                    
-                                                    // clamp progress along the chosen ray
-                                                    let rayU  = chooseSample ? uSample : uBlank
-                                                    let rayL  = chooseSample ? sampleLen : blankLen
-                                                    let proj  = (chooseSample ? pSample : pBlank).clamped(0, rayL)
-                                                    let snapped = rayU * proj
-                                                    
-                                                    // apply as translation
-                                                    addButtonTranslation = CGSize(width: snapped.x, height: snapped.y)
-                                                    
-                                                    // hover highlight near the end (70%+)
-                                                    let nearEnd = proj > (rayL * 0.7)
-                                                    sampleButtonHovered   = chooseSample && nearEnd
-                                                    blankButtonHovered = !chooseSample && nearEnd
-                                                }
+                                        )
+                                        .gesture(
+                                            LongPressGesture(minimumDuration: 0.01)
                                                 .onEnded { _ in
-                                                    guard addButtonTapped else { return }
-                                                    
-                                                    // compute final progress to decide commit
-                                                    let origin = addFrame.center
-                                                    let sampleVec = sampleFrame.center - origin
-                                                    let blankVec  = blankFrame.center - origin
-                                                    let sampleLen = sampleVec.length
-                                                    let blankLen  = blankVec.length
-                                                    guard sampleLen > 1, blankLen > 1 else {
-                                                        withAnimation {
-                                                            addButtonTranslation = .zero
-                                                            sampleButtonHovered = false
-                                                            blankButtonHovered = false
-                                                            addButtonTapped = false
-                                                        }
-                                                        return
+                                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                                                        exitButtonTapped.toggle()
                                                     }
-                                                    
-                                                    let current = CGPoint(x: addButtonTranslation.width, y: addButtonTranslation.height)
-                                                    let progressOnSample = current.dot(sampleVec.normalized) / sampleLen
-                                                    let progressOnBlank  = current.dot(blankVec.normalized)  / blankLen
-                                                    
-                                                    // commit threshold
-                                                    let threshold: CGFloat = 0.7
-                                                    
-                                                    if progressOnSample >= threshold {
-                                                        // commit Save
-                                                        showAddItemsSheet = true
-                                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                            addButtonTranslation = .zero
-                                                            sampleButtonHovered = false
-                                                            blankButtonHovered = false
-                                                            addButtonTapped = false
-                                                        }
-                                                    } else if progressOnBlank >= threshold {
-                                                        // commit Delete (your current action = dismiss)
-                                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                            addButtonTranslation = .zero
-                                                            sampleButtonHovered = false
-                                                            blankButtonHovered = false
-                                                            addButtonTapped = false
-                                                        }
-                                                        print("Blank would open")
-                                                    } else {
-                                                        // snap back
-                                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                                            addButtonTranslation = .zero
-                                                            sampleButtonHovered = false
-                                                            blankButtonHovered = false
-                                                            addButtonTapped = false
-                                                        }
-                                                    }
+                                                    let impact = UIImpactFeedbackGenerator(style: .soft)
+                                                    impact.prepare(); impact.impactOccurred(intensity: 0.8)
                                                 }
-                                                      )
-                                    )
-                                }
-                                .onChange(of: sampleButtonHovered) { old, new in
-                                    if new == true {
-                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 1.0)
+                                        )
                                     }
-                                    if new == false {
-                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 0.6)
-                                    }
-                                }
-                                .onChange(of: blankButtonHovered) { old, new in
-                                    if new == true {
-                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 1.0)
-                                    }
-                                    if new == false {
-                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 0.6)
-                                    }
-                                }
-                                .frame(width: 70, height: 70)
-                                .background(Color.black.opacity(0.001))
-                                .contentShape(Rectangle())
-                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                .overlay(alignment: .top) {
-                                    if addButtonTapped {
-                                        HStack {
-                                            // Delete
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "square.dashed")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: blankButtonHovered ? 35 : 20, height: blankButtonHovered ? 35 : 20)
-                                                Text("Blank")
-                                                    .font(.custom("Nunito-Black", size: blankButtonHovered ? 15 : 11))
-                                            }
-                                            .frame(width: 65, height: 65)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear
-                                                        .onAppear { blankFrame = gp.frame(in: .named("exitbar")) }
-                                                        .onChange(of: gp.size) { _, _ in blankFrame = gp.frame(in: .named("exitbar")) }
-                                                }
-                                            )
-                                            .simultaneousGesture(
-                                                LongPressGesture(minimumDuration: 0.0).onEnded { _ in
-                                                    print("Blank would open")
-                                                    withAnimation { addButtonTapped = false }
-                                                    let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                    impact.prepare()
-                                                    impact.impactOccurred(intensity: 1.0)
-                                                }
-                                            )
-                                            
-                                            // Save
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "square.dashed.inset.filled")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: sampleButtonHovered ? 35 : 20, height: sampleButtonHovered ? 35 : 20)
-                                                Text("Sample")
-                                                    .font(.custom("Nunito-Black", size: sampleButtonHovered ? 15 : 11))
-                                                    .matchedTransitionSource(
-                                                        id: "sampleButton", in: transition
-                                                    )
-                                            }
-                                            .frame(width: 65, height: 65)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear
-                                                        .onAppear { sampleFrame = gp.frame(in: .named("exitbar")) }
-                                                        .onChange(of: gp.size) { _, _ in sampleFrame = gp.frame(in: .named("exitbar")) }
-                                                }
-                                            )
-                                            .simultaneousGesture(
-                                                LongPressGesture(minimumDuration: 0.0).onEnded { _ in
-                                                    showAddItemsSheet = true
-                                                    withAnimation { addButtonTapped = false }
-                                                    let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                    impact.prepare()
-                                                    impact.impactOccurred(intensity: 1.0)
-                                                }
-                                            )
-                                        }
-                                        .offset(y: -55)
-                                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                                        .zIndex(50)
-                                        .allowsHitTesting(true)
-                                    }
-                                }
-                            }
-                            VStack(spacing: 5) {
-                                Image(systemName: "switch.2")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 20, height: 20)
-                                    .fontWeight(.bold)
-                                
-                                Text("Edit")
-                                    .font(.custom("Nunito-Black", size: 11))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .minimumScaleFactor(0.7)
-                                    .allowsTightening(true)
-                                    .matchedTransitionSource(
-                                        id: "editButton", in: transition
-                                    )
-                            }
-                            .frame(width: 70, height: 70)
-                            .background(Color.black.opacity(0.001))
-                            .contentShape(Circle())
-                            .gesture(
-                                LongPressGesture(minimumDuration: 0.01)
-                                    .onEnded { _ in
-                                        withAnimation { editButtonTapped = true }
-                                    }
-                            )
-                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                            VStack(spacing: 5) {
-                                Image(systemName: "arrow.up.arrow.down")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 20, height: 20)
-                                    .fontWeight(.bold)
-                                
-                                Text("Rank")
-                                    .font(.custom("Nunito-Black", size: 11))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .minimumScaleFactor(0.7)
-                                    .allowsTightening(true)
-                                    .matchedTransitionSource(
-                                        id: "rankButton", in: transition
-                                    )
-                            }
-                            .frame(width: 70, height: 70)
-                            .background(Color.black.opacity(0.001))
-                            .contentShape(Circle())
-                            .gesture(
-                                LongPressGesture(minimumDuration: 0.01)
-                                    .onEnded { _ in
-                                        withAnimation { rankButtonTapped = true }
-                                    }
-                            )
-                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                            VStack(spacing: -5) {
-                                VStack {
-                                    VStack(spacing: 5) {
+                                    .frame(width: 70, height: 70)
+                                    .background(Color.black.opacity(0.001))
+                                    .contentShape(Rectangle())
+                                    .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                    .overlay(alignment: .top) {
                                         if exitButtonTapped {
-                                            ZStack {
-                                                Image(systemName: "xmark")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.black)
-                                                    .foregroundStyle(Color.clear)
-                                                    .offset(exitButtonTranslation)
-                                                Image(systemName: "xmark")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.black)
-                                                    .foregroundStyle(Color(hex: 0x000000))
-                                            }
-                                        } else {
-                                            ZStack(alignment: .bottomLeading) {
-                                                Image(systemName: "rectangle.portrait.fill")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 20, height: 20)
-                                                    .fontWeight(.bold)
-                                                    .foregroundStyle(Color(hex: 0x000000))
-                                                Image(systemName: "figure.walk")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: 15, height: 15)
-                                                    .fontWeight(.bold)
-                                                    .foregroundStyle(Color(hex: 0xFFFFFF))
-                                                    .offset(x: 2, y: -2)
-                                            }
-                                            
-                                            Text("Exit")
-                                                .font(.custom("Nunito-Black", size: 11))
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.7)
-                                                .allowsTightening(true)
-                                        }
-                                    }
-                                    .frame(width: 60, height: 60)
-                                    .background(Color.black.opacity(0.001))
-                                    .contentShape(Circle())
-                                    // capture exit button frame
-                                    .background(
-                                        GeometryReader { gp in
-                                            Color.clear
-                                                .onAppear { exitFrame = gp.frame(in: .named("exitbar")) }
-                                                .onChange(of: gp.size) { _, _ in exitFrame = gp.frame(in: .named("exitbar")) }
-                                        }
-                                    )
-                                    .gesture(
-                                        LongPressGesture(minimumDuration: 0.01)
-                                            .onEnded { _ in
-                                                withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                    exitButtonTapped.toggle()
+                                            HStack(spacing: -10) {
+                                                // DELETE
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "trash.fill")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 17,
+                                                               height: 17)
+                                                    Text("Delete")
+                                                        .font(.custom("Nunito-Black", size: 10))
                                                 }
-                                                let impact = UIImpactFeedbackGenerator(style: .soft)
-                                                impact.prepare(); impact.impactOccurred(intensity: 0.8)
-                                            }
-                                            .sequenced(before:
-                                                        DragGesture()
-                                                .onChanged { value in
-                                                    guard exitButtonTapped else { return }
-                                                    
-                                                    // make sure frames exist
-                                                    let hasFrames = exitFrame != .zero && saveFrame != .zero && deleteFrame != .zero && cancelFrame != .zero
-                                                    guard hasFrames else { return }
-                                                    
-                                                    let origin = exitFrame.center
-                                                    let saveVec   = saveFrame.center   - origin
-                                                    let cancelVec = cancelFrame.center - origin
-                                                    let delVec    = deleteFrame.center - origin
-                                                    
-                                                    let lenS = saveVec.length, lenC = cancelVec.length, lenD = delVec.length
-                                                    guard lenS > 1, lenC > 1, lenD > 1 else { return }
-                                                    
-                                                    let uS = saveVec.normalized
-                                                    let uC = cancelVec.normalized
-                                                    let uD = delVec.normalized
-                                                    
-                                                    // current drag vector
-                                                    let v = CGPoint(x: value.translation.width, y: value.translation.height)
-                                                    
-                                                    // projections along each ray
-                                                    let pS = v.dot(uS)
-                                                    let pC = v.dot(uC)
-                                                    let pD = v.dot(uD)
-                                                    
-                                                    // choose exactly one ray with the largest positive projection
-                                                    enum Target { case save, cancel, delete }
-                                                    let choices: [(proj: CGFloat, u: CGPoint, len: CGFloat, tgt: Target, priority: Int)] = [
-                                                        (pS, uS, lenS, .save,   3),
-                                                        (pC, uC, lenC, .cancel, 2),
-                                                        (pD, uD, lenD, .delete, 1)
-                                                    ]
-                                                    // tie-break by priority if projections are equal
-                                                    let best = choices.max { a, b in
-                                                        if a.proj == b.proj { return a.priority < b.priority }
-                                                        return a.proj < b.proj
-                                                    }!
-                                                    
-                                                    // if best projection is not forward, clear hovers
-                                                    guard best.proj > 0 else {
-                                                        withAnimation { exitButtonTranslation = .zero }
-                                                        withAnimation { saveButtonHovered = false }
-                                                        withAnimation { cancelButtonHovered = false }
-                                                        withAnimation { deleteButtonHovered = false }
-                                                        return
+                                                .frame(width: 60, height: 60)
+                                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                                .background(
+                                                    GeometryReader { gp in
+                                                        Color.clear
+                                                            .onAppear { deleteFrame = gp.frame(in: .named("exitbar")) }
+                                                            .onChange(of: gp.size) { _, _ in deleteFrame = gp.frame(in: .named("exitbar")) }
                                                     }
-                                                    
-                                                    // clamp along the best ray
-                                                    let proj = min(best.proj, best.len)
-                                                    let snapped = best.u * max(0, proj)
-                                                    exitButtonTranslation = CGSize(width: snapped.x, height: snapped.y)
-                                                    
-                                                    // EXCLUSIVE hover: only the best ray can be hovered
-                                                    let progress = max(0, proj) / best.len
-                                                    let isNearEnd = progress >= 0.7
-                                                    withAnimation { saveButtonHovered   = isNearEnd && best.tgt == .save }
-                                                    withAnimation { cancelButtonHovered = isNearEnd && best.tgt == .cancel }
-                                                    withAnimation { deleteButtonHovered = isNearEnd && best.tgt == .delete }
+                                                )
+                                                .onTapGesture {
+                                                    let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                    impact.prepare(); impact.impactOccurred(intensity: 1.0)
+                                                    withAnimation { exitButtonTapped = false }
+                                                    showDeleteAlert = true
                                                 }
-                                                .onEnded { _ in
-                                                    guard exitButtonTapped else { return }
-                                                    
-                                                    let origin = exitFrame.center
-                                                    let saveVec   = saveFrame.center   - origin
-                                                    let cancelVec = cancelFrame.center - origin
-                                                    let delVec    = deleteFrame.center - origin
-                                                    
-                                                    let lenS = saveVec.length, lenC = cancelVec.length, lenD = delVec.length
-                                                    guard lenS > 1, lenC > 1, lenD > 1 else {
-                                                        withAnimation { resetExitDragState() }
-                                                        return
+                                                .offset(y: -40)
+                                                
+                                                // CANCEL (new) → dismiss
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "xmark.circle.fill")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 17,
+                                                               height: 17)
+                                                    Text("Cancel")
+                                                        .font(.custom("Nunito-Black", size: 10))
+                                                }
+                                                .frame(width: 60, height: 60)
+                                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                                .background(
+                                                    GeometryReader { gp in
+                                                        Color.clear
+                                                            .onAppear { cancelFrame = gp.frame(in: .named("exitbar")) }   // 👈 capture Cancel frame
+                                                            .onChange(of: gp.size) { _, _ in cancelFrame = gp.frame(in: .named("exitbar")) }
                                                     }
-                                                    
-                                                    let current = CGPoint(x: exitButtonTranslation.width, y: exitButtonTranslation.height)
-                                                    let progS = max(0, current.dot(saveVec.normalized))   / lenS
-                                                    let progC = max(0, current.dot(cancelVec.normalized)) / lenC
-                                                    let progD = max(0, current.dot(delVec.normalized))    / lenD
-                                                    
-                                                    let threshold: CGFloat = 0.7
-                                                    
-                                                    // pick a single winner
-                                                    enum Action { case save, cancel, delete, none }
-                                                    let winners: [(CGFloat, Action, Int)] = [
-                                                        (progS, .save,   3),
-                                                        (progC, .cancel, 2),
-                                                        (progD, .delete, 1)
-                                                    ]
-                                                    let best = winners.max { a, b in
-                                                        if a.0 == b.0 { return a.2 < b.2 }  // tie-break
-                                                        return a.0 < b.0
-                                                    }!
-                                                    
-                                                    if best.0 >= threshold {
-                                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) { resetExitDragState() }
-                                                        switch best.1 {
-                                                        case .save:   startSave()
-                                                        case .cancel: dismiss()
-                                                        case .delete: showDeleteAlert = true
-                                                        case .none:   break
-                                                        }
-                                                    } else {
-                                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { resetExitDragState() }
+                                                )
+                                                .onTapGesture {
+                                                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                                                    impact.prepare(); impact.impactOccurred(intensity: 0.9)
+                                                    withAnimation { exitButtonTapped = false }
+                                                    dismiss()
+                                                }
+                                                .offset(y: -55)
+                                                
+                                                // SAVE
+                                                VStack(spacing: 5) {
+                                                    Image(systemName: "square.and.arrow.down.fill")
+                                                        .resizable().scaledToFit()
+                                                        .frame(width: 17,
+                                                               height: 17)
+                                                    Text("Save")
+                                                        .font(.custom("Nunito-Black", size: 10))
+                                                }
+                                                .frame(width: 60, height: 60)
+                                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                                .background(
+                                                    GeometryReader { gp in
+                                                        Color.clear
+                                                            .onAppear { saveFrame = gp.frame(in: .named("exitbar")) }
+                                                            .onChange(of: gp.size) { _, _ in saveFrame = gp.frame(in: .named("exitbar")) }
                                                     }
+                                                )
+                                                .onTapGesture {
+                                                    let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                    impact.prepare(); impact.impactOccurred(intensity: 1.0)
+                                                    withAnimation { exitButtonTapped = false }
+                                                    startSave()
                                                 }
-                                                      )
-                                    )
-                                }
-                                .onChange(of: saveButtonHovered) { old, new in
-                                    if new == true {
-                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 1.0)
-                                    }
-                                    if new == false {
-                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 0.6)
-                                    }
-                                }
-                                .onChange(of: deleteButtonHovered) { old, new in
-                                    if new == true {
-                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 1.0)
-                                    }
-                                    if new == false {
-                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 0.6)
-                                    }
-                                }
-                                .onChange(of: cancelButtonHovered) { old, new in
-                                    if new == true {
-                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 1.0)
-                                    } else {
-                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                        impact.prepare()
-                                        impact.impactOccurred(intensity: 0.6)
-                                    }
-                                }
-                                .frame(width: 70, height: 70)
-                                .background(Color.black.opacity(0.001))
-                                .contentShape(Rectangle())
-                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                .overlay(alignment: .top) {
-                                    if exitButtonTapped {
-                                        HStack(spacing: -10) {
-                                            // DELETE
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "trash.fill")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: deleteButtonHovered ? 25 : 17,
-                                                           height: deleteButtonHovered ? 25 : 17)
-                                                Text("Delete")
-                                                    .font(.custom("Nunito-Black", size: deleteButtonHovered ? 12 : 10))
+                                                .offset(y: -40)
                                             }
-                                            .frame(width: 60, height: 60)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear
-                                                        .onAppear { deleteFrame = gp.frame(in: .named("exitbar")) }
-                                                        .onChange(of: gp.size) { _, _ in deleteFrame = gp.frame(in: .named("exitbar")) }
-                                                }
-                                            )
-                                            .onTapGesture {
-                                                let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                impact.prepare(); impact.impactOccurred(intensity: 1.0)
-                                                withAnimation { exitButtonTapped = false }
-                                                showDeleteAlert = true
-                                            }
-                                            .offset(y: -40)
-                                            
-                                            // CANCEL (new) → dismiss
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: cancelButtonHovered ? 25 : 17,
-                                                           height: cancelButtonHovered ? 25 : 17)
-                                                Text("Cancel")
-                                                    .font(.custom("Nunito-Black", size: cancelButtonHovered ? 12 : 10))
-                                            }
-                                            .frame(width: 60, height: 60)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear
-                                                        .onAppear { cancelFrame = gp.frame(in: .named("exitbar")) }   // 👈 capture Cancel frame
-                                                        .onChange(of: gp.size) { _, _ in cancelFrame = gp.frame(in: .named("exitbar")) }
-                                                }
-                                            )
-                                            .onTapGesture {
-                                                let impact = UIImpactFeedbackGenerator(style: .medium)
-                                                impact.prepare(); impact.impactOccurred(intensity: 0.9)
-                                                withAnimation { exitButtonTapped = false }
-                                                dismiss()
-                                            }
-                                            .offset(y: -55)
-                                            
-                                            // SAVE
-                                            VStack(spacing: 5) {
-                                                Image(systemName: "square.and.arrow.down.fill")
-                                                    .resizable().scaledToFit()
-                                                    .frame(width: saveButtonHovered ? 25 : 17,
-                                                           height: saveButtonHovered ? 25 : 17)
-                                                Text("Save")
-                                                    .font(.custom("Nunito-Black", size: saveButtonHovered ? 12 : 10))
-                                            }
-                                            .frame(width: 60, height: 60)
-                                            .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                            .background(
-                                                GeometryReader { gp in
-                                                    Color.clear
-                                                        .onAppear { saveFrame = gp.frame(in: .named("exitbar")) }
-                                                        .onChange(of: gp.size) { _, _ in saveFrame = gp.frame(in: .named("exitbar")) }
-                                                }
-                                            )
-                                            .onTapGesture {
-                                                let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                impact.prepare(); impact.impactOccurred(intensity: 1.0)
-                                                withAnimation { exitButtonTapped = false }
-                                                startSave()
-                                            }
-                                            .offset(y: -40)
+                                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                                            .zIndex(50)
+                                            .allowsHitTesting(true)
                                         }
-                                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                                        .zIndex(50)
-                                        .allowsHitTesting(true)
                                     }
                                 }
                             }
                         }
+                        .shadow(color: Color(hex: 0x000000).opacity(0.15), radius: 4)
                     }
-                    .shadow(color: Color(hex: 0x000000).opacity(0.15), radius: 4)
+                }
+                .coordinateSpace(name: "exitbar")   // ← add this
+                .padding(.bottom, 10)
+            }
+            .overlay {
+                if progressLoading {
+                    ZStack {
+                        Color.black.opacity(0.35).ignoresSafeArea()
+                        VStack(spacing: 10) {
+                            ProgressView("Saving Ranko…") // 👈 your requested copy
+                                .padding(.vertical, 8)
+                            Text("Waiting for Firebase + Algolia")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+                        .padding(18)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .transition(.opacity)
+                    .zIndex(999)
                 }
             }
-            .coordinateSpace(name: "exitbar")   // ← add this
-            .padding(.bottom, 10)
-            
-        }
-        .overlay {
-            if progressLoading {
-                ZStack {
-                    Color.black.opacity(0.35).ignoresSafeArea()
-                    VStack(spacing: 10) {
-                        ProgressView("Saving Ranko…") // 👈 your requested copy
-                            .padding(.vertical, 8)
-                        Text("Waiting for Firebase + Algolia")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.9))
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
                     }
-                    .padding(18)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .tint(Color(hex: 0x000000))
                 }
-                .transition(.opacity)
-                .zIndex(999)
+                ToolbarItem(placement: .principal) {
+                    RankoToolbarTitleStack(
+                        name: rankoName,
+                        description: description,
+                        isPrivate: $isPrivate,
+                        categoryName: categoryName,
+                        categoryIcon: categoryIcon,
+                        categoryColour: categoryColour,
+                        showEditDetailsSheet: $showEditDetailsSheet,
+                        onTapPrivacy: {  },   // or: { isPrivate.toggle() }
+                        onTapCategory: {  }
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(rankoName). \(description). \(isPrivate ? "Private" : "Public"). \(categoryName)")
+                }
             }
-        }
-        .interactiveDismissDisabled(progressLoading) // block sheet swipe
-        .disabled(progressLoading)                   // block touches
-        .alert("Couldn't save", isPresented: .init(
-            get: { publishError != nil },
-            set: { if !$0 { publishError = nil } }
-        )) {
-            Button("Retry") { startSave() }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text(publishError ?? "Something went wrong.")
-        }
-        .refreshable {
-            refreshItemImages()
-        }
-        .onAppear {
-            loadListFromFirebase()
-            refreshItemImages()
-        }
-        .sheet(isPresented: $addButtonTapped, onDismiss : {
-            possiblyEdited = true
-        }) {
-            FilterChipPickerView(
-                selectedRankoItems: $selectedRankoItems
-            )
-        }
-        .sheet(isPresented: $editButtonTapped) {
-            DefaultListEditDetails(
-                rankoName: rankoName,
-                description: description,
-                isPrivate: isPrivate,
-                category: category
-            ) { newName, newDescription, newPrivate, newCategory in
-                rankoName   = newName
-                description = newDescription
-                isPrivate   = newPrivate
-                category    = newCategory
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color.white.opacity(0.92), for: .navigationBar)
+            .interactiveDismissDisabled(progressLoading) // block sheet swipe
+            .disabled(progressLoading)                   // block touches
+            .alert("Couldn't save", isPresented: .init(
+                get: { publishError != nil },
+                set: { if !$0 { publishError = nil } }
+            )) {
+                Button("Retry") { startSave() }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text(publishError ?? "Something went wrong.")
+            }
+            .refreshable {
+                refreshItemImages()
+            }
+            .onAppear {
+                loadListFromFirebase()
+                refreshItemImages()
+            }
+            .sheet(isPresented: $addButtonTapped, onDismiss : {
                 possiblyEdited = true
+            }) {
+                FilterChipPickerView(
+                    selectedRankoItems: $selectedRankoItems
+                )
             }
-            .navigationTransition(
-                .zoom(sourceID: "editButton", in: transition)
-            )
-        }
-        .sheet(isPresented: $rankButtonTapped) {
-            DefaultListReRank(
-                items: selectedRankoItems,
-                onSave: { newOrder in
-                    selectedRankoItems = newOrder
-                    possiblyEdited = true
+            .sheet(isPresented: $editButtonTapped) {
+                DefaultListEditDetails(
+                    rankoName: rankoName,
+                    description: description,
+                    isPrivate: isPrivate,
+                    categoryName: categoryName,
+                    categoryIcon: categoryIcon,
+                    categoryColour: categoryColour
+                ) { newName, newDescription, newPrivate, newCategoryName, newCategoryIcon, newCategoryColour in
+                    rankoName      = newName
+                    description    = newDescription
+                    isPrivate      = newPrivate
+                    categoryName   = newCategoryName
+                    categoryIcon   = newCategoryIcon
+                    categoryColour = newCategoryColour
                 }
-            )
-        }
-        .fullScreenCover(isPresented: $showBlankItemsFS, onDismiss : {
-            possiblyEdited = true
-        }) {
-            BlankItemsComposer(
-                rankoID: listID,                  // 👈 add this
-                drafts: $blankDrafts,
-                error: $draftError,
-                canAddMore: blankDrafts.count < 10,
-                onCommit: { appendDraftsToSelectedRanko() }
-            )
-        }
-        .alert(isPresented: $showDeleteAlert) {
-            CustomDialog(
-                title: "Delete Ranko?",
-                content: "Are you sure you want to delete your Ranko.",
-                image: .init(
-                    content: "trash.fill",
-                    background: .red,
-                    foreground: .white
-                ),
-                button1: .init(
-                    content: "Delete",
-                    background: .red,
-                    foreground: .white,
-                    action: { _ in
-                        showDeleteAlert = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                            removeFeaturedRanko(listID: listID) { success in}
-                            deleteRanko() { success in
-                                if success {
-                                    print("🎉 Fields updated in Algolia")
-                                } else {
-                                    print("⚠️ Failed to update fields")
-                                }
-                            }
-                            onDelete!()
-                            dismiss()
-                        }
-                    }
-                ),
-                button2: .init(
-                    content: "Cancel",
-                    background: .orange,
-                    foreground: .white,
-                    action: { _ in
-                        showDeleteAlert = false
+                .navigationTransition(
+                    .zoom(sourceID: "editButton", in: transition)
+                )
+            }
+            .sheet(isPresented: $rankButtonTapped) {
+                DefaultListReRank(
+                    items: selectedRankoItems,
+                    onSave: { newOrder in
+                        selectedRankoItems = newOrder
+                        possiblyEdited = true
                     }
                 )
-            )
-            .transition(.blurReplace.combined(with: .push(from: .bottom)))
-        } background: {
-            Rectangle()
-                .fill(.primary.opacity(0.35))
-        }
-        .sheet(item: $selectedItem) { tapped in
-            ItemDetailView(
-                items: selectedRankoItems,
-                initialItem: tapped,
-                listID: listID
-            ) { updated in
-                // replace the old item with the updated one
+            }
+            .fullScreenCover(isPresented: $showBlankItemsFS, onDismiss : {
                 possiblyEdited = true
-                if let idx = selectedRankoItems.firstIndex(where: { $0.id == updated.id }) {
-                    selectedRankoItems[idx] = updated
+            }) {
+                BlankItemsComposer(
+                    rankoID: rankoID,                  // 👈 add this
+                    drafts: $blankDrafts,
+                    error: $draftError,
+                    canAddMore: blankDrafts.count < 10,
+                    onCommit: { appendDraftsToSelectedRanko() }
+                )
+            }
+            .alert(isPresented: $showDeleteAlert) {
+                CustomDialog(
+                    title: "Delete Ranko?",
+                    content: "Are you sure you want to delete your Ranko.",
+                    image: .init(
+                        content: "trash.fill",
+                        background: .red,
+                        foreground: .white
+                    ),
+                    button1: .init(
+                        content: "Delete",
+                        background: .red,
+                        foreground: .white,
+                        action: { _ in
+                            showDeleteAlert = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                removeFeaturedRanko(rankoID: rankoID) { success in}
+                                deleteRanko() { success in
+                                    if success {
+                                        print("🎉 Fields updated in Algolia")
+                                    } else {
+                                        print("⚠️ Failed to update fields")
+                                    }
+                                }
+                                onDelete!()
+                                dismiss()
+                            }
+                        }
+                    ),
+                    button2: .init(
+                        content: "Cancel",
+                        background: .orange,
+                        foreground: .white,
+                        action: { _ in
+                            showDeleteAlert = false
+                        }
+                    )
+                )
+                .transition(.blurReplace.combined(with: .push(from: .bottom)))
+            } background: {
+                Rectangle()
+                    .fill(.primary.opacity(0.35))
+            }
+            .sheet(item: $selectedItem) { tapped in
+                ItemDetailView(
+                    items: selectedRankoItems,
+                    initialItem: tapped,
+                    rankoID: rankoID
+                ) { updated in
+                    // replace the old item with the updated one
+                    possiblyEdited = true
+                    if let idx = selectedRankoItems.firstIndex(where: { $0.id == updated.id }) {
+                        selectedRankoItems[idx] = updated
+                    }
                 }
             }
         }
     }
     
-    
-    
     private func appendDraftsToSelectedRanko() {
         let placeholderURL = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/placeholderImages%2FitemPlaceholder.png?alt=media&token="
         var nextRank = (selectedRankoItems.map(\.rank).max() ?? 0) + 1
-
+        
         for draft in blankDrafts {
             let newItemID = UUID().uuidString
             let url = draft.itemImageURL ?? placeholderURL
-
+            
             let rec = RankoRecord(
                 objectID: newItemID,
                 ItemName: draft.name,
@@ -1187,11 +863,11 @@ struct DefaultListPersonal: View {
             selectedRankoItems.append(item)
             nextRank += 1
         }
-
+        
         blankDrafts = [BlankItemDraft()]
         draftError = nil
     }
-
+    
     // one draft card UI
     private struct DraftCard: View {
         @Binding var draft: BlankItemDraft
@@ -1199,7 +875,7 @@ struct DefaultListPersonal: View {
         let subtitle: String
         var onTapImage: () -> Void
         var onDelete: () -> Void
-
+        
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
@@ -1211,7 +887,7 @@ struct DefaultListPersonal: View {
                         ProgressView().controlSize(.small)
                     }
                 }
-
+                
                 Button(action: onTapImage) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 14)
@@ -1221,7 +897,7 @@ struct DefaultListPersonal: View {
                                     .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
                             )
                             .frame(width: 240, height: 240)
-
+                        
                         if let img = draft.image {
                             Image(uiImage: img)
                                 .resizable().scaledToFill()
@@ -1241,7 +917,7 @@ struct DefaultListPersonal: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(draft.isUploading)
-
+                
                 VStack(spacing: 8) {
                     HStack(spacing: 6) {
                         TextField("Item Name *", text: $draft.name)
@@ -1251,7 +927,7 @@ struct DefaultListPersonal: View {
                     }
                     .padding(10)
                     .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
-
+                    
                     TextField("Item Description (optional)", text: $draft.description, axis: .vertical)
                         .lineLimit(1...3)
                         .font(.system(size: 14, weight: .semibold))
@@ -1259,7 +935,7 @@ struct DefaultListPersonal: View {
                         .padding(10)
                         .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
                 }
-
+                
                 HStack {
                     if let err = draft.uploadError {
                         Label(err, systemImage: "exclamationmark.triangle.fill")
@@ -1300,32 +976,24 @@ struct DefaultListPersonal: View {
         return String(format: "0x%06X", intVal)
     }
     
-    private func resetExitDragState() {
-        withAnimation { exitButtonTranslation = .zero }
-        withAnimation { saveButtonHovered = false }
-        withAnimation { deleteButtonHovered = false }
-        withAnimation { cancelButtonHovered = false }
-        withAnimation { exitButtonTapped = false }
-    }
-    
     private func refreshItemImages() {
         guard !selectedRankoItems.isEmpty else { return }
         imageReloadToken = UUID() // change identity → rows/images rebuild
     }
     
     private func startSave() {
-        guard category != nil || !categoryName.isEmpty else {
+        guard !categoryName.isEmpty else {
             publishError = "Please pick a category before saving."
             return
         }
         progressLoading = true
         publishError = nil
-
+        
         let group = DispatchGroup()
         var firebaseOK = false
         var algoliaOK = false
         var firstError: String?
-
+        
         // 1) Firebase
         group.enter()
         updateListInFirebase { success, errMsg in
@@ -1333,26 +1001,26 @@ struct DefaultListPersonal: View {
             if !success, firstError == nil { firstError = errMsg ?? "Firebase save failed." }
             group.leave()
         }
-
+        
         // 2) Algolia
         group.enter()
         updateListInAlgolia(
-            listID: listID,
+            rankoID: rankoID,
             newName: rankoName,
             newDescription: description,
-            newCategory: category?.name ?? categoryName,
+            newCategory: categoryName,
             isPrivate: isPrivate
         ) { success in
             algoliaOK = success
             if !success, firstError == nil { firstError = "Algolia update failed." }
             group.leave()
         }
-
+        
         group.notify(queue: .main) {
             progressLoading = false
             if firebaseOK && algoliaOK {
-                possiblyEdited = false
-                // optional: toast / haptic
+                print("Saved RankoID: \(rankoID) --- \(rankoName)")
+                dismiss()
             } else {
                 publishError = firstError ?? "Failed to save."
             }
@@ -1362,8 +1030,8 @@ struct DefaultListPersonal: View {
     private func loadListFromFirebase() {
         let ref = Database.database().reference()
             .child("RankoData")
-            .child(listID)
-
+            .child(rankoID)
+        
         func parseColourToUInt(_ any: Any?) -> UInt {
             // accepts: "0xFFCF00", "#FFCF00", "FFCF00", 16763904, NSNumber, etc.
             if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
@@ -1377,27 +1045,27 @@ struct DefaultListPersonal: View {
             }
             return 0x446D7A
         }
-
+        
         ref.observeSingleEvent(of: .value) { snap in
             guard let root = snap.value as? [String: Any] else { return }
-
+            
             // ---------- NEW SCHEMA ----------
             let details = root["RankoDetails"] as? [String: Any]
             let privacy = root["RankoPrivacy"] as? [String: Any]
             let cat     = root["RankoCategory"] as? [String: Any]
             let items   = root["RankoItems"] as? [String: Any] ?? [:]
-
+            
             if details != nil || privacy != nil || cat != nil {
                 // details
                 let name = (details?["name"] as? String) ?? ""
                 let des  = (details?["description"] as? String) ?? ""
                 let priv = (privacy?["private"] as? Bool) ?? false
-
+                
                 // category
                 let catName  = (cat?["name"] as? String) ?? ""
                 let catIcon  = (cat?["icon"] as? String) ?? "circle"
-                let catColour = parseColourToUInt(cat?["colour"])
-
+                let catColour = (cat?["colour"] as? String) ?? "0x000000"
+                
                 // items
                 let parsedItems: [RankoItem] = items.compactMap { (k, v) in
                     guard let it = v as? [String: Any] else { return nil }
@@ -1415,7 +1083,7 @@ struct DefaultListPersonal: View {
                     let plays = intFromAny(it["PlayCount"]) ?? 0
                     return RankoItem(id: k, rank: rank, votes: votes, record: rec, playCount: plays)
                 }
-
+                
                 // assign UI state
                 rankoName = name
                 description = des
@@ -1423,33 +1091,35 @@ struct DefaultListPersonal: View {
                 categoryName = catName
                 categoryIcon = catIcon
                 categoryColour = catColour
-
+                
                 selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
-
+                
                 // originals (for revert)
                 originalRankoName = name
                 originalDescription = des
                 originalIsPrivate = priv
-                originalCategory = category // keep as-is if you use SampleCategoryChip elsewhere
+                originalCategoryName = catName
+                originalCategoryIcon = catIcon
+                originalCategoryColour = catColour
                 return
             }
-
+            
             // ---------- OLD SCHEMA (fallback) ----------
             let name = (root["RankoName"] as? String) ?? ""
             let des  = (root["RankoDescription"] as? String) ?? ""
             let priv = (root["RankoPrivacy"] as? Bool) ?? false
-
+            
             var catName = ""
             var catIcon = "circle"
-            var catColourUInt: UInt = 0x446D7A
+            var catColour = "0x000000"
             if let catObj = root["RankoCategory"] as? [String: Any] {
                 catName = (catObj["name"] as? String) ?? ""
                 catIcon = (catObj["icon"] as? String) ?? "circle"
-                catColourUInt = parseColourToUInt(catObj["colour"])
+                catColour = (catObj["colour"] as? String) ?? "0x000000"
             } else if let catStr = root["RankoCategory"] as? String {
                 catName = catStr
             }
-
+            
             let itemsDict = root["RankoItems"] as? [String: [String: Any]] ?? [:]
             let parsedItems: [RankoItem] = itemsDict.compactMap { (itemID, it) in
                 guard
@@ -1466,34 +1136,36 @@ struct DefaultListPersonal: View {
                 let plays = intFromAny(it["PlayCount"]) ?? 0
                 return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
             }
-
+            
             // assign UI state
             rankoName = name
             description = des
             isPrivate = priv
             categoryName = catName
             categoryIcon = catIcon
-            categoryColour = catColourUInt
+            categoryColour = catColour
             selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
-
+            
             originalRankoName = name
             originalDescription = des
             originalIsPrivate = priv
-            originalCategory = category
+            originalCategoryName = catName
+            originalCategoryIcon = catIcon
+            originalCategoryColour = catColour
         }
     }
     
     private struct BlankItemsComposer: View {
         @Environment(\.dismiss) private var dismiss
         @StateObject private var user_data = UserInformation.shared
-
+        
         let rankoID: String                                  // 👈 new
-
+        
         @Binding var drafts: [BlankItemDraft]
         @Binding var error: String?
         let canAddMore: Bool
         let onCommit: () -> Void
-
+        
         @State private var activeDraftID: String? = nil
         @State private var showNewImageSheet = false
         @State private var showPhotoPicker = false
@@ -1501,7 +1173,7 @@ struct DefaultListPersonal: View {
         @State private var imageForCropping: UIImage? = nil
         @State private var backupImage: UIImage? = nil
         @State private var isCleaningUp = false
-
+        
         // convenience
         private var placeholderURL: String {
             "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/placeholderImages%2FitemPlaceholder.png?alt=media&token="
@@ -1513,11 +1185,11 @@ struct DefaultListPersonal: View {
         private var anyUploading: Bool {
             drafts.contains { $0.isUploading }
         }
-
+        
         private var hasUploadError: Bool {
             drafts.contains { $0.uploadError != nil }
         }
-
+        
         /// true when every draft is "image-ready":
         /// - no image: ok
         /// - has image: must have finished upload (itemImageURL != nil) and no error
@@ -1530,7 +1202,7 @@ struct DefaultListPersonal: View {
                 }
             }
         }
-
+        
         var body: some View {
             NavigationStack {
                 ScrollView {
@@ -1598,7 +1270,7 @@ struct DefaultListPersonal: View {
                                 } label: { Label("Clear All", systemImage: "delete.right.fill") }
                             }
                         }
-
+                        
                         Button {
                             withAnimation { drafts.append(BlankItemDraft()) }
                         } label: {
@@ -1686,57 +1358,57 @@ struct DefaultListPersonal: View {
                 } message: {
                     Text(drafts.first(where: { $0.uploadError != nil })?.uploadError ?? "unknown error")
                 }
-            }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showNewImageSheet) {
-                NewImageSheet(pickFromLibrary: {
-                    showNewImageSheet = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showPhotoPicker = true }
-                })
-                .presentationDetents([.fraction(0.4)])
-                .presentationBackground(Color.white)
-            }
-            .sheet(isPresented: $showPhotoPicker) {
-                ImagePicker(image: $imageForCropping, isPresented: $showPhotoPicker)
-            }
-            .fullScreenCover(isPresented: $showImageCropper) {
-                if let img = imageForCropping {
-                    SwiftyCropView(
-                        imageToCrop: img,
-                        maskShape: .square,
-                        configuration: SwiftyCropConfiguration(
-                            maxMagnificationScale: 8.0,
-                            maskRadius: 190.0,
-                            cropImageCircular: false,
-                            rotateImage: false,
-                            rotateImageWithButtons: true,
-                            usesLiquidGlassDesign: true,
-                            zoomSensitivity: 3.0
-                        ),
-                        onCancel: {
-                            imageForCropping = nil
-                            showImageCropper = false
-                            restoreBackupForActiveDraft()
-                        },
-                        onComplete: { cropped in
-                            imageForCropping = nil
-                            showImageCropper = false
-                            // 👇 immediately try to upload with timeout
-                            if let id = activeDraftID { Task { await uploadCropped(cropped!, for: id) } }
-                        }
-                    )
+                .navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+                .sheet(isPresented: $showNewImageSheet) {
+                    NewImageSheet(pickFromLibrary: {
+                        showNewImageSheet = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showPhotoPicker = true }
+                    })
+                    .presentationDetents([.fraction(0.4)])
+                    .presentationBackground(Color.white)
                 }
-            }
-            .onChange(of: imageForCropping) { _, newVal in
-                if newVal != nil { showImageCropper = true }
+                .sheet(isPresented: $showPhotoPicker) {
+                    ImagePicker(image: $imageForCropping, isPresented: $showPhotoPicker)
+                }
+                .fullScreenCover(isPresented: $showImageCropper) {
+                    if let img = imageForCropping {
+                        SwiftyCropView(
+                            imageToCrop: img,
+                            maskShape: .square,
+                            configuration: SwiftyCropConfiguration(
+                                maxMagnificationScale: 8.0,
+                                maskRadius: 190.0,
+                                cropImageCircular: false,
+                                rotateImage: false,
+                                rotateImageWithButtons: true,
+                                usesLiquidGlassDesign: true,
+                                zoomSensitivity: 3.0
+                            ),
+                            onCancel: {
+                                imageForCropping = nil
+                                showImageCropper = false
+                                restoreBackupForActiveDraft()
+                            },
+                            onComplete: { cropped in
+                                imageForCropping = nil
+                                showImageCropper = false
+                                // 👇 immediately try to upload with timeout
+                                if let id = activeDraftID { Task { await uploadCropped(cropped!, for: id) } }
+                            }
+                        )
+                    }
+                }
+                .onChange(of: imageForCropping) { _, newVal in
+                    if newVal != nil { showImageCropper = true }
+                }
             }
         }
         
         private func makeJPEGMetadata(rankoID: String, itemID: String, userID: String) -> StorageMetadata {
             let md = StorageMetadata()
             md.contentType = "image/jpeg"
-
+            
             // add some useful tags like your profile code does (timestamp, owner, etc.)
             let now = Date()
             let fmt = DateFormatter()
@@ -1744,7 +1416,7 @@ struct DefaultListPersonal: View {
             fmt.timeZone = TimeZone(identifier: "Australia/Sydney") // AEST/AEDT
             fmt.dateFormat = "yyyyMMddHHmmss"
             let ts = fmt.string(from: now)
-
+            
             md.customMetadata = [
                 "rankoID": rankoID,
                 "itemID": itemID,
@@ -1753,28 +1425,28 @@ struct DefaultListPersonal: View {
             ]
             return md
         }
-
+        
         // MARK: - Upload w/ 10s timeout
-
+        
         private func uploadCropped(_ img: UIImage, for draftID: String) async {
             guard let data = img.jpegData(compressionQuality: 0.9) else {
                 setUpload(error: "couldn't encode image", for: draftID); return
             }
             setUploading(true, for: draftID)
-
+            
             let path = "rankoPersonalImages/\(rankoID)/\(draftID).jpg"
             let ref  = Storage.storage().reference().child(path)
             let metadata = makeJPEGMetadata(rankoID: rankoID, itemID: draftID, userID: user_data.userID)
-
+            
             do {
                 try await withTimeout(seconds: 10) {
                     _ = try await ref.putDataAsync(data, metadata: metadata)  // 👈 pass metadata
                 }
-
+                
                 // success → set image + deterministic URL string (your requested format)
                 setUploadSuccess(image: img, url: finalURL(for: draftID), for: draftID)
                 print("image uploaded successfully for itemID: \(draftID)")
-
+                
                 // (optional) also mirror a tiny index in Realtime DB like your profile fn:
                 // try? await setValueAsync(
                 //   Database.database().reference()
@@ -1782,7 +1454,7 @@ struct DefaultListPersonal: View {
                 //     .child("RankoItemImages").child(draftID),
                 //   value: ["path": path, "modified": metadata.customMetadata?["uploadedAt"] ?? ""]
                 // )
-
+                
             } catch {
                 let msg: String
                 if error is TimeoutErr { msg = "upload timed out, please try again." }
@@ -1790,7 +1462,7 @@ struct DefaultListPersonal: View {
                 setUpload(error: msg, for: draftID)
             }
         }
-
+        
         private enum TimeoutErr: Error { case timedOut }
         private func withTimeout<T>(seconds: Double, _ op: @escaping () async throws -> T) async throws -> T {
             try await withThrowingTaskGroup(of: T.self) { group in
@@ -1804,9 +1476,9 @@ struct DefaultListPersonal: View {
                 return result
             }
         }
-
+        
         // MARK: - Draft mutations
-
+        
         private func setUploading(_ uploading: Bool, for id: String) {
             if let i = drafts.firstIndex(where: { $0.id == id }) {
                 drafts[i].isUploading = uploading
@@ -1827,7 +1499,7 @@ struct DefaultListPersonal: View {
                 drafts[i].uploadError = error
             }
         }
-
+        
         private func restoreBackupForActiveDraft() {
             guard let id = activeDraftID, let backup = backupImage,
                   let idx = drafts.firstIndex(where: { $0.id == id }) else { return }
@@ -1839,9 +1511,9 @@ struct DefaultListPersonal: View {
             let targets = drafts
                 .filter { !isPlaceholderURL($0.itemImageURL) }
                 .map { $0.id }
-
+            
             guard !targets.isEmpty else { return }
-
+            
             // delete all in parallel but don't hang forever
             do {
                 try await withTimeout(seconds: 10) {
@@ -1857,14 +1529,14 @@ struct DefaultListPersonal: View {
                 }
             } catch {
                 // optional: you could surface a toast here if you want
-                #if DEBUG
+#if DEBUG
                 print("⚠️ cleanup timeout/err: \(error.localizedDescription)")
-                #endif
+#endif
             }
         }
     }
-
-
+    
+    
     // Helper to safely coerce Firebase numbers/strings into Int
     private func intFromAny(_ any: Any?) -> Int? {
         if let i = any as? Int { return i }
@@ -1880,7 +1552,7 @@ struct DefaultListPersonal: View {
         normalizeRanks()
         possiblyEdited = true
     }
-
+    
     private func moveToTop(_ item: RankoItem) {
         guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
         let moved = selectedRankoItems.remove(at: idx)
@@ -1888,7 +1560,7 @@ struct DefaultListPersonal: View {
         normalizeRanks()
         possiblyEdited = true
     }
-
+    
     private func moveToBottom(_ item: RankoItem) {
         guard let idx = selectedRankoItems.firstIndex(where: { $0.id == item.id }) else { return }
         let moved = selectedRankoItems.remove(at: idx)
@@ -1896,7 +1568,7 @@ struct DefaultListPersonal: View {
         normalizeRanks()
         possiblyEdited = true
     }
-
+    
     private func normalizeRanks() {
         for index in selectedRankoItems.indices {
             selectedRankoItems[index].rank = index + 1
@@ -1918,7 +1590,7 @@ struct DefaultListPersonal: View {
                         }
                     }
                     .padding(.horizontal, 24)
-
+                    
                     // simple row buttons (camera/files hooks left for you if needed)
                     Divider().padding(.horizontal, 24)
                     Button(action: pickFromLibrary) {
@@ -1951,7 +1623,7 @@ struct DefaultListPersonal: View {
             "RankoStatus": "deleted"
         ]
         
-        let listRef = db.child("RankoData").child(listID)
+        let listRef = db.child("RankoData").child(rankoID)
         
         // ✅ Update list fields
         listRef.updateChildValues(statusUpdate) { error, _ in
@@ -1967,12 +1639,12 @@ struct DefaultListPersonal: View {
             apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
         )
         let index = client.index(withName: "RankoLists")
-
+        
         // ✅ Prepare partial updates
         let updates: [(ObjectID, PartialUpdate)] = [
-            (ObjectID(rawValue: listID), .update(attribute: "RankoStatus", value: "deleted"))
+            (ObjectID(rawValue: rankoID), .update(attribute: "RankoStatus", value: "deleted"))
         ]
-
+        
         // ✅ Perform batch update in Algolia
         index.partialUpdateObjects(updates: updates) { result in
             switch result {
@@ -1986,37 +1658,37 @@ struct DefaultListPersonal: View {
         }
     }
     
-    func removeFeaturedRanko(listID: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    func removeFeaturedRanko(rankoID: String, completion: @escaping (Result<Void, Error>) -> Void) {
         guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
             // No user; nothing to delete
             completion(.success(()))
             return
         }
-
+        
         let featuredRef = Database.database()
             .reference()
             .child("UserData")
             .child(user_data.userID)
             .child("UserRankos")
             .child("UserFeaturedRankos")
-
+        
         // 1) Load all featured slots
         featuredRef.getData { error, snapshot in
             if let error = error {
                 completion(.failure(error))
                 return
             }
-
+            
             guard let snap = snapshot, snap.exists() else {
                 // No featured entries at all
                 completion(.success(()))
                 return
             }
-
-            // 2) Find the slot whose value == listID
+            
+            // 2) Find the slot whose value == rankoID
             var didRemove = false
             for case let child as DataSnapshot in snap.children {
-                if let value = child.value as? String, value == listID {
+                if let value = child.value as? String, value == rankoID {
                     didRemove = true
                     // 3) Remove that child entirely
                     featuredRef.child(child.key).removeValue { removeError, _ in
@@ -2031,7 +1703,7 @@ struct DefaultListPersonal: View {
                     break
                 }
             }
-
+            
             // 4) If no match was found, still report success
             if !didRemove {
                 completion(.success(()))
@@ -2042,8 +1714,8 @@ struct DefaultListPersonal: View {
     // MARK: - Firebase Update
     private func updateListInFirebase(completion: @escaping (_ success: Bool, _ errorMessage: String?) -> Void) {
         let db = Database.database().reference()
-        let listRef = db.child("RankoData").child(listID)
-
+        let listRef = db.child("RankoData").child(rankoID)
+        
         // AEDT/AEST timestamp
         let now = Date()
         let fmt = DateFormatter()
@@ -2051,32 +1723,26 @@ struct DefaultListPersonal: View {
         fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
         fmt.dateFormat = "yyyyMMddHHmmss"
         let ts = fmt.string(from: now)
-
+        
         // resolve category fields from either chip or separate fields
-        let catNameOut  = category?.name ?? categoryName
-        let catIconOut  = category?.icon ?? categoryIcon ?? "circle"
-
-        // prefer whatever your chip stores; else use the UInt state you already show
-        let colourOut: String = {
-            if let s = category?.colour as? String { return s }                  // already "0xRRGGBB"
-            if let i = category?.colour as? Int { return String(format: "0x%06X", i & 0x00FF_FFFF) }
-            return String(format: "0x%06X", Int(categoryColour) & 0x00FF_FFFF)   // from @State UInt
-        }()
-
+        let catNameOut  = categoryName
+        let catIconOut  = categoryIcon
+        let colourOut   = categoryColour
+        
         // fan-out partial updates to nested paths
         let updates: [String: Any] = [
             "RankoDetails/name":        rankoName,
             "RankoDetails/description": description,
-
+            
             "RankoPrivacy/private":     isPrivate,
-
+            
             "RankoCategory/name":       catNameOut,
             "RankoCategory/icon":       catIconOut,
             "RankoCategory/colour":     colourOut,
-
+            
             "RankoDateTime/updated":    ts
         ]
-
+        
         // rebuild RankoItems blob
         var itemsUpdate: [String: Any] = [:]
         for it in selectedRankoItems {
@@ -2093,34 +1759,34 @@ struct DefaultListPersonal: View {
                 "PlayCount":       0
             ]
         }
-
+        
         // run both writes
         let group = DispatchGroup()
         var ok1 = false, ok2 = false
         var err: String?
-
+        
         group.enter()
         listRef.updateChildValues(updates) { e, _ in
             ok1 = (e == nil)
             if let e = e { err = "details/privacy/category: \(e.localizedDescription)" }
             group.leave()
         }
-
+        
         group.enter()
         listRef.child("RankoItems").setValue(itemsUpdate) { e, _ in
             ok2 = (e == nil)
             if let e = e, err == nil { err = "items: \(e.localizedDescription)" }
             group.leave()
         }
-
+        
         group.notify(queue: .main) {
             completion(ok1 && ok2, ok1 && ok2 ? nil : (err ?? "unknown firebase error"))
         }
     }
-
-        // MARK: - Algolia Update
+    
+    // MARK: - Algolia Update
     private func updateListInAlgolia(
-        listID: String,
+        rankoID: String,
         newName: String,
         newDescription: String,
         newCategory: String,
@@ -2132,15 +1798,15 @@ struct DefaultListPersonal: View {
             apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
         )
         let index = client.index(withName: "RankoLists")
-
+        
         // ✅ Prepare partial updates
         let updates: [(ObjectID, PartialUpdate)] = [
-            (ObjectID(rawValue: listID), .update(attribute: "RankoName", value: .string(newName))),
-            (ObjectID(rawValue: listID), .update(attribute: "RankoDescription", value: .string(newDescription))),
-            (ObjectID(rawValue: listID), .update(attribute: "RankoCategory", value: .string(newCategory))),
-            (ObjectID(rawValue: listID), .update(attribute: "RankoPrivacy", value: .bool(isPrivate)))
+            (ObjectID(rawValue: rankoID), .update(attribute: "RankoName", value: .string(newName))),
+            (ObjectID(rawValue: rankoID), .update(attribute: "RankoDescription", value: .string(newDescription))),
+            (ObjectID(rawValue: rankoID), .update(attribute: "RankoCategory", value: .string(newCategory))),
+            (ObjectID(rawValue: rankoID), .update(attribute: "RankoPrivacy", value: .bool(isPrivate)))
         ]
-
+        
         // ✅ Perform batch update in Algolia
         index.partialUpdateObjects(updates: updates) { result in
             switch result {

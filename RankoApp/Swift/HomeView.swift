@@ -182,7 +182,13 @@ struct HomeView: View {
             if let d = any as? Double    { return Int(d) }
             return nil
         }
-
+        func doubleFromAny(_ any: Any?) -> Double? {
+            if let n = any as? NSNumber { return n.doubleValue }
+            if let s = any as? String   { return Double(s) }
+            if let d = any as? Double   { return d }
+            if let i = any as? Int      { return Double(i) }
+            return nil
+        }
         func parseColourUInt(_ any: Any?) -> UInt {
             // accepts "0xFFCF00", "#FFCF00", "FFCF00", 16763904, NSNumber, etc.
             if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
@@ -197,6 +203,46 @@ struct HomeView: View {
             return 0x446D7A
         }
 
+        // parse RankoTiers as [Int : (code,label,colorHex)]
+        func parseTiers(_ any: Any?) -> (codes: [Int:String], labels: [Int:String], colors: [Int:Int])? {
+            var codeBy:  [Int:String] = [:]
+            var labelBy: [Int:String] = [:]
+            var colorBy: [Int:Int]    = [:]
+
+            if let arr = any as? [Any] {
+                // array form: index 0 may be NSNull; rows start at 1
+                for (idx, v) in arr.enumerated() {
+                    guard idx > 0, let t = v as? [String:Any] else { continue }
+                    let code  = (t["Code"] as? String) ?? ""
+                    let label = (t["Label"] as? String) ?? ""
+                    let hex = (t["ColorHex"] as? Int)
+                           ?? intFromAny(t["ColorHex"])
+                           ?? Int(parseColourUInt(t["ColorHex"]))
+
+                    codeBy[idx]  = code
+                    labelBy[idx] = label
+                    colorBy[idx] = hex
+                }
+            } else if let dict = any as? [String: Any] {
+                // map form: keys "1","2","3",…
+                for (k, v) in dict {
+                    guard let idx = Int(k), let t = v as? [String:Any] else { continue }
+                    let code  = (t["Code"] as? String) ?? ""
+                    let label = (t["Label"] as? String) ?? ""
+                    let hex = (t["ColorHex"] as? Int)
+                           ?? intFromAny(t["ColorHex"])
+                           ?? Int(parseColourUInt(t["ColorHex"]))
+
+                    codeBy[idx]  = code
+                    labelBy[idx] = label
+                    colorBy[idx] = hex
+                }
+            } else {
+                return nil
+            }
+            return (codeBy, labelBy, colorBy)
+        }
+
         ref.observeSingleEvent(of: .value, with: { snap in
             guard let root = snap.value as? [String: Any] else {
                 DispatchQueue.main.async { completion(nil) }
@@ -209,6 +255,7 @@ struct HomeView: View {
                 let cat     = root["RankoCategory"] as? [String: Any]
                 let items   = root["RankoItems"] as? [String: Any] ?? [:]
                 let dt      = root["RankoDateTime"] as? [String: Any]
+                let tiersAny = root["RankoTiers"] // array or map; optional
 
                 let name        = (details["name"] as? String) ?? ""
                 let description = (details["description"] as? String) ?? ""
@@ -224,24 +271,40 @@ struct HomeView: View {
                 let createdStr  = (dt?["created"] as? String) ?? ""
                 let updatedStr  = (dt?["updated"] as? String) ?? createdStr
 
-                let parsedItems: [RankoItem] = items.compactMap { (k, v) in
+                let parsedItems = items.compactMap { (k, v) -> RankoItem? in
                     guard let it = v as? [String: Any] else { return nil }
                     guard
-                        let itemName  = it["ItemName"] as? String,
-                        let itemDesc  = it["ItemDescription"] as? String,
-                        let itemImage = it["ItemImage"] as? String,
-                        let itemGIF    = it["ItemGIF"] as? String,
-                        let itemVideo    = it["ItemVideo"] as? String,
-                        let itemAudio    = it["ItemAudio"] as? String
+                        let itemName   = it["ItemName"] as? String,
+                        let itemDesc   = it["ItemDescription"] as? String,
+                        let itemImage  = it["ItemImage"] as? String
                     else { return nil }
-                    let rank  = intFromAny(it["ItemRank"])  ?? 0
-                    let votes = intFromAny(it["ItemVotes"]) ?? 0
-                    let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                    let plays = intFromAny(it["PlayCount"]) ?? 0
-                    return RankoItem(id: k, rank: rank, votes: votes, record: rec, playCount: plays)
-                }
 
-                let list = RankoList(
+                    // media optionality tolerated
+                    let itemGIF   = (it["ItemGIF"] as? String) ?? ""
+                    let itemVideo = (it["ItemVideo"] as? String) ?? ""
+                    let itemAudio = (it["ItemAudio"] as? String) ?? ""
+
+                    // NEW: decimal ranks
+                    let rank  = doubleFromAny(it["ItemRank"])  ?? 0.0
+                    let votes = intFromAny(it["ItemVotes"])    ?? 0
+                    let plays = intFromAny(it["PlayCount"])    ?? 0
+
+                    let rec = RankoRecord(
+                        objectID: k,
+                        ItemName: itemName,
+                        ItemDescription: itemDesc,
+                        ItemCategory: "",
+                        ItemImage: itemImage,
+                        ItemGIF: itemGIF,
+                        ItemVideo: itemVideo,
+                        ItemAudio: itemAudio
+                    )
+                    return RankoItem(id: k, rank: Int(rank), votes: votes, record: rec, playCount: plays)
+                }
+                // Tiers (optional)
+                let tiers = parseTiers(tiersAny)
+
+                var list = RankoList(
                     id: objectID,
                     listName: name,
                     listDescription: description,
@@ -255,6 +318,11 @@ struct HomeView: View {
                     timeUpdated: updatedStr,
                     items: parsedItems.sorted { $0.rank < $1.rank }
                 )
+                // inject tier maps if your model has them
+                list.tierCodeByIndex   = tiers?.codes
+                list.tierLabelByIndex  = tiers?.labels
+                list.tierColorHexByIndex = tiers?.colors
+
                 DispatchQueue.main.async { completion(list) }
                 return
             }
@@ -274,7 +342,6 @@ struct HomeView: View {
             var createdStr = ""
             var updatedStr = ""
             if let dt = root["RankoDateTime"] as? [String: Any] {
-                // older keys
                 createdStr = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? ""
                 updatedStr = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? createdStr
             } else if let s = root["RankoDateTime"] as? String {
@@ -294,23 +361,37 @@ struct HomeView: View {
             }
 
             let itemsDict = root["RankoItems"] as? [String: [String: Any]] ?? [:]
-            let items: [RankoItem] = itemsDict.compactMap { itemID, it in
+
+            let items: [RankoItem] = itemsDict.compactMap { itemID, it -> RankoItem? in
                 guard
-                    let itemName  = it["ItemName"] as? String,
-                    let itemDesc  = it["ItemDescription"] as? String,
-                    let itemImage = it["ItemImage"] as? String,
-                    let itemGIF    = it["ItemGIF"] as? String,
-                    let itemVideo    = it["ItemVideo"] as? String,
-                    let itemAudio    = it["ItemAudio"] as? String
+                    let itemName   = it["ItemName"] as? String,
+                    let itemDesc   = it["ItemDescription"] as? String,
+                    let itemImage  = it["ItemImage"] as? String
                 else { return nil }
-                let rank  = intFromAny(it["ItemRank"])  ?? 0
-                let votes = intFromAny(it["ItemVotes"]) ?? 0
-                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                let plays = intFromAny(it["PlayCount"]) ?? 0
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
+
+                let itemGIF   = (it["ItemGIF"] as? String) ?? ""
+                let itemVideo = (it["ItemVideo"] as? String) ?? ""
+                let itemAudio = (it["ItemAudio"] as? String) ?? ""
+
+                let rank  = doubleFromAny(it["ItemRank"])  ?? 0.0
+                let votes = intFromAny(it["ItemVotes"])    ?? 0
+                let plays = intFromAny(it["PlayCount"])    ?? 0
+
+                let rec = RankoRecord(
+                    objectID: itemID,
+                    ItemName: itemName,
+                    ItemDescription: itemDesc,
+                    ItemCategory: "",
+                    ItemImage: itemImage,
+                    ItemGIF: itemGIF,
+                    ItemVideo: itemVideo,
+                    ItemAudio: itemAudio
+                )
+
+                return RankoItem(id: itemID, rank: Int(rank), votes: votes, record: rec, playCount: plays)
             }
 
-            let list = RankoList(
+            var list = RankoList(
                 id: objectID,
                 listName: name,
                 listDescription: description,
@@ -324,6 +405,14 @@ struct HomeView: View {
                 timeUpdated: updatedStr,
                 items: items.sorted { $0.rank < $1.rank }
             )
+
+            // legacy paths rarely had tiers, but if present, still parse
+            if let tiersAny = root["RankoTiers"] {
+                let tiers = parseTiers(tiersAny)
+                list.tierCodeByIndex     = tiers?.codes
+                list.tierLabelByIndex    = tiers?.labels
+                list.tierColorHexByIndex = tiers?.colors
+            }
 
             DispatchQueue.main.async { completion(list) }
         })
@@ -458,22 +547,18 @@ struct HomeView: View {
                             .padding(.bottom, 60)
                             .padding(.leading)
                         } else {
-                            // ✅ FEED
                             LazyVStack(alignment: .leading, spacing: 16) {
-                                ForEach(feedLists.indices, id: \.self) { idx in
-                                    let list = feedLists[idx]
+                                ForEach(feedLists, id: \.id) { list in
                                     if list.type == "group" {
-                                        GroupListHomeView(
+                                        TierListHomeView(
                                             listData: list,
                                             onCommentTap: { msg in
                                                 showComingSoonToast(msg)
                                             },
                                             onRankoTap: { _ in
-                                                
+                                                selectedList = list
                                             },
-                                            onProfileTap: { _ in
-                                                
-                                            }
+                                            onProfileTap: { _ in }
                                         )
                                     } else {
                                         DefaultListHomeView(
@@ -484,13 +569,11 @@ struct HomeView: View {
                                             onRankoTap: { _ in
                                                 selectedList = list
                                             },
-                                            onProfileTap: { _ in
-                                                
-                                            }
+                                            onProfileTap: { _ in }
                                         )
                                     }
                                 }
-                                
+
                                 // ✅ Load more
                                 Button {
                                     loadNextBatch()
@@ -540,15 +623,19 @@ struct HomeView: View {
         }
         
         .fullScreenCover(item: $selectedList) { list in
-            DefaultListSpectate(listID: list.id, onClone: {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    clonedList = list
-                }
-            })
+            if list.type == "default" {
+                DefaultListSpectate(rankoID: list.id, onClone: {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        clonedList = list
+                    }
+                })
+            } else if list.type == "tier" {
+                TierListPersonal(rankoID: list.id, onSave: { _ in } )
+            }
         }
         
         .fullScreenCover(item: $clonedList) { list in
-            DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, category: SampleCategoryChip(id: "", name: list.categoryName, icon: list.categoryIcon, colour: String(list.categoryColour)), selectedRankoItems: list.items, onSave: { _ in})
+            DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, selectedRankoItems: list.items, onSave: { _ in})
         }
         
         // MARK: – reset "listViewID" whenever HomeView comes back on screen
@@ -1313,40 +1400,754 @@ struct DefaultListHomeView: View {
     }
 }
 
-struct GroupListHomeView: View {
+
+
+struct TierListHomeView: View {
     let listData: RankoList
+    @StateObject private var user_data = UserInformation.shared
+    
+    // Profile & creator info
+    @State private var profileImage: UIImage?
+    @State private var creatorName: String = ""
+    
+    // Likes & comments
+    @State private var likes: [String: String] = [:]
+    @State private var commentsCount: Int = 0
+    @State private var isLikeDisabled = false
+    @State private var showToast = false
+    @State private var toastMessage = ""
+    @State private var animateHeart = false
+    @State private var spectateProfile: Bool = false
+    @State private var openShareView: Bool = false
+    
     var onCommentTap: (String) -> Void
-    var onRankoTap: (RankoList) -> Void
+    var onRankoTap: (String) -> Void
     var onProfileTap: (String) -> Void
     
-    private var adjustedItems: [RankoItem] {
-        listData.items.map { item in
-            let adjustedRank = item.rank / 1000
-            return RankoItem(id: item.id, rank: adjustedRank, votes: item.votes, record: item.record, playCount: item.playCount)
-        }
+    // optional (1-based index -> value) maps; pass these if you decode RankoTiers
+    var codeByIndex: [Int: String]? = nil
+    var labelByIndex: [Int: String]? = nil
+    var colorHexByIndex: [Int: Int]? = nil
+    
+    private var sortedItems: [RankoItem] {
+        listData.items.sorted { $0.rank < $1.rank }
+    }
+    private var firstBlock: [RankoItem] {
+        Array(sortedItems.prefix(5))
+    }
+    private var remainder: [RankoItem] {
+        Array(sortedItems.dropFirst(5))
+    }
+    private var secondBlock: [RankoItem] {
+        Array(remainder.prefix(4))
+    }
+    
+    // MARK: — Helpers to compute “safe” UID & whether we’ve liked
+    private var safeUID: String {
+        let raw = Auth.auth().currentUser?.uid ?? user_data.userID
+        return raw.components(separatedBy: CharacterSet(charactersIn: ".#$[]")).joined()
+    }
+    private var hasLiked: Bool {
+        likes.keys.contains(safeUID)
     }
     
     var body: some View {
-        DefaultListHomeView(listData: RankoList(
-            id: listData.id,
-            listName: listData.listName,
-            listDescription: listData.listDescription,
-            type: listData.type,
-            categoryName: listData.categoryName,
-            categoryIcon: listData.categoryIcon,
-            categoryColour: listData.categoryColour,
-            isPrivate: listData.isPrivate,
-            userCreator: listData.userCreator,
-            timeCreated: listData.timeUpdated,
-            timeUpdated: listData.timeUpdated,
-            items: adjustedItems
-        ), onCommentTap: { msg in
-            onCommentTap(msg)
-        }, onRankoTap: { _ in
-            onRankoTap(listData)
-        }, onProfileTap: { _ in
-            onProfileTap(listData.userCreator)
+        LazyVStack {
+            Rectangle()
+                .fill(Color(hex: 0x707070))
+                .opacity(0.15)
+                .frame(maxWidth: .infinity)
+                .frame(height: 2)
+                .padding(.bottom, 10)
+                .padding(.horizontal, 10)
+            HStack(alignment: .top) {
+                Group {
+                    AsyncImage(url: URL(string: "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media&token=\(user_data.userID)")) { phase in
+                        if let img = phase.image {
+                            img.resizable()
+                                .scaledToFill()
+                                .frame(width: 50, height: 50)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        } else {
+                            SkeletonView(RoundedRectangle(cornerRadius: 10))
+                                .frame(width: 42, height: 42)
+                        }
+                    }
+                    .frame(width: 42, height: 42)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .onTapGesture {
+                    onProfileTap(listData.userCreator)
+                }
+                
+                LazyVStack(alignment: .leading) {
+                    HStack(spacing: 4) {
+                        Text(creatorName)
+                            .font(.custom("Nunito-Black", size: 13))
+                            .foregroundColor(Color(hex: 0x000000))
+                        Text("•")
+                            .font(.custom("Nunito-Black", size: 11))
+                            .foregroundColor(Color(hex: 0x818181))
+                        Text(timeAgo(from: String(listData.timeUpdated)))
+                            .font(.custom("Nunito-Black", size: 11))
+                            .foregroundColor(Color(hex: 0x818181))
+                        Spacer()
+                    }
+                    Text(listData.listName)
+                        .font(.custom("Nunito-Black", size: 18))
+                        .foregroundColor(Color(hex: 0x666666))
+                        .padding(.bottom, -15)
+                }
+                .padding(.leading, 8)
+                .onTapGesture {
+                    onRankoTap(listData.id)
+                }
+                Spacer()
+            }
+            ZStack {
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 42)
+                    // MARK: Top 3 tiers section
+                    TopThreeTiersSection(
+                        items: listData.items,
+                        codeByIndex: listData.tierCodeByIndex,
+                        labelByIndex: listData.tierLabelByIndex,
+                        colorHexByIndex: listData.tierColorHexByIndex
+                    )
+                    .onTapGesture {
+                        onRankoTap(listData.id)
+                    }
+                }
+                .onTapGesture {
+                    onRankoTap(listData.id)
+                }
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 42)
+                        .overlay(
+                            Rectangle()
+                                .fill(Color(hex: 0x707070))
+                                .frame(width: 2)
+                                .opacity(0.3)
+                        )
+                    Spacer()
+                }
+            }
+            HStack {
+                ZStack {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 42)
+                    HomeCategoryBadge1(
+                        name: listData.categoryName,
+                        colour: listData.categoryColour,   // UInt from Firebase
+                        icon: listData.categoryIcon        // SF Symbol name from Firebase
+                    )
+                    .onTapGesture {
+                        onRankoTap(listData.id)
+                    }
+                }
+                
+                HStack(spacing: 4) {
+                    LikeButton(isLiked: hasLiked, onTap: handleLikeTap)
+                    Text("\(likes.count)")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(Color(hex: 0x666666))
+                }
+                .padding(.horizontal, 8)
+                
+                Button {
+                    // pass a custom message or a static one:
+                    onCommentTap("Interacting on Friends & Community Rankos Are Coming Soon!")
+                } label: {
+                    Image(systemName: "bubble.fill")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                    Text("\(commentsCount)")
+                        .font(.system(size: 12, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                }
+                .padding(.trailing, 8)
+                
+                Button {
+                    openShareView = true
+                } label: {
+                    Image(systemName: "paperplane.fill")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                }
+                Spacer()
+            }
+        }
+        .overlay(
+            Group {
+                if showToast {
+                    Text(toastMessage)
+                        .padding(8)
+                        .background(Color.black.opacity(0.8))
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                        .transition(.opacity)
+                }
+            }, alignment: .bottom
+        )
+        .onAppear {
+            fetchCreatorName()
+            fetchLikes()
+            fetchComments()
+        }
+        .sheet(isPresented: $spectateProfile) {
+            //ProfileSpectateView(userID: (listData.userCreator))
+        }
+        .sheet(isPresented: $openShareView) {
+            //ProfileSpectateView(userID: (listData.userCreator))
+        }
+    }
+    
+    private func positionForItem(_ item: RankoItem) -> Int? {
+        // prefer matching by id; if your RankoItem doesn't have `id`,
+        // swap to another unique key (e.g. itemName + image url).
+        if let idx = sortedItems.firstIndex(where: { $0.id == item.id }) {
+            return idx + 1
+        }
+        return nil
+    }
+    
+    @ViewBuilder
+    private func badgeView(forPosition position: Int) -> some View {
+        // colors for 1/2/3 stay special; others default to black
+        let color: Color = {
+            switch position {
+            case 1: return Color(red: 1, green: 0.65, blue: 0)            // gold-ish
+            case 2: return Color(red: 0.635, green: 0.7, blue: 0.698)      // silver-ish
+            case 3: return Color(red: 0.56, green: 0.33, blue: 0)          // bronze-ish
+            default: return Color(hex: 0x000000)
+            }
+        }()
+
+        // SF Symbols provide numbered circles up to 50; fallback to text if bigger
+        if (1...50).contains(position) {
+            Image(systemName: "\(position).circle.fill")
+                .foregroundColor(color)
+                .font(.system(size: 15, weight: .black, design: .default))
+                .padding(2)
+                .background(Circle().fill(Color.white))
+                .offset(x: 7, y: 7)
+        } else {
+            ZStack {
+                Circle().fill(Color.white)
+                Text("\(position)")
+                    .font(.system(size: 11, weight: .black, design: .default))
+                    .foregroundColor(color)
+            }
+            .frame(width: 19, height: 19)
+            .offset(x: 7, y: 7)
+        }
+    }
+    
+    private var itemsSection: some View {
+        GeometryReader { geometry in
+            let halfWidth = geometry.size.width * 0.4
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 24) {
+                    // pass halfWidth as the minimum
+                    leftColumn(minWidth: halfWidth)
+                    rightColumn()
+                }
+                .padding(.vertical, 4)
+                // force the entire HStack to stick to the left
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(height: 300)
+    }
+    
+    private func leftColumn(minWidth: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(firstBlock) { item in
+                itemRow(item)
+            }
+        }
+        // use minWidth instead of fixed width, and align its content leading
+        .frame(minWidth: minWidth, alignment: .leading)
+    }
+    
+    private func rightColumn() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(secondBlock) { item in
+                itemRow(item)
+            }
+            // 10th slot logic…
+            if remainder.count >= 5 {
+                if remainder.count == 5 {
+                    // exactly 10 items → show the 10th
+                    let item10 = remainder[4]
+                    HStack(spacing: 8) {
+                        ZStack(alignment: .bottomTrailing) {
+                            AsyncImage(url: URL(string: item10.itemImage)) { phase in
+                                if let img = phase.image {
+                                    img.resizable()
+                                        .scaledToFill()
+                                        .frame(width: 50, height: 50)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                } else {
+                                    Color.gray.opacity(0.2)
+                                        .frame(width: 50, height: 50)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                            if let pos = positionForItem(item10) {
+                                badgeView(forPosition: pos)
+                            }
+                        }
+                        Text(item10.itemName)
+                            .font(.custom("Nunito-Black", size: 14))
+                            .foregroundColor(Color(hex: 0x666666))
+                            .lineLimit(1)
+                            .padding(.leading, 6)
+                    }
+                } else {
+                    // >10 items → show “+N” where N = total-9
+                    Color.gray.opacity(0.2)
+                        .frame(width: 47, height: 47)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            Text("+\(listData.items.count - 9)")
+                                .font(.custom("Nunito-Black", size: 12))
+                                .foregroundColor(Color(hex: 0x666666))
+                        )
+                }
+            }
+        }
+    }
+    
+    private func itemRow(_ item: RankoItem) -> some View {
+        HStack(spacing: 8) {
+            ZStack(alignment: .bottomTrailing) {
+                AsyncImage(url: URL(string: item.itemImage)) { phase in
+                    if let img = phase.image {
+                        img.resizable()
+                            .scaledToFill()
+                            .frame(width: 47, height: 47)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else {
+                        Color.gray.opacity(0.2)
+                            .frame(width: 47, height: 47)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+                if let pos = positionForItem(item) {
+                    badgeView(forPosition: pos)
+                }
+            }
+            Text(item.itemName.count > 25 ? "\(item.itemName.prefix(23))..." : item.itemName)
+                .font(.custom("Nunito-Black", size: 14))
+                .foregroundColor(Color(hex: 0x666666))
+                .lineLimit(1)
+                .padding(.leading, 6)
+        }
+    }
+    
+    // MARK: — Like handling (unchanged)
+    private func handleLikeTap() {
+        guard !isLikeDisabled else {
+            showInlineToast("Calm down! Wait a few seconds.")
+            return
+        }
+        isLikeDisabled = true
+
+        let ts = currentAEDTString()
+        let dbRef = Database.database().reference()
+        let likePath = "RankoData/\(listData.id)/RankoLikes/\(safeUID)"
+        let likeRef = dbRef.child(likePath)
+
+        // 1) Optimistically update local state
+        let currentlyLiked = hasLiked
+        if currentlyLiked {
+            likes.removeValue(forKey: safeUID)
+        } else {
+            likes[safeUID] = ts
+        }
+
+        // 2) Read once to confirm server state
+        likeRef.observeSingleEvent(of: .value, with: { snapshot in
+            if snapshot.exists() {
+                // 👎 Unlike on server
+                likeRef.removeValue { error, _ in
+                    if let error = error {
+                        // 3a) Roll back if failure
+                        likes[safeUID] = ts
+                        print("Error removing like:", error)
+                        showInlineToast("Couldn’t remove like.")
+                    }
+                    isLikeDisabled = false
+                }
+            } else {
+                // 👍 Like on server
+                likeRef.setValue(ts) { error, _ in
+                    if let error = error {
+                        // 3b) Roll back if failure
+                        likes.removeValue(forKey: safeUID)
+                        print("Error adding like:", error)
+                        showInlineToast("Couldn’t add like.")
+                    }
+                    isLikeDisabled = false
+                }
+            }
+        }) { error in
+            // Handle read error
+            print("Read error:", error)
+            // Roll back optimistic change
+            if currentlyLiked {
+                likes[safeUID] = ts
+            } else {
+                likes.removeValue(forKey: safeUID)
+            }
+            isLikeDisabled = false
+            showInlineToast("Network error.")
+        }
+    }
+    
+    private func showInlineToast(_ msg: String) {
+        toastMessage = msg
+        withAnimation { showToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation { showToast = false }
+        }
+    }
+    
+    // MARK: — Data fetches
+    private func fetchCreatorName() {
+        let userDetails = Database.database().reference().child("UserData").child(listData.userCreator).child("UserDetails")
+
+        userDetails.observeSingleEvent(of: .value, with: { snapshot in
+            guard let value = snapshot.value as? [String: Any] else {
+                print("❌ Could Not Load User Data for HomeView Rankos with UserID: \(listData.userCreator)")
+                return
+            }
+
+            self.creatorName = value["UserName"] as? String ?? ""
         })
+    }
+    
+    // MARK: — Fetch likes
+    private func fetchLikes() {
+        let ref = Database.database()
+            .reference()
+            .child("RankoData")
+            .child(listData.id)
+            .child("RankoLikes")
+        
+        ref.observe(.value, with: { snap in
+            if let dict = snap.value as? [String: String] {
+                likes = dict
+            } else {
+                likes = [:]
+            }
+        })
+        
+        // ✅ Algolia update
+        let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
+                                  apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
+        let index = client.index(withName: "RankoLists")
+        
+        let updates: [(ObjectID, PartialUpdate)] = [
+            (ObjectID(rawValue: listData.id), .update(attribute: "RankoLikes", value: AlgoliaSearchClient.JSON(likes.count)))
+        ]
+        
+        index.partialUpdateObjects(updates: updates) { result in
+            switch result {
+            case .success(_):
+                print("✅ Algolia RankoLikes updated")
+            case .failure(let error):
+                print("❌ Algolia update failed:", error)
+            }
+        }
+    }
+    
+    private func fetchComments() {
+        let ref = Database.database().reference()
+            .child("RankoData")
+            .child(listData.id)
+            .child("RankoComments")
+
+        ref.observe(.value, with: { snap in
+            if let dict = snap.value as? [String: Any] {
+                commentsCount = dict.count
+            } else {
+                commentsCount = 0
+            }
+        })
+        
+        // ✅ Algolia update
+        let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
+                                  apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
+        let index = client.index(withName: "RankoLists")
+        
+        let updates: [(ObjectID, PartialUpdate)] = [
+            (ObjectID(rawValue: listData.id), .update(attribute: "RankoComments", value: AlgoliaSearchClient.JSON(commentsCount)))
+        ]
+        
+        index.partialUpdateObjects(updates: updates) { result in
+            switch result {
+            case .success(_):
+                print("✅ Algolia RankoComments updated")
+            case .failure(let error):
+                print("❌ Algolia update failed:", error)
+            }
+        }
+    }
+    
+    private func timeAgo(from dt: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Australia/Sydney")
+        formatter.dateFormat = "yyyyMMddHHmmss"
+
+        guard let date = formatter.date(from: dt) else {
+            print("Failed to parse date from string: \(dt)")
+            return ""
+        }
+
+        let now = Date()
+        let secondsAgo = Int(now.timeIntervalSince(date))
+
+        switch secondsAgo {
+        case 0..<60:
+            return "\(secondsAgo)s ago"
+        case 60..<3600:
+            return "\(secondsAgo / 60)m ago"
+        case 3600..<86400:
+            return "\(secondsAgo / 3600)h ago"
+        case 86400..<604800:
+            return "\(secondsAgo / 86400)d ago"
+        case 604800..<31536000:
+            return "\(secondsAgo / 604800)w ago"
+        default:
+            return "\(secondsAgo / 31536000)y ago"
+        }
+    }
+
+    
+    private func currentAEDTString() -> String {
+        let now = Date()
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
+        fmt.dateFormat = "yyyyMMddHHmmss"
+        return fmt.string(from: now)
+    }
+    
+    
+    
+    struct LikeButton: View {
+        let isLiked: Bool
+        let onTap: () -> Void
+        
+        var body: some View {
+            Button {
+                onTap()
+            } label: {
+                ZStack {
+                    image(Image(systemName: "heart.fill"), show: isLiked)
+                    image(Image(systemName: "heart.fill"),      show: !isLiked)
+                }
+            }
+            
+        }
+        
+        private func image(_ image: Image, show: Bool) -> some View {
+            image
+                .tint(isLiked ? Color(hex: 0xDA0D0D) : Color(hex: 0x666666))
+                .font(.system(size: 16, weight: .black))
+                .scaleEffect(show ? 1 : 0)
+                .opacity(show ? 1 : 0)
+                .animation(.interpolatingSpring(stiffness: 170, damping: 15), value: show)
+        }
+    }
+}
+
+struct TierListHomeView2: View {
+    // core data
+    let listData: RankoList
+
+    // actions
+    var onCommentTap: (String) -> Void
+    var onRankoTap: (RankoList) -> Void
+    var onProfileTap: (String) -> Void
+
+    // optional (1-based index -> value) maps; pass these if you decode RankoTiers
+    var codeByIndex: [Int: String]? = nil
+    var labelByIndex: [Int: String]? = nil
+    var colorHexByIndex: [Int: Int]? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // header (tap anywhere to open the ranko)
+            HStack(alignment: .top, spacing: 10) {
+                // profile thumb
+                AsyncImage(
+                    url: URL(string:
+                        "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media"
+                    )
+                ) { phase in
+                    if let img = phase.image {
+                        img.resizable().scaledToFill()
+                    } else {
+                        Color.gray.opacity(0.2)
+                    }
+                }
+                .frame(width: 42, height: 42)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .onTapGesture { onProfileTap(listData.userCreator) }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(listData.listName)
+                        .font(.custom("Nunito-Black", size: 18))
+                        .foregroundColor(Color(hex: 0x666666))
+
+                    HStack(spacing: 6) {
+                        HomeCategoryBadge1(
+                            name: listData.categoryName,
+                            colour: listData.categoryColour,
+                            icon: listData.categoryIcon
+                        )
+                        .onTapGesture { onRankoTap(listData) }
+
+                        Spacer(minLength: 0)
+                    }
+                }
+                .onTapGesture { onRankoTap(listData) }
+            }
+
+            
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+        )
+    }
+}
+
+// MARK: - TopThreeTiersSection (private to this file)
+private struct TopThreeTiersSection: View {
+    let items: [RankoItem]
+    let codeByIndex: [Int: String]?
+    let labelByIndex: [Int: String]?
+    let colorHexByIndex: [Int: Int]?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach([1, 2, 3], id: \.self) { tierIndex in
+                if let group = grouped[tierIndex], !group.isEmpty {
+                    TierBlock(
+                        tierIndex: tierIndex,
+                        items: Array(group.prefix(3)),
+                        code: codeFor(tierIndex),
+                        label: labelFor(tierIndex),
+                        hex: colorFor(tierIndex)
+                    )
+                }
+            }
+        }
+    }
+
+    // group by tier (1-based) using floor(rank) from decimal ranks like 1.0001, 4.0012, …
+    private var grouped: [Int: [RankoItem]] {
+        let sorted = items.sorted { $0.rank < $1.rank }
+        return Dictionary(grouping: sorted) { item in
+            max(1, Int(floor(Float16(item.rank))))
+        }
+    }
+
+    private func codeFor(_ i: Int) -> String {
+        codeByIndex?[i] ?? ""
+    }
+    private func labelFor(_ i: Int) -> String {
+        labelByIndex?[i] ?? "Tier #\(i)"
+    }
+    private func colorFor(_ i: Int) -> Int {
+        colorHexByIndex?[i] ?? 0x666666
+    }
+}
+
+private struct TierBlock: View {
+    let tierIndex: Int
+    let items: [RankoItem]
+    let code: String
+    let label: String
+    let hex: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // header
+            HStack(spacing: 8) {
+                Text(headerTitle)
+                    .font(.custom("Nunito-Black", size: 14))
+                    .colorInvert()
+            }
+            .padding(.horizontal, 8)
+            .background {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(hex: hex))
+            }
+
+            // first three items
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(items) { item in
+                        HStack(spacing: 14) {
+                            AsyncImage(url: URL(string: item.itemImage)) { phase in
+                                if let img = phase.image {
+                                    img.resizable().scaledToFill()
+                                } else {
+                                    Color.gray.opacity(0.2)
+                                }
+                            }
+                            .frame(width: 40, height: 40)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                            Text(truncated(item.itemName))
+                                .font(.custom("Nunito-Black", size: 13))
+                                .foregroundColor(Color(hex: 0x666666))
+                                .lineLimit(1)
+                        }
+                        .padding(6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.white.opacity(0.95))
+                                .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+                        )
+                    }
+                }
+                .padding(5)
+            }
+        }
+    }
+
+    private var headerTitle: String {
+        let pieces = [code, label].filter { !$0.isEmpty }
+        return pieces.isEmpty ? "Tier #\(tierIndex)" : pieces.joined(separator: " • ")
+    }
+
+    private func truncated(_ s: String) -> String {
+        s.count > 22 ? "\(s.prefix(20))…" : s
+    }
+}
+
+// MARK: - Small helpers (only include if you don't already have them)
+private extension Color {
+    init(hex: Int, alpha: Double = 1.0) {
+        let r = Double((hex >> 16) & 0xFF) / 255.0
+        let g = Double((hex >> 8) & 0xFF) / 255.0
+        let b = Double(hex & 0xFF) / 255.0
+        self.init(.sRGB, red: r, green: g, blue: b, opacity: alpha)
     }
 }
 

@@ -153,6 +153,11 @@ struct RankoList: Identifiable, Codable {
     let timeCreated: String       // from "RankoUserID"
     let timeUpdated: String
     var items: [RankoItem]
+    
+    // TierListHomeView)
+    var tierCodeByIndex: [Int: String]?       // e.g. [1: "S", 2: "A", 3: "B"]
+    var tierLabelByIndex: [Int: String]?      // e.g. [1: "Legendary", 2: "Great", 3: "Good"]
+    var tierColorHexByIndex: [Int: Int]?      // e.g. [1: 0xFFD700, 2: 0xC0C0C0, 3: 0xCD7F32]
 }
 
 struct RankoCategoryInfo: Codable, Hashable {
@@ -188,6 +193,28 @@ struct RankoItem: Identifiable, Codable, Equatable, Hashable {
     var itemVideo: String { record.ItemVideo ?? "" }
     var itemAudio: String { record.ItemAudio ?? "" }
     var playCount: Int
+}
+
+struct RankoTier: Codable, Hashable, Identifiable {
+    // Your loader currently uses the Firebase dictionary key as "index".
+    // In TierList_Personal you build it from a String key (e.g. "1", "2").
+    // Keep it String to match, or switch to Int if you normalize later.
+    let id: String           // mirror "index" for Identifiable
+    let index: String        // "1", "2", ...
+    let code: String         // e.g. "S", "A", ...
+    let label: String        // e.g. "Legendary"
+    let colorHex: String     // store the hex as a string like "0xFFD700"
+
+    init(index: String, code: String, label: String, colorHex: String) {
+        self.index = index
+        self.id = index
+        self.code = code
+        self.label = label
+        self.colorHex = colorHex
+    }
+
+    // If you later prefer Ints:
+    // var indexInt: Int? { Int(index) }
 }
 
 struct RankoUser: Identifiable, Codable {

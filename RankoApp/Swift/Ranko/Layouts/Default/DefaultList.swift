@@ -57,18 +57,22 @@ struct DefaultListView: View {
     @Environment(\.tabViewBottomAccessoryPlacement) var placement
 
     // Init properties
-    @State private var listUUID: String = UUID().uuidString
+    @State private var rankoID: String = UUID().uuidString
     @State private var rankoName: String
     @State private var description: String
     @State private var isPrivate: Bool
-    @State private var category: SampleCategoryChip?
+    @State private var categoryName: String = "Unknown"
+    @State private var categoryIcon: String = "questionmark"
+    @State private var categoryColour: String = "0x000000"
     @State private var tags: [String] = []
     
     // to revert to old values
     @State private var originalRankoName: String
     @State private var originalDescription: String
     @State private var originalIsPrivate: Bool
-    @State private var originalCategory: SampleCategoryChip?
+    @State private var originalCategoryName: String = ""
+    @State private var originalCategoryIcon: String = ""
+    @State private var originalCategoryColour: String = ""
 
     // Sheet states
     @State var showEditItemSheet = false
@@ -137,21 +141,21 @@ struct DefaultListView: View {
         rankoName: String,
         description: String,
         isPrivate: Bool,
-        category: SampleCategoryChip?,
         selectedRankoItems: [RankoItem] = [],
         onSave: @escaping (RankoItem) -> Void
     ) {
         _rankoName   = State(initialValue: rankoName)
         _description = State(initialValue: description)
         _isPrivate   = State(initialValue: isPrivate)
-        _category    = State(initialValue: category)
         _selectedRankoItems = State(initialValue: selectedRankoItems)
         _onSave = State(initialValue: onSave)
 
         _originalRankoName = State(initialValue: rankoName)
         _originalDescription = State(initialValue: description)
         _originalIsPrivate = State(initialValue: isPrivate)
-        _originalCategory = State(initialValue: category)
+        _originalCategoryName = State(initialValue: categoryName)
+        _originalCategoryIcon = State(initialValue: categoryIcon)
+        _originalCategoryColour = State(initialValue: categoryColour)
     }
     
     private struct RankoToolbarTitleStack: View {
@@ -159,8 +163,9 @@ struct DefaultListView: View {
         let name: String
         let description: String
         @Binding var isPrivate: Bool
-        let category: SampleCategoryChip?
-        let categoryColor: Color
+        let categoryName: String
+        let categoryIcon: String
+        let categoryColour: String
         @Binding var showEditDetailsSheet: Bool
         var onTapPrivacy: (() -> Void)?
         var onTapCategory: (() -> Void)?
@@ -231,19 +236,19 @@ struct DefaultListView: View {
                         }
                     }
 
-                    if let cat = category {
+                    if categoryName != "" {
                         Button {
                             if let onTapCategory { onTapCategory() } else { showEditDetailsSheet = true }
                         } label: {
                             HStack(spacing: 6) {
-                                Image(systemName: cat.icon)
+                                Image(systemName: categoryIcon)
                                     .font(.system(size: 11, weight: .black))
-                                Text(cat.name)
+                                Text(categoryName)
                                     .font(.custom("Nunito-Black", size: 11))
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(categoryColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(Color(hex: categoryColour).opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .foregroundStyle(.white)
                             .contentShape(RoundedRectangle(cornerRadius: 12))
                         }
@@ -266,7 +271,6 @@ struct DefaultListView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                LinearGradient(colors: [Color(hex: 0x514343), Color(hex: 0x000000)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 Color(hex: 0xFFFFFF)
                     .ignoresSafeArea()
                 ScrollView {
@@ -311,7 +315,7 @@ struct DefaultListView: View {
                                                         // Determine which item is centered
                                                         EditItemView(
                                                             item: item,
-                                                            listID: listUUID
+                                                            rankoID: rankoID
                                                         ) { newName, newDesc in
                                                             // build updated record & item
                                                             let rec = item.record
@@ -339,7 +343,7 @@ struct DefaultListView: View {
                                             }
                                         }
                                         .id(imageReloadToken)
-                                        .padding(.top, 25)
+                                        .padding(.top, 70)
                                         .padding(.bottom, 120)
                                         .padding(.horizontal)
                                     }
@@ -351,7 +355,6 @@ struct DefaultListView: View {
                 VStack {
                     Spacer()
                     HStack {
-                        
                         GlassEffectContainer(spacing: 45) {
                             HStack(alignment: .bottom, spacing: 10) {
                                 VStack(spacing: -5) {
@@ -409,115 +412,6 @@ struct DefaultListView: View {
                                                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { addHoldButton = false }
                                                     }
                                                 }
-                                                .sequenced(before:
-                                                            DragGesture()
-                                                    .onChanged { value in
-                                                        guard addButtonTapped else { return }
-                                                        
-                                                        // ensure we have frames
-                                                        let hasFrames = addFrame != .zero && sampleFrame != .zero && blankFrame != .zero
-                                                        guard hasFrames else { return }
-                                                        
-                                                        // define origin/targets in the same space
-                                                        let origin = addFrame.center
-                                                        let sampleVec = sampleFrame.center - origin
-                                                        let blankVec  = blankFrame.center - origin
-                                                        let sampleLen = sampleVec.length
-                                                        let blankLen  = blankVec.length
-                                                        guard sampleLen > 1, blankLen > 1 else { return }
-                                                        
-                                                        // unit directions
-                                                        let uSample = sampleVec.normalized
-                                                        let uBlank  = blankVec.normalized
-                                                        
-                                                        // current drag as a vector
-                                                        let v = CGPoint(x: value.translation.width, y: value.translation.height)
-                                                        
-                                                        // projections onto each ray
-                                                        let pSample = v.dot(uSample)
-                                                        let pBlank  = v.dot(uBlank)
-                                                        
-                                                        // choose which ray we're moving along (favor positive progress)
-                                                        let chooseSample: Bool
-                                                        if pSample <= 0 && pBlank <= 0 {
-                                                            chooseSample = pSample >= pBlank // both negative: pick the "less negative"
-                                                        } else if pSample > 0 && pBlank <= 0 {
-                                                            chooseSample = true
-                                                        } else if pBlank > 0 && pSample <= 0 {
-                                                            chooseSample = false
-                                                        } else {
-                                                            chooseSample = pSample >= pBlank
-                                                        }
-                                                        
-                                                        // clamp progress along the chosen ray
-                                                        let rayU  = chooseSample ? uSample : uBlank
-                                                        let rayL  = chooseSample ? sampleLen : blankLen
-                                                        let proj  = (chooseSample ? pSample : pBlank).clamped(0, rayL)
-                                                        let snapped = rayU * proj
-                                                        
-                                                        // apply as translation
-                                                        addButtonTranslation = CGSize(width: snapped.x, height: snapped.y)
-                                                        
-                                                        // hover highlight near the end (70%+)
-                                                        let nearEnd = proj > (rayL * 0.7)
-                                                        sampleButtonHovered   = chooseSample && nearEnd
-                                                        blankButtonHovered = !chooseSample && nearEnd
-                                                    }
-                                                    .onEnded { _ in
-                                                        guard addButtonTapped else { return }
-                                                        
-                                                        // compute final progress to decide commit
-                                                        let origin = addFrame.center
-                                                        let sampleVec = sampleFrame.center - origin
-                                                        let blankVec  = blankFrame.center - origin
-                                                        let sampleLen = sampleVec.length
-                                                        let blankLen  = blankVec.length
-                                                        guard sampleLen > 1, blankLen > 1 else {
-                                                            withAnimation {
-                                                                addButtonTranslation = .zero
-                                                                sampleButtonHovered = false
-                                                                blankButtonHovered = false
-                                                                addButtonTapped = false
-                                                            }
-                                                            return
-                                                        }
-                                                        
-                                                        let current = CGPoint(x: addButtonTranslation.width, y: addButtonTranslation.height)
-                                                        let progressOnSample = current.dot(sampleVec.normalized) / sampleLen
-                                                        let progressOnBlank  = current.dot(blankVec.normalized)  / blankLen
-                                                        
-                                                        // commit threshold
-                                                        let threshold: CGFloat = 0.7
-                                                        
-                                                        if progressOnSample >= threshold {
-                                                            // commit Save
-                                                            showAddItemsSheet = true
-                                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                                addButtonTranslation = .zero
-                                                                sampleButtonHovered = false
-                                                                blankButtonHovered = false
-                                                                addButtonTapped = false
-                                                            }
-                                                        } else if progressOnBlank >= threshold {
-                                                            // commit Delete (your current action = dismiss)
-                                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                                addButtonTranslation = .zero
-                                                                sampleButtonHovered = false
-                                                                blankButtonHovered = false
-                                                                addButtonTapped = false
-                                                            }
-                                                            print("Blank would open")
-                                                        } else {
-                                                            // snap back
-                                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                                                addButtonTranslation = .zero
-                                                                sampleButtonHovered = false
-                                                                blankButtonHovered = false
-                                                                addButtonTapped = false
-                                                            }
-                                                        }
-                                                    }
-                                                          )
                                         )
                                     }
                                     .onChange(of: sampleButtonHovered) { old, new in
@@ -730,124 +624,6 @@ struct DefaultListView: View {
                                                         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { exitHoldButton = false }
                                                     }
                                                 }
-                                                .sequenced(before:
-                                                            DragGesture()
-                                                    .onChanged { value in
-                                                        guard exitButtonTapped else { return }
-                                                        
-                                                        // ensure we have frames
-                                                        let hasFrames = exitFrame != .zero && saveFrame != .zero && deleteFrame != .zero
-                                                        guard hasFrames else { return }
-                                                        
-                                                        // define origin/targets in the same space
-                                                        let origin = exitFrame.center
-                                                        let saveVec = saveFrame.center - origin
-                                                        let delVec  = deleteFrame.center - origin
-                                                        let saveLen = saveVec.length
-                                                        let delLen  = delVec.length
-                                                        guard saveLen > 1, delLen > 1 else { return }
-                                                        
-                                                        // unit directions
-                                                        let uSave = saveVec.normalized
-                                                        let uDel  = delVec.normalized
-                                                        
-                                                        // current drag as a vector
-                                                        let v = CGPoint(x: value.translation.width, y: value.translation.height)
-                                                        
-                                                        // projections onto each ray
-                                                        let pSave = v.dot(uSave)
-                                                        let pDel  = v.dot(uDel)
-                                                        
-                                                        // choose which ray we're moving along (favor positive progress)
-                                                        let chooseSave: Bool
-                                                        if pSave <= 0 && pDel <= 0 {
-                                                            chooseSave = pSave >= pDel // both negative: pick the "less negative"
-                                                        } else if pSave > 0 && pDel <= 0 {
-                                                            chooseSave = true
-                                                        } else if pDel > 0 && pSave <= 0 {
-                                                            chooseSave = false
-                                                        } else {
-                                                            chooseSave = pSave >= pDel
-                                                        }
-                                                        
-                                                        // clamp progress along the chosen ray
-                                                        let rayU  = chooseSave ? uSave : uDel
-                                                        let rayL  = chooseSave ? saveLen : delLen
-                                                        let proj  = (chooseSave ? pSave : pDel).clamped(0, rayL)
-                                                        let snapped = rayU * proj
-                                                        
-                                                        // apply as translation
-                                                        exitButtonTranslation = CGSize(width: snapped.x, height: snapped.y)
-                                                        
-                                                        // hover highlight near the end (70%+)
-                                                        let nearEnd = proj > (rayL * 0.7)
-                                                        saveButtonHovered   = chooseSave && nearEnd
-                                                        deleteButtonHovered = !chooseSave && nearEnd
-                                                    }
-                                                    .onEnded { _ in
-                                                        guard exitButtonTapped else { return }
-                                                        
-                                                        // compute final progress to decide commit
-                                                        let origin = exitFrame.center
-                                                        let saveVec = saveFrame.center - origin
-                                                        let delVec  = deleteFrame.center - origin
-                                                        let saveLen = saveVec.length
-                                                        let delLen  = delVec.length
-                                                        guard saveLen > 1, delLen > 1 else {
-                                                            withAnimation {
-                                                                exitButtonTranslation = .zero
-                                                                saveButtonHovered = false
-                                                                deleteButtonHovered = false
-                                                                exitButtonTapped = false
-                                                            }
-                                                            return
-                                                        }
-                                                        
-                                                        let current = CGPoint(x: exitButtonTranslation.width, y: exitButtonTranslation.height)
-                                                        let progressOnSave = current.dot(saveVec.normalized) / saveLen
-                                                        let progressOnDel  = current.dot(delVec.normalized)  / delLen
-                                                        
-                                                        // commit threshold
-                                                        let threshold: CGFloat = 0.7
-                                                        
-                                                        if progressOnSave >= threshold {
-                                                            // commit Save
-                                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                                exitButtonTranslation = .zero
-                                                                saveButtonHovered = false
-                                                                deleteButtonHovered = false
-                                                                exitButtonTapped = false
-                                                            }
-                                                            startPublishAndDismiss()
-                                                        } else if progressOnDel >= threshold {
-                                                            // commit Delete (your current action = dismiss)
-                                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                                exitButtonTranslation = .zero
-                                                                saveButtonHovered = false
-                                                                deleteButtonHovered = false
-                                                                exitButtonTapped = false
-                                                            }
-                                                            Task {
-                                                                await deleteRankoPersonalFolderAsync(rankoID: listUUID)
-                                                                // if you also remove DB/Algolia here, do it after the cleanup:
-                                                                // try? await deleteRankoFromFirebase(listUUID)
-                                                                // try? await deleteRankoFromAlgolia(listUUID)
-                                                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                                                                    dismiss()
-                                                                }
-                                                            }
-                                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { dismiss() }
-                                                        } else {
-                                                            // snap back
-                                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                                                exitButtonTranslation = .zero
-                                                                saveButtonHovered = false
-                                                                deleteButtonHovered = false
-                                                                exitButtonTapped = false
-                                                            }
-                                                        }
-                                                    }
-                                                          )
                                         )
                                     }
                                     .onChange(of: saveButtonHovered) { old, new in
@@ -973,109 +749,114 @@ struct DefaultListView: View {
                         name: rankoName,
                         description: description,
                         isPrivate: $isPrivate,
-                        category: category,
-                        categoryColor: category.flatMap { categoryChipIconColors[$0.name] } ?? .gray.opacity(0.7),
+                        categoryName: categoryName,
+                        categoryIcon: categoryIcon,
+                        categoryColour: categoryColour,
                         showEditDetailsSheet: $showEditDetailsSheet,
-                        onTapPrivacy: { showEditDetailsSheet = true },   // or: { isPrivate.toggle() }
-                        onTapCategory: { showEditDetailsSheet = true }
+                        onTapPrivacy: {  },   // or: { isPrivate.toggle() }
+                        onTapCategory: {  }
                     )
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(rankoName). \(description). \(isPrivate ? "Private" : "Public"). \(category?.name ?? "")")
+                    .accessibilityLabel("\(rankoName). \(description). \(isPrivate ? "Private" : "Public"). \(categoryName)")
                 }
             }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarBackground(Color.white.opacity(0.92), for: .navigationBar)
-        .interactiveDismissDisabled(progressLoading) // block pull-to-dismiss on sheets while saving
-        .disabled(progressLoading)                   // block interactions while saving
-        .alert("Couldn't publish", isPresented: .init(
-            get: { publishError != nil },
-            set: { if !$0 { publishError = nil } }
-        )) {
-            Button("Retry") {
-                startPublishAndDismiss()
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color.white.opacity(0.92), for: .navigationBar)
+            .interactiveDismissDisabled(progressLoading) // block pull-to-dismiss on sheets while saving
+            .disabled(progressLoading)                   // block interactions while saving
+            .alert("Couldn't publish", isPresented: .init(
+                get: { publishError != nil },
+                set: { if !$0 { publishError = nil } }
+            )) {
+                Button("Retry") {
+                    startPublishAndDismiss()
+                }
+                Button("Cancel", role: .cancel) {
+                    // 🔥 Nuke only if the user gives up
+                    Task { await deleteRankoPersonalFolderAsync(rankoID: rankoID) }
+                }
+            } message: {
+                Text(publishError ?? "Something went wrong.")
             }
-            Button("Cancel", role: .cancel) {
-                // 🔥 Nuke only if the user gives up
-                Task { await deleteRankoPersonalFolderAsync(rankoID: listUUID) }
+            .refreshable {
+                refreshItemImages()
             }
-        } message: {
-            Text(publishError ?? "Something went wrong.")
-        }
-        .refreshable {
-            refreshItemImages()
-        }
-        .sheet(isPresented: $showAddItemsSheet) {
-            FilterChipPickerView(selectedRankoItems: $selectedRankoItems)
-                .presentationDetents([.height(480)])
-                .interactiveDismissDisabled(true)
+            .sheet(isPresented: $showAddItemsSheet) {
+                FilterChipPickerView(selectedRankoItems: $selectedRankoItems)
+                    .presentationDetents([.height(480)])
+                    .interactiveDismissDisabled(true)
+                    .navigationTransition(
+                        .zoom(sourceID: "sampleButton", in: transition)
+                    )
+            }
+            .sheet(isPresented: $editButtonTapped) {
+                DefaultListEditDetails(
+                    rankoName: rankoName,
+                    description: description,
+                    isPrivate: isPrivate,
+                    categoryName: categoryName,
+                    categoryIcon: categoryIcon,
+                    categoryColour: categoryColour
+                ) { newName, newDescription, newPrivate, newCategoryName, newCategoryIcon, newCategoryColour in
+                    rankoName      = newName
+                    description    = newDescription
+                    isPrivate      = newPrivate
+                    categoryName   = newCategoryName
+                    categoryIcon   = newCategoryIcon
+                    categoryColour = newCategoryColour
+                }
                 .navigationTransition(
-                    .zoom(sourceID: "sampleButton", in: transition)
+                    .zoom(sourceID: "editButton", in: transition)
                 )
-        }
-        .sheet(isPresented: $editButtonTapped) {
-            DefaultListEditDetails(
-                rankoName: rankoName,
-                description: description,
-                isPrivate: isPrivate,
-                category: category
-            ) { newName, newDescription, newPrivate, newCategory in
-                rankoName   = newName
-                description = newDescription
-                isPrivate   = newPrivate
-                category    = newCategory
             }
-            .navigationTransition(
-                .zoom(sourceID: "editButton", in: transition)
-            )
-        }
-        .fullScreenCover(isPresented: $rankButtonTapped) {
-            DefaultListReRank(items: selectedRankoItems) { newOrder in
-                selectedRankoItems = newOrder
-            }
-            .navigationTransition(
-                .zoom(sourceID: "rankButton", in: transition)
-            )
-        }
-        
-        // SINGLE edit sheet bound to the selected item (no per-row sheets)
-        .sheet(item: $itemToEdit) { item in
-            EditItemView(item: item, listID: listUUID) { newName, newDesc in
-                let rec = item.record
-                let updatedRecord = RankoRecord(
-                    objectID: rec.objectID,
-                    ItemName: newName,
-                    ItemDescription: newDesc,
-                    ItemCategory: "",
-                    ItemImage: rec.ItemImage,
-                    ItemGIF: rec.ItemAudio,
-                    ItemVideo: rec.ItemVideo,
-                    ItemAudio: rec.ItemAudio
+            .fullScreenCover(isPresented: $rankButtonTapped) {
+                DefaultListReRank(items: selectedRankoItems) { newOrder in
+                    selectedRankoItems = newOrder
+                }
+                .navigationTransition(
+                    .zoom(sourceID: "rankButton", in: transition)
                 )
-                let updatedItem = RankoItem(
-                    id: item.id,
-                    rank: item.rank,
-                    votes: item.votes,
-                    record: updatedRecord,
-                    playCount: item.playCount
-                )
-                onSave(updatedItem)
             }
-        }
-        .fullScreenCover(isPresented: $showBlankItemsFS) {
-            BlankItemsComposer(
-                rankoID: listUUID,                  // 👈 add this
-                drafts: $blankDrafts,
-                error: $draftError,
-                canAddMore: blankDrafts.count < 10,
-                onCommit: { appendDraftsToSelectedRanko() }
-            )
-        }
-        .onAppear {
-            refreshItemImages()
+            // SINGLE edit sheet bound to the selected item (no per-row sheets)
+            .sheet(item: $itemToEdit) { item in
+                EditItemView(item: item, rankoID: rankoID) { newName, newDesc in
+                    let rec = item.record
+                    let updatedRecord = RankoRecord(
+                        objectID: rec.objectID,
+                        ItemName: newName,
+                        ItemDescription: newDesc,
+                        ItemCategory: "",
+                        ItemImage: rec.ItemImage,
+                        ItemGIF: rec.ItemAudio,
+                        ItemVideo: rec.ItemVideo,
+                        ItemAudio: rec.ItemAudio
+                    )
+                    let updatedItem = RankoItem(
+                        id: item.id,
+                        rank: item.rank,
+                        votes: item.votes,
+                        record: updatedRecord,
+                        playCount: item.playCount
+                    )
+                    onSave(updatedItem)
+                }
+            }
+            .fullScreenCover(isPresented: $showBlankItemsFS) {
+                BlankItemsComposer(
+                    rankoID: rankoID,                  // 👈 add this
+                    drafts: $blankDrafts,
+                    error: $draftError,
+                    canAddMore: blankDrafts.count < 10,
+                    onCommit: { appendDraftsToSelectedRanko() }
+                )
+            }
+            .onAppear {
+                refreshItemImages()
+            }
         }
     }
+    
     private func refreshItemImages() {
         guard !selectedRankoItems.isEmpty else { return }
         imageReloadToken = UUID() // change identity → rows/images rebuild
@@ -1086,7 +867,7 @@ struct DefaultListView: View {
         // attempt storage delete IFF this item used a personal image (not placeholder)
         let imgURL = item.record.ItemImage
         if !isPlaceholderURL(imgURL) {
-            Task { await deleteStorageImage(rankoID: listUUID, itemID: item.id) }
+            Task { await deleteStorageImage(rankoID: rankoID, itemID: item.id) }
         }
 
         selectedRankoItems.removeAll { $0.id == item.id }
@@ -1115,7 +896,7 @@ struct DefaultListView: View {
     
     @MainActor
     private func startPublishAndDismiss() {
-        guard category != nil else {
+        guard categoryName != "Unknown" else {
             publishError = "Please pick a category before saving."
             return
         }
@@ -1145,7 +926,7 @@ struct DefaultListView: View {
     // MARK: - Algolia (async)
 
     private func saveRankedListToAlgoliaAsync() async throws {
-        guard let category = category else { throw PublishErr.missingCategory }
+        guard categoryName != "" else { throw PublishErr.missingCategory }
 
         let now = Date()
         let aedtFormatter = DateFormatter()
@@ -1155,13 +936,13 @@ struct DefaultListView: View {
         let rankoDateTime = aedtFormatter.string(from: now)
 
         let listRecord = RankoListAlgolia(
-            objectID:         listUUID,
+            objectID:         rankoID,
             RankoName:        rankoName,
             RankoDescription: description,
             RankoType:        "default",
             RankoPrivacy:     isPrivate,
             RankoStatus:      "active",
-            RankoCategory:    category.name,
+            RankoCategory:    categoryName,
             RankoUserID:      user_data.userID,
             RankoCreated:     rankoDateTime,
             RankoUpdated:     rankoDateTime,
@@ -1185,7 +966,7 @@ struct DefaultListView: View {
     // MARK: - Firebase (async)
 
     private func saveRankedListToFirebaseAsync() async throws {
-        guard let category = category else { throw PublishErr.missingCategory }
+        guard categoryName != "Unknown" else { throw PublishErr.missingCategory }
 
         let db = Database.database().reference()
         let rawUID = Auth.auth().currentUser?.uid ?? user_data.userID
@@ -1221,20 +1002,17 @@ struct DefaultListView: View {
         formatter.dateFormat = "yyyyMMddHHmmss"
         let ts = formatter.string(from: now)
 
-        // Category object (use hex string like "0xFFCF00")
-        let colourString: String = normalizeHexString(category.colour)
-
         let categoryDict: [String: Any] = [
-            "colour": colourString,
-            "icon":   category.icon,
-            "name":   category.name
+            "colour": categoryColour,
+            "icon":   categoryIcon,
+            "name":   categoryName
         ]
 
         // Details (fill tags/region/lang with smart defaults if you don't have UI for them yet)
-        let normalizedTags: [String] = tags.isEmpty ? ["ranko", category.name.lowercased()] : tags
+        let normalizedTags: [String] = tags.isEmpty ? ["ranko", categoryName.lowercased()] : tags
 
         let rankoDetails: [String: Any] = [
-            "id":          listUUID,
+            "id":          rankoID,
             "name":        rankoName,
             "description": description,
             "type":        "default",
@@ -1280,7 +1058,7 @@ struct DefaultListView: View {
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
                 try await setValueAsync(
-                    db.child("RankoData").child(self.listUUID),
+                    db.child("RankoData").child(self.rankoID),
                     value: payload
                 )
             }
@@ -1289,8 +1067,8 @@ struct DefaultListView: View {
                 try await setValueAsync(
                     db.child("UserData").child(safeUID)
                       .child("UserRankos").child("UserActiveRankos")
-                      .child(self.listUUID),
-                    value: category.name
+                      .child(self.rankoID),
+                    value: categoryName
                 )
             }
             try await group.waitForAll()
@@ -1947,7 +1725,7 @@ struct DefaultListView: View {
         guard !pendingPersonalImages.isEmpty else { return }
 
         let storage = Storage.storage()
-        let bucketPathRoot = "rankoPersonalImages/\(listUUID)" // use your listUUID as rankoID
+        let bucketPathRoot = "rankoPersonalImages/\(rankoID)" // use your rankoID as rankoID
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             for (itemID, image) in pendingPersonalImages {
@@ -1968,7 +1746,7 @@ struct DefaultListView: View {
         try await uploadPersonalImagesAsync()
 
         // 2) now that uploads succeeded, rewrite ItemImage URLs for the affected items
-        let urlBase = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(listUUID)%2F"
+        let urlBase = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(rankoID)%2F"
 
         for idx in selectedRankoItems.indices {
             let itemID = selectedRankoItems[idx].id
@@ -2373,8 +2151,13 @@ struct DefaultListEditDetails: View {
     @State private var rankoName: String
     @State private var description: String
     @State private var isPrivate: Bool
+    @State private var categoryName: String = ""
+    @State private var categoryIcon: String = ""
+    @State private var categoryColour: String = ""
     @State private var selectedCategoryChip: SampleCategoryChip?
-    @State private var initialCategoryChip: SampleCategoryChip?
+    @State private var initialCategoryName: String = ""
+    @State private var initialCategoryIcon: String = ""
+    @State private var initialCategoryColour: String = ""
 
     // MARK: – UI state
     @FocusState private var nameFocused: Bool
@@ -2392,21 +2175,24 @@ struct DefaultListEditDetails: View {
     @State private var rankoNameShake: CGFloat = 0
     private var isValid: Bool { !rankoName.isEmpty }
 
-    private let onSave: (String, String, Bool, SampleCategoryChip?) -> Void
+    private let onSave: (String, String, Bool, String, String, String) -> Void
 
     init(
         rankoName: String,
         description: String = "",
         isPrivate: Bool,
-        category: SampleCategoryChip?,
-        onSave: @escaping (String, String, Bool, SampleCategoryChip?) -> Void
+        categoryName: String,
+        categoryIcon: String,
+        categoryColour: String,
+        onSave: @escaping (String, String, Bool, String, String, String) -> Void
     ) {
         self.onSave = onSave
         _rankoName  = State(initialValue: rankoName)
         _description = State(initialValue: description)
         _isPrivate  = State(initialValue: isPrivate)
-        _selectedCategoryChip = State(initialValue: category)
-        _localSelection = State(initialValue: category)
+        _categoryName = State(initialValue: categoryName)
+        _categoryIcon = State(initialValue: categoryIcon)
+        _categoryColour = State(initialValue: categoryColour)
         // if you pass a category, pre-expand its path on appear
     }
 
@@ -2525,14 +2311,14 @@ struct DefaultListEditDetails: View {
                                     Capsule().fill(Color.black.opacity(0.05))
                                 )
                                 .foregroundColor(.black)
-                            } else if let initCat = initialCategoryChip {
+                            } else {
                                 HStack(spacing: 6) {
-                                    Image(systemName: initCat.icon)
-                                    Text(initCat.name).font(.custom("Nunito-Black", size: 13))
+                                    Image(systemName: initialCategoryIcon)
+                                    Text(initialCategoryName).font(.custom("Nunito-Black", size: 13))
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(Capsule().fill(Color.black.opacity(0.05)))
+                                .background(Capsule().fill(Color(hex: initialCategoryColour).opacity(0.05)))
                                 .foregroundColor(.black)
                             }
                         }
@@ -2568,7 +2354,9 @@ struct DefaultListEditDetails: View {
                         }
                         .onChange(of: selectedCategoryChip) {
                             if selectedCategoryChip == nil {
-                                selectedCategoryChip = initialCategoryChip
+                                categoryName = initialCategoryName
+                                categoryIcon = initialCategoryIcon
+                                categoryColour = initialCategoryColour
                             }
                         }
 
@@ -2589,7 +2377,9 @@ struct DefaultListEditDetails: View {
                 .padding(22)
             }
             .onAppear {
-                initialCategoryChip = selectedCategoryChip
+                initialCategoryName = categoryName
+                initialCategoryIcon = categoryIcon
+                initialCategoryColour = categoryColour
             }
             .background(Color.white)                // full white
             .scrollContentBackground(.hidden)       // just in case this is used inside a Form somewhere
@@ -2661,7 +2451,7 @@ private extension DefaultListEditDetails {
             return
         }
         
-        onSave(rankoName, description, isPrivate, selectedCategoryChip)
+        onSave(rankoName, description, isPrivate, categoryName, categoryIcon, categoryColour)
         dismiss()
     }
 

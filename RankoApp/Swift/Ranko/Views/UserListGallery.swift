@@ -35,9 +35,9 @@ import AlgoliaSearchClient
 //        // when the user taps one, call the callback and dismiss
 //        .sheet(item: $selectedList) { list in
 //            if list.type == "default" {
-//                DefaultListPersonal(listID: list.id){ updatedItem in }
+//                DefaultListPersonal(rankoID: list.id){ updatedItem in }
 //            } else if list.type == "group" {
-//                GroupListPersonal(listID: list.id)
+//                TierListPersonal(rankoID: list.id)
 //            }
 //        }
 //    }
@@ -425,9 +425,9 @@ import AlgoliaSearchClient
 //        // when the user taps one, call the callback and dismiss
 //        .sheet(item: $selectedList) { list in
 //            if list.type == "default" {
-//                DefaultListPersonal(listID: list.id){ updatedItem in }
+//                DefaultListPersonal(rankoID: list.id){ updatedItem in }
 //            } else if list.type == "group" {
-//                GroupListPersonal(listID: list.id)
+//                TierListPersonal(rankoID: list.id)
 //            }
 //        }
 //    }

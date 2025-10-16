@@ -220,7 +220,7 @@ public extension View {
 //    
 //    // Show list layouts
 //    @State private var showDefaultList: Bool = false
-//    @State private var showGroupList: Bool = false
+//    @State private var showTierList: Bool = false
 //    @State private var showTierList: Bool = false
 //    
 //    @State private var fullScreenListDestination: ListDestination?
@@ -699,7 +699,7 @@ public extension View {
 //            case .defaultList:
 //                DefaultListView(rankoName: rankoName, description: description, isPrivate: isPrivate, category: selectedCategoryChip, onSave: {_ in })
 //            case .groupList:
-//                GroupListView(rankoName: rankoName, description: description, isPrivate: isPrivate, category: selectedCategoryChip)
+//                TierListView(rankoName: rankoName, description: description, isPrivate: isPrivate, category: selectedCategoryChip)
 //            }
 //        }
 //        .onChange(of: vStackHeightName) {

@@ -419,7 +419,7 @@ struct FeaturedCategoryBadge: View {
                 .font(.system(size: 10, weight: .heavy))
                 .foregroundColor(Color(hex: colour))
             Text(name)
-                .font(.custom("Nunito-ExtraBold", size: 11))
+                .font(.custom("Nunito-SemiBold", size: 11))
                 .foregroundColor(Color(hex: colour))
         }
         .font(.caption)

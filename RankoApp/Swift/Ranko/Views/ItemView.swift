@@ -15,7 +15,7 @@ import FirebaseDatabase
 struct ItemDetailView: View {
     let items: [RankoItem]
     let initialItem: RankoItem  // the item to center on initially
-    let listID: String
+    let rankoID: String
     let onSave: (RankoItem) -> Void
     
     // Infinite carousel state
@@ -183,7 +183,7 @@ struct ItemDetailView: View {
                     let currentItem = items.sorted { $0.rank < $1.rank }[centerIdx]
                     EditItemView(
                         item: currentItem,
-                        listID: listID
+                        rankoID: rankoID
                     ) { newName, newDesc in
                         // build updated record & item
                         let rec = currentItem.record
@@ -311,7 +311,7 @@ struct EditItemView: View {
 
     // inbound
     let item: RankoItem
-    let listID: String
+    let rankoID: String
     let onSave: (String, String) -> Void   // NOTE: this only returns name/desc; ItemImage is written directly to RTDB here
 
     // editable fields
@@ -323,7 +323,7 @@ struct EditItemView: View {
     @State private var imageForCropping: UIImage? = nil
     @State private var showPicker = false
     @State private var showCropper = false
-    @State private var newUploadedPath: String? = nil        // "rankoPersonalImages/{listID}/{itemID}.jpg"
+    @State private var newUploadedPath: String? = nil        // "rankoPersonalImages/{rankoID}/{itemID}.jpg"
     @State private var newUploadedURL: String? = nil         // deterministic download URL string (no token)
     @State private var didUploadThisSession = false
 
@@ -333,9 +333,9 @@ struct EditItemView: View {
     @State private var errorMessage: String? = nil
     @State private var showConfirmAttach = false
 
-    init(item: RankoItem, listID: String, onSave: @escaping (String, String) -> Void) {
+    init(item: RankoItem, rankoID: String, onSave: @escaping (String, String) -> Void) {
         self.item = item
-        self.listID = listID
+        self.rankoID = rankoID
         self.onSave = onSave
         _editedName = State(initialValue: item.itemName)
         _editedDescription = State(initialValue: item.itemDescription)
@@ -668,12 +668,12 @@ struct EditItemView: View {
 
     // MARK: - Upload
 
-    private func pathForItem(_ listID: String, _ itemID: String) -> String {
-        "rankoPersonalImages/\(listID)/\(itemID).jpg"
+    private func pathForItem(_ rankoID: String, _ itemID: String) -> String {
+        "rankoPersonalImages/\(rankoID)/\(itemID).jpg"
     }
 
-    private func deterministicURL(for listID: String, _ itemID: String) -> String {
-        "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(listID)%2F\(itemID).jpg?alt=media&token="
+    private func deterministicURL(for rankoID: String, _ itemID: String) -> String {
+        "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(rankoID)%2F\(itemID).jpg?alt=media&token="
     }
 
     private func makeJPEGMetadata() -> StorageMetadata {
@@ -685,7 +685,7 @@ struct EditItemView: View {
         fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
         fmt.dateFormat = "yyyyMMddHHmmss"
         md.customMetadata = [
-            "rankoID": listID,
+            "rankoID": rankoID,
             "itemID": item.id,
             "userID": Auth.auth().currentUser?.uid ?? "",
             "uploadedAt": fmt.string(from: now)
@@ -703,7 +703,7 @@ struct EditItemView: View {
         }
         errorMessage = nil
 
-        let path = pathForItem(listID, item.id)
+        let path = pathForItem(rankoID, item.id)
         let ref = Storage.storage().reference().child(path)
 
         do {
@@ -712,7 +712,7 @@ struct EditItemView: View {
             await MainActor.run {
                 localPreview = image
                 newUploadedPath = path
-                newUploadedURL = deterministicURL(for: listID, item.id)
+                newUploadedURL = deterministicURL(for: rankoID, item.id)
                 didUploadThisSession = true
                 withAnimation {
                     isUploading = false
@@ -772,7 +772,7 @@ struct EditItemView: View {
         do {
             // 1) write ItemImage directly to RTDB
             let ref = Database.database().reference()
-                .child("RankoData").child(listID)
+                .child("RankoData").child(rankoID)
                 .child("RankoItems").child(item.id)
                 .child("ItemImage")
             try await setValueAsync(ref, value: finalURL)
@@ -893,7 +893,7 @@ struct ItemDetailViewSpectate: View {
     
     let items: [RankoItem]
     let initialItem: RankoItem  // the item to center on initially
-    let listID: String
+    let rankoID: String
     
     // Infinite carousel state
     @State private var scrollPosition: Int?
@@ -1154,12 +1154,12 @@ struct ItemDetailViewSpectate: View {
     }
 }
 
-struct GroupItemDetailView: View {
+struct TierItemDetailView: View {
     let items: [RankoItem]
     let rowIndex: Int
     let numberOfRows: Int
     let initialItem: RankoItem
-    let listID: String
+    let rankoID: String
     let onSave: (RankoItem) -> Void
     
     // Infinite carousel state
@@ -1382,7 +1382,7 @@ struct GroupItemDetailView: View {
                     let currentItem = items.sorted { $0.rank < $1.rank }[centerIdx]
                     EditItemView(
                         item: currentItem,
-                        listID: listID
+                        rankoID: rankoID
                     ) { newName, newDesc in
                         // build updated record & item
                         let rec = currentItem.record
@@ -1481,12 +1481,12 @@ struct GroupItemDetailView: View {
     }
 }
 
-struct GroupItemDetailViewSpectate: View {
+struct TierItemDetailViewSpectate: View {
     let items: [RankoItem]
     let rowIndex: Int
     let numberOfRows: Int
     let initialItem: RankoItem
-    let listID: String
+    let rankoID: String
     let onSave: (RankoItem) -> Void
     
     // Infinite carousel state

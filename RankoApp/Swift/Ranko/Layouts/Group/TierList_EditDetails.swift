@@ -1,5 +1,5 @@
 //
-//  GroupList_EditDetails.swift
+//  TierList_EditDetails.swift
 //  RankoTestViewer
 //
 //  Created by Kyan Aldridge on 10/6/2025.
@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct GroupListEditDetails: View {
+struct TierListEditDetails: View {
     @Environment(\.dismiss) private var dismiss
     
     // MARK: – Original values

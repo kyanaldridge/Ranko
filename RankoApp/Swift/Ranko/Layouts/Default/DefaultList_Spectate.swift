@@ -16,6 +16,44 @@ import AlgoliaSearchClient
 import UIKit
 import Photos
 
+extension Color {
+    /// Accepts "0xFFC800", "#FFC800", "FFC800", "FC8" (shorthand), and 8-digit "RRGGBBAA".
+    /// If 8 digits are given, treats them as RRGGBBAA. Use `opacity` param to override for 6-digit/3-digit cases.
+    init(hex: String, opacity: Double = 1.0) {
+        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if s.hasPrefix("#")  { s.removeFirst() }
+        if s.hasPrefix("0x") { s.removeFirst(2) }
+
+        // expand shorthand: RGB -> RRGGBB, RGBA -> RRGGBBAA
+        if s.count == 3 || s.count == 4 {
+            s = s.map { String(repeating: $0, count: 2) }.joined()
+        }
+
+        func clamp(_ x: Double) -> Double { min(1, max(0, x)) }
+
+        var r = 1.0, g = 1.0, b = 1.0, a = opacity
+
+        if let value = UInt64(s, radix: 16) {
+            switch s.count {
+            case 6: // RRGGBB
+                r = Double((value & 0xFF0000) >> 16) / 255.0
+                g = Double((value & 0x00FF00) >> 8)  / 255.0
+                b = Double( value & 0x0000FF)        / 255.0
+                // a stays as passed-in opacity
+            case 8: // RRGGBBAA
+                r = Double((value & 0xFF000000) >> 24) / 255.0
+                g = Double((value & 0x00FF0000) >> 16) / 255.0
+                b = Double((value & 0x0000FF00) >> 8)  / 255.0
+                a = Double( value & 0x000000FF)        / 255.0
+            default:
+                break // keep defaults
+            }
+        }
+
+        self = Color(.sRGB, red: clamp(r), green: clamp(g), blue: clamp(b), opacity: clamp(a))
+    }
+}
+
 struct DefaultListSpectate: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var user_data = UserInformation.shared
@@ -25,22 +63,23 @@ struct DefaultListSpectate: View {
     @Namespace private var transition
     
     // Required property
-    let listID: String
+    let rankoID: String
     
     // Optional editable properties with defaults
     @State private var rankoName: String = ""
     @State private var description: String = ""
     @State private var isPrivate: Bool = false
-    @State private var category: SampleCategoryChip? = nil
-    @State private var categoryName: String = ""
-    @State private var categoryIcon: String? = nil
-    @State private var categoryColour: UInt = 0x000000
+    @State private var categoryName: String = "Unknown"
+    @State private var categoryIcon: String = "questionmark"
+    @State private var categoryColour: String = "0x000000"
     
     // Original values (to revert if needed)
     @State private var originalRankoName: String = ""
     @State private var originalDescription: String = ""
     @State private var originalIsPrivate: Bool = false
-    @State private var originalCategory: SampleCategoryChip? = nil
+    @State private var originalCategoryName: String = ""
+    @State private var originalCategoryIcon: String = ""
+    @State private var originalCategoryColour: String = ""
     
     // Sheets & states
     @State var showEditDetailsSheet = false
@@ -116,28 +155,138 @@ struct DefaultListSpectate: View {
     @State private var creatorName: String = "@" + (UserInformation.shared.username.isEmpty ? "creator" : UserInformation.shared.username)
     private let onClone: () -> Void
     
-    // MARK: - Init now only requires listID
+    // MARK: - Init now only requires rankoID
     init(
-        listID: String,
+        rankoID: String,
         onClone: @escaping () -> Void,
         rankoName: String? = nil,
         description: String? = nil,
         isPrivate: Bool? = nil,
-        category: SampleCategoryChip? = nil,
         selectedRankoItems: [RankoItem] = []
     ) {
-        self.listID = listID
+        self.rankoID = rankoID
         self.onClone = onClone
         _rankoName = State(initialValue: rankoName ?? "")
         _description = State(initialValue: description ?? "")
         _isPrivate = State(initialValue: isPrivate ?? false)
-        _category = State(initialValue: category)
         _selectedRankoItems = State(initialValue: selectedRankoItems)
         
         _originalRankoName = State(initialValue: rankoName ?? "")
         _originalDescription = State(initialValue: description ?? "")
         _originalIsPrivate = State(initialValue: isPrivate ?? false)
-        _originalCategory = State(initialValue: category)
+        _originalCategoryName = State(initialValue: categoryName)
+        _originalCategoryIcon = State(initialValue: categoryIcon)
+        _originalCategoryColour = State(initialValue: categoryColour)
+    }
+    
+    private struct RankoToolbarTitleStack: View {
+        @StateObject private var user_data = UserInformation.shared
+        let name: String
+        let description: String
+        @Binding var isPrivate: Bool
+        let categoryName: String
+        let categoryIcon: String
+        let categoryColour: String
+        @Binding var showEditDetailsSheet: Bool
+        var onTapPrivacy: (() -> Void)?
+        var onTapCategory: (() -> Void)?
+
+        var body: some View {
+            VStack(spacing: 6) {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(height: 50)
+                // ranko name (top)
+                Text(name.isEmpty ? "untitled ranko" : name)
+                    .font(.custom("Nunito-Black", size: 18))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .contextMenu {
+                        Button {
+                            showEditDetailsSheet = true
+                        } label: {
+                            Label("Edit Details", systemImage: "pencil")
+                        }
+                    }
+
+                // description (middle)
+                Text(description.isEmpty ? "no description yet..." : description)
+                    .font(.custom("Nunito-Black", size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .transition(.opacity)
+                    .contextMenu {
+                        Button {
+                            showEditDetailsSheet = true
+                        } label: {
+                            Label("Edit Details", systemImage: "pencil")
+                        }
+                    }
+
+                // privacy + category (bottom)
+                HStack(spacing: 8) {
+                    Button {
+                        // prefer explicit callback; fallback to opening the sheet
+                        if let onTapPrivacy { onTapPrivacy() } else { showEditDetailsSheet = true }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
+                                .font(.system(size: 11, weight: .black))
+                            Text(isPrivate ? "Private" : "Public")
+                                .font(.custom("Nunito-Black", size: 11))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(hex: 0xF2AB69), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundStyle(.white)
+                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            showEditDetailsSheet = true
+                        } label: {
+                            Label("Edit Details", systemImage: "pencil")
+                        }
+                        Button {
+                            isPrivate.toggle()
+                        } label: {
+                            Label(isPrivate ? "Make Public" : "Make Private",
+                                  systemImage: isPrivate ? "globe.americas.fill" : "lock.fill")
+                        }
+                    }
+
+                    if categoryName != "" {
+                        Button {
+                            if let onTapCategory { onTapCategory() } else { showEditDetailsSheet = true }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: categoryIcon)
+                                    .font(.system(size: 11, weight: .black))
+                                Text(categoryName)
+                                    .font(.custom("Nunito-Black", size: 11))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color(hex: categoryColour).opacity(0.7), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .foregroundStyle(.white)
+                            .contentShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                showEditDetailsSheet = true
+                            } label: {
+                                Label("Edit Details", systemImage: "pencil")
+                            }
+                        }
+                    }
+                }
+                .frame(minWidth: CGFloat(user_data.deviceWidth))
+            }
+            .multilineTextAlignment(.center)
+        }
     }
     
     private func handleSaveTap() {
@@ -152,393 +301,284 @@ struct DefaultListSpectate: View {
     }
     
     var body: some View {
-        ZStack(alignment: .top) {
-            Color(hex: 0xFFFFFF)
-                .ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: 6) {
-                    HStack {
-                        VStack(spacing: 6) {
-                            HStack {
-                                Text(rankoName)
-                                    .font(.custom("Nunito-Black", size: 24))
-                                    .foregroundStyle(Color(hex: 0x514343))
-                                    .kerning(-0.4)
-                                Spacer()
-                            }
-                            .padding(.top, 20)
-                            .padding(.leading, 20)
-                            
-                            HStack {
-                                Text(description.isEmpty ? "No description yet…" : description)
-                                    .lineLimit(3)
-                                    .font(.custom("Nunito-Black", size: 13))
-                                    .foregroundStyle(Color(hex: 0x514343))
-                                Spacer()
-                            }
-                            .padding(.top, 5)
-                            .padding(.leading, 20)
-                            
-                            HStack(spacing: 8) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: isPrivate ? "lock.fill" : "globe.americas.fill")
-                                        .font(.system(size: 12, weight: .bold, design: .default))
-                                        .foregroundColor(.white)
-                                        .padding(.leading, 10)
-                                    Text(isPrivate ? "Private" : "Public")
-                                        .font(.system(size: 12, weight: .bold, design: .default))
-                                        .foregroundColor(.white)
-                                        .padding(.trailing, 10)
-                                        .padding(.vertical, 8)
-                                }
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: 0xF2AB69))
-                                )
-                                HStack(spacing: 4) {
-                                    Image(systemName: categoryIcon ?? "circle")
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                        .padding(.leading, 10)
-                                    Text(categoryName)
-                                        .font(.system(size: 12, weight: .bold, design: .default))
-                                        .foregroundColor(.white)
-                                        .padding(.trailing, 10)
-                                        .padding(.vertical, 8)
-                                    
-                                }
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(hex: categoryColour))
-                                        .opacity(0.6)
-                                )
-                                
-                                Spacer()
-                            }
-                            .padding(.top, 5)
-                            .padding(.leading, 20)
-                        }
-                        
-                        Spacer()
-                        
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 22, weight: .black))
-                                .padding(.vertical, 5)
-                        }
-                        .foregroundColor(Color(hex: 0x514343))
-                        .tint(Color(hex: 0xFFFFFF))
-                        .buttonStyle(.glassProminent)
-                        .shadow(color: Color(hex: 0x000000).opacity(0.1), radius: 4, x: 0, y: 0)
-                        .alert(isPresented: $showLeaveAlert) {
-                            CustomDialog(
-                                title: "Leave Without Saving?",
-                                content: "Are you sure you want to leave your Ranko without saving? All your changes will be lost.",
-                                image: .init(
-                                    content: "figure.walk.departure",
-                                    background: .orange,
-                                    foreground: .white
-                                ),
-                                button1: .init(
-                                    content: "Leave",
-                                    background: .orange,
-                                    foreground: .white,
-                                    action: { _ in
-                                        showLeaveAlert = false
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                            dismiss()
-                                        }
-                                    }
-                                ),
-                                button2: .init(
-                                    content: "Cancel",
-                                    background: .red,
-                                    foreground: .white,
-                                    action: { _ in
-                                        showLeaveAlert = false
-                                    }
-                                )
-                            )
-                            .transition(.blurReplace.combined(with: .push(from: .bottom)))
-                        } background: {
-                            Rectangle()
-                                .fill(.primary.opacity(0.35))
-                        }
-                    }
-                    .padding(.trailing, 20)
-                    .contextMenu {
-                        Button {
-                            
-                        } label: {
-                            Label("Edit Details", systemImage: "pencil")
-                        }
-                        
-                        Divider()
-                        
-                        Button {
-                            
-                        } label: {
-                            Label("Re-Rank Items", systemImage: "chevron.up.chevron.down")
-                        }
-                        
-                        Divider()
-                        
-                        Button(role: .destructive) {
-                            
-                        } label: {
-                            Label("Delete Ranko", systemImage: "trash")
-                        }
-                    }
-                    
-                    ZStack(alignment: .bottom) {
-                        
-                        ScrollView {
-                            VStack {
-                                ScrollView {
-                                    Group {
-                                        ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
-                                            DefaultListItemRow(item: item)
-                                                .onTapGesture {
-                                                    selectedItem = item
-                                                }
-                                                .contextMenu {
-                                                    Button(action: {
-                                                        
-                                                    }) {
-                                                        Label("View Item", systemImage: "magnifyingglass")
+        NavigationStack {
+            ZStack(alignment: .top) {
+                Color(hex: 0xFFFFFF)
+                    .ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ZStack(alignment: .bottom) {
+                            ScrollView {
+                                VStack {
+                                    ScrollView {
+                                        Group {
+                                            ForEach(selectedRankoItems.sorted { $0.rank < $1.rank }) { item in
+                                                DefaultListItemRow(item: item)
+                                                    .onTapGesture {
+                                                        selectedItem = item
                                                     }
+                                                    .contextMenu {
+                                                        Button(action: {
+                                                            
+                                                        }) {
+                                                            Label("View Item", systemImage: "magnifyingglass")
+                                                        }
+                                                    }
+                                            }
+                                        }
+                                        .id(imageReloadToken)
+                                        .padding(.top, 70)
+                                        .padding(.bottom, 120)
+                                        .padding(.horizontal)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                VStack {
+                    Spacer()
+                    HStack {
+                        GlassEffectContainer(spacing: 45) {
+                            HStack(alignment: .bottom, spacing: 10) {
+                                VStack(spacing: 5) {
+                                    VStack {
+                                        VStack(spacing: 5) {
+                                            Image(systemName: "bookmark.fill")
+                                                .resizable().scaledToFit()
+                                                .frame(width: 20, height: 20)
+                                                .fontWeight(.bold)
+                                                .foregroundStyle(isSaved ? Color.yellow : Color.black)
+                                                .pulse($isSaved)
+                                            
+                                            Text("Save")
+                                                .font(.custom("Nunito-Black", size: 11))
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.7)
+                                                .allowsTightening(true)
+                                        }
+                                        .frame(width: 60, height: 60)
+                                        .background(Color.black.opacity(0.001))
+                                        .contentShape(Circle())
+                                        // capture exit button frame
+                                        .background(
+                                            GeometryReader { gp in
+                                                Color.clear
+                                                    .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
+                                                    .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
+                                            }
+                                        )
+                                        .gesture(
+                                            LongPressGesture(minimumDuration: 0.01)
+                                                .onEnded { _ in
+                                                    handleSaveTap()
                                                 }
-                                        }
+                                        )
                                     }
-                                    .id(imageReloadToken)
-                                    .padding(.top, 25)
-                                    .padding(.bottom, 120)
-                                    .padding(.horizontal)
+                                    .frame(width: 70, height: 70)
+                                    .background(Color.black.opacity(0.001))
+                                    .contentShape(Rectangle())
+                                    .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                }
+                                VStack(spacing: 5) {
+                                    VStack {
+                                        VStack(spacing: 5) {
+                                            Image(systemName: "rectangle.on.rectangle")
+                                                .resizable().scaledToFit()
+                                                .frame(width: 20, height: 20)
+                                                .fontWeight(.bold)
+                                            
+                                            Text("Clone")
+                                                .font(.custom("Nunito-Black", size: 11))
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.7)
+                                                .allowsTightening(true)
+                                        }
+                                        .frame(width: 60, height: 60)
+                                        .background(Color.black.opacity(0.001))
+                                        .contentShape(Circle())
+                                        // capture exit button frame
+                                        .background(
+                                            GeometryReader { gp in
+                                                Color.clear
+                                                    .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
+                                                    .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
+                                            }
+                                        )
+                                        .gesture(
+                                            LongPressGesture(minimumDuration: 0.01)
+                                                .onEnded { _ in
+                                                    handleCloneTap()
+                                                }
+                                        )
+                                    }
+                                    .frame(width: 70, height: 70)
+                                    .background(Color.black.opacity(0.001))
+                                    .contentShape(Rectangle())
+                                    .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
+                                }
+                                VStack(spacing: 5) {
+                                    VStack {
+                                        VStack(spacing: 5) {
+                                            Image(systemName: "square.and.arrow.up")
+                                                .resizable().scaledToFit()
+                                                .frame(width: 20, height: 20)
+                                                .fontWeight(.bold)
+                                            
+                                            Text("Share")
+                                                .font(.custom("Nunito-Black", size: 11))
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.7)
+                                                .allowsTightening(true)
+                                        }
+                                        .frame(width: 60, height: 60)
+                                        .background(Color.black.opacity(0.001))
+                                        .contentShape(Circle())
+                                        // capture exit button frame
+                                        .background(
+                                            GeometryReader { gp in
+                                                Color.clear
+                                                    .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
+                                                    .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
+                                            }
+                                        )
+                                        .gesture(
+                                            LongPressGesture(minimumDuration: 0.01)
+                                                .onEnded { _ in
+                                                    handleShareTap()
+                                                }
+                                        )
+                                    }
+                                    .frame(width: 70, height: 70)
+                                    .background(Color.black.opacity(0.001))
+                                    .contentShape(Rectangle())
+                                    .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
                                 }
                             }
                         }
+                        .shadow(color: Color(hex: 0x000000).opacity(0.15), radius: 4)
                     }
+                }
+                .coordinateSpace(name: "exitbar")   // ← add this
+                .padding(.bottom, 10)
+                
+            }
+            .overlay {
+                if progressLoading {
+                    ZStack {
+                        Color.black.opacity(0.35).ignoresSafeArea()
+                        VStack(spacing: 10) {
+                            ProgressView("Saving Ranko…") // 👈 your requested copy
+                                .padding(.vertical, 8)
+                            Text("Waiting for Firebase + Algolia")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+                        .padding(18)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .transition(.opacity)
+                    .zIndex(999)
                 }
             }
-            
-            VStack {
-                Spacer()
-                HStack {
-                    GlassEffectContainer(spacing: 45) {
-                        HStack(alignment: .bottom, spacing: 10) {
-                            VStack(spacing: 5) {
-                                VStack {
-                                    VStack(spacing: 5) {
-                                        Image(systemName: "bookmark.fill")
-                                            .resizable().scaledToFit()
-                                            .frame(width: 20, height: 20)
-                                            .fontWeight(.bold)
-                                            .foregroundStyle(isSaved ? Color.yellow : Color.black)
-                                            .pulse($isSaved)
-                                        
-                                        Text("Save")
-                                            .font(.custom("Nunito-Black", size: 11))
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.7)
-                                            .allowsTightening(true)
-                                    }
-                                    .frame(width: 60, height: 60)
-                                    .background(Color.black.opacity(0.001))
-                                    .contentShape(Circle())
-                                    // capture exit button frame
-                                    .background(
-                                        GeometryReader { gp in
-                                            Color.clear
-                                                .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
-                                                .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
-                                        }
-                                    )
-                                    .gesture(
-                                        LongPressGesture(minimumDuration: 0.01)
-                                            .onEnded { _ in
-                                                handleSaveTap()
-                                            }
-                                    )
-                                }
-                                .frame(width: 70, height: 70)
-                                .background(Color.black.opacity(0.001))
-                                .contentShape(Rectangle())
-                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                            }
-                            VStack(spacing: 5) {
-                                VStack {
-                                    VStack(spacing: 5) {
-                                        Image(systemName: "rectangle.on.rectangle")
-                                            .resizable().scaledToFit()
-                                            .frame(width: 20, height: 20)
-                                            .fontWeight(.bold)
-                                        
-                                        Text("Clone")
-                                            .font(.custom("Nunito-Black", size: 11))
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.7)
-                                            .allowsTightening(true)
-                                    }
-                                    .frame(width: 60, height: 60)
-                                    .background(Color.black.opacity(0.001))
-                                    .contentShape(Circle())
-                                    // capture exit button frame
-                                    .background(
-                                        GeometryReader { gp in
-                                            Color.clear
-                                                .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
-                                                .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
-                                        }
-                                    )
-                                    .gesture(
-                                        LongPressGesture(minimumDuration: 0.01)
-                                            .onEnded { _ in
-                                                handleCloneTap()
-                                            }
-                                    )
-                                }
-                                .frame(width: 70, height: 70)
-                                .background(Color.black.opacity(0.001))
-                                .contentShape(Rectangle())
-                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                            }
-                            VStack(spacing: 5) {
-                                VStack {
-                                    VStack(spacing: 5) {
-                                        Image(systemName: "square.and.arrow.up")
-                                            .resizable().scaledToFit()
-                                            .frame(width: 20, height: 20)
-                                            .fontWeight(.bold)
-                                        
-                                        Text("Share")
-                                            .font(.custom("Nunito-Black", size: 11))
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.7)
-                                            .allowsTightening(true)
-                                    }
-                                    .frame(width: 60, height: 60)
-                                    .background(Color.black.opacity(0.001))
-                                    .contentShape(Circle())
-                                    // capture exit button frame
-                                    .background(
-                                        GeometryReader { gp in
-                                            Color.clear
-                                                .onAppear { addFrame = gp.frame(in: .named("exitbar")) }
-                                                .onChange(of: gp.size) { _, _ in addFrame = gp.frame(in: .named("exitbar")) }
-                                        }
-                                    )
-                                    .gesture(
-                                        LongPressGesture(minimumDuration: 0.01)
-                                            .onEnded { _ in
-                                                handleShareTap()
-                                            }
-                                    )
-                                }
-                                .frame(width: 70, height: 70)
-                                .background(Color.black.opacity(0.001))
-                                .contentShape(Rectangle())
-                                .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                            }
-                        }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
                     }
-                    .shadow(color: Color(hex: 0x000000).opacity(0.15), radius: 4)
+                    .tint(Color(hex: 0x000000))
+                }
+                ToolbarItem(placement: .principal) {
+                    RankoToolbarTitleStack(
+                        name: rankoName,
+                        description: description,
+                        isPrivate: $isPrivate,
+                        categoryName: categoryName,
+                        categoryIcon: categoryIcon,
+                        categoryColour: categoryColour,
+                        showEditDetailsSheet: $showEditDetailsSheet,
+                        onTapPrivacy: {  },   // or: { isPrivate.toggle() }
+                        onTapCategory: {  }
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(rankoName). \(description). \(isPrivate ? "Private" : "Public"). \(categoryName)")
                 }
             }
-            .coordinateSpace(name: "exitbar")   // ← add this
-            .padding(.bottom, 10)
-            
-        }
-        .overlay {
-            if progressLoading {
-                ZStack {
-                    Color.black.opacity(0.35).ignoresSafeArea()
-                    VStack(spacing: 10) {
-                        ProgressView("Saving Ranko…") // 👈 your requested copy
-                            .padding(.vertical, 8)
-                        Text("Waiting for Firebase + Algolia")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                    }
-                    .padding(18)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-                .transition(.opacity)
-                .zIndex(999)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color.white.opacity(0.92), for: .navigationBar)
+            .interactiveDismissDisabled(progressLoading) // block sheet swipe
+            .disabled(progressLoading)                   // block touches
+            .refreshable {
+                refreshItemImages()
             }
-        }
-        .interactiveDismissDisabled(progressLoading) // block sheet swipe
-        .disabled(progressLoading)                   // block touches
-        .refreshable {
-            refreshItemImages()
-        }
-        .onAppear {
-            loadListFromFirebase()
-            refreshItemImages()
-        }
-//        .fullScreenCover(isPresented: $showCloneSheet) {
-//            DefaultListView(
-//                rankoName: rankoName,
-//                description: description,
-//                isPrivate: isPrivate,
-//                category: SampleCategoryChip(
-//                    id: categoryName,
-//                    name: categoryName,
-//                    icon: categoryIcon,
-//                    colour: categoryColour,
-//                    onSave: { _ in }
-//                )
-//            )
-//        }
-        .sheet(isPresented: $showExportSheet) {
-            NavigationStack {
-                Form {
-                    Section("Options") {
-                        Toggle("Include Creator", isOn: $exportIncludeCreator)
-                        Toggle("Dark Mode", isOn: $exportDarkMode)
-                        Toggle("Show Item Descriptions", isOn: $exportShowItemDescriptions)
-                        Toggle("Show Ranks", isOn: $exportShowRanks)
-                    }
-                    if let img = generatedImage {
-                        Section("Preview") {
-                            ScrollView([.vertical, .horizontal]) {
-                                Image(uiImage: img).resizable().scaledToFit()
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .frame(minHeight: 240)
+            .onAppear {
+                loadListFromFirebase()
+                refreshItemImages()
+            }
+            //        .fullScreenCover(isPresented: $showCloneSheet) {
+            //            DefaultListView(
+            //                rankoName: rankoName,
+            //                description: description,
+            //                isPrivate: isPrivate,
+            //                category: SampleCategoryChip(
+            //                    id: categoryName,
+            //                    name: categoryName,
+            //                    icon: categoryIcon,
+            //                    colour: categoryColour,
+            //                    onSave: { _ in }
+            //                )
+            //            )
+            //        }
+            .sheet(isPresented: $showExportSheet) {
+                NavigationStack {
+                    Form {
+                        Section("Options") {
+                            Toggle("Include Creator", isOn: $exportIncludeCreator)
+                            Toggle("Dark Mode", isOn: $exportDarkMode)
+                            Toggle("Show Item Descriptions", isOn: $exportShowItemDescriptions)
+                            Toggle("Show Ranks", isOn: $exportShowRanks)
                         }
-                    }
-                }
-                .navigationTitle("Export Ranko")
-                .toolbar {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        Button("Regenerate") {
-                            Task { generatedImage = await renderExportImage() }
-                        }
-                        Button("Save to Photos") {
-                            Task {
-                                if let img = await renderExportImage() { saveToPhotos(img) }
+                        if let img = generatedImage {
+                            Section("Preview") {
+                                ScrollView([.vertical, .horizontal]) {
+                                    Image(uiImage: img).resizable().scaledToFit()
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .frame(minHeight: 240)
                             }
                         }
-                        Button("Share…") {
-                            Task {
+                    }
+                    .navigationTitle("Export Ranko")
+                    .toolbar {
+                        ToolbarItemGroup(placement: .bottomBar) {
+                            Button("Regenerate") {
+                                Task { generatedImage = await renderExportImage() }
+                            }
+                            Button("Save to Photos") {
+                                Task {
+                                    if let img = await renderExportImage() { saveToPhotos(img) }
+                                }
+                            }
+                            Button("Share…") {
+                                Task {
+                                    generatedImage = await renderExportImage()
+                                    showShareController = true
+                                }
+                            }
+                        }
+                    }
+                    .sheet(isPresented: $showShareController) {
+                        if let img = generatedImage {
+                            ShareSheet(items: [img])
+                        }
+                    }
+                    .onAppear {
+                        if generatedImage == nil {
+                            Task {                      // hop into an async context
                                 generatedImage = await renderExportImage()
-                                showShareController = true
                             }
-                        }
-                    }
-                }
-                .sheet(isPresented: $showShareController) {
-                    if let img = generatedImage {
-                        ShareSheet(items: [img])
-                    }
-                }
-                .onAppear {
-                    if generatedImage == nil {
-                        Task {                      // hop into an async context
-                            generatedImage = await renderExportImage()
                         }
                     }
                 }
@@ -562,7 +602,7 @@ struct DefaultListSpectate: View {
     private func loadListFromFirebase() {
         let ref = Database.database().reference()
             .child("RankoData")
-            .child(listID)
+            .child(rankoID)
 
         func parseColourToUInt(_ any: Any?) -> UInt {
             // accepts: "0xFFCF00", "#FFCF00", "FFCF00", 16763904, NSNumber, etc.
@@ -596,7 +636,7 @@ struct DefaultListSpectate: View {
                 // category
                 let catName  = (cat?["name"] as? String) ?? ""
                 let catIcon  = (cat?["icon"] as? String) ?? "circle"
-                let catColour = parseColourToUInt(cat?["colour"])
+                let catColour = (cat?["colour"] as? String) ?? "0x000000"
 
                 // items
                 let parsedItems: [RankoItem] = items.compactMap { (k, v) in
@@ -630,7 +670,9 @@ struct DefaultListSpectate: View {
                 originalRankoName = name
                 originalDescription = des
                 originalIsPrivate = priv
-                originalCategory = category // keep as-is if you use SampleCategoryChip elsewhere
+                originalCategoryName = catName
+                originalCategoryIcon = catIcon
+                originalCategoryColour = catColour
                 return
             }
 
@@ -641,11 +683,11 @@ struct DefaultListSpectate: View {
 
             var catName = ""
             var catIcon = "circle"
-            var catColourUInt: UInt = 0x446D7A
+            var catColourUInt = "0x000000"
             if let catObj = root["RankoCategory"] as? [String: Any] {
                 catName = (catObj["name"] as? String) ?? ""
                 catIcon = (catObj["icon"] as? String) ?? "circle"
-                catColourUInt = parseColourToUInt(catObj["colour"])
+                catColourUInt = (catObj["colour"] as? String) ?? "0x000000"
             } else if let catStr = root["RankoCategory"] as? String {
                 catName = catStr
             }
@@ -679,7 +721,9 @@ struct DefaultListSpectate: View {
             originalRankoName = name
             originalDescription = des
             originalIsPrivate = priv
-            originalCategory = category
+            originalCategoryName = catName
+            originalCategoryIcon = catIcon
+            originalCategoryColour = catColourUInt
         }
     }
 
@@ -914,7 +958,7 @@ struct RankoExportView: View {
     let description: String
     let categoryName: String
     let categoryIcon: String?
-    let categoryColour: UInt
+    let categoryColour: String
     let creatorName: String?
     let items: [RankoItem]
     let darkMode: Bool

@@ -53,6 +53,8 @@ struct ExploreView: View {
     @State private var toastMessage = ""
     @State private var toastID = UUID()
     @State private var toastDismissWorkItem: DispatchWorkItem?
+    @State private var selectedList: RankoList?
+    @State private var clonedList: RankoList?
     
     @State private var showBlindSequence = false
     
@@ -580,10 +582,29 @@ struct ExploreView: View {
                                     // ✅ FEED (HORIZONTAL)
                                     LazyHStack(spacing: 14) {
                                         ForEach(feedLists, id: \.id) { list in
-                                            DefaultListExploreView(listData: list) { msg in showComingSoonToast(msg) }
-                                                .onTapGesture {
-                                                    // open spectate/vote if you want
-                                                }
+                                            if list.type == "default" {
+                                                DefaultListExploreView(
+                                                    listData: list,
+                                                    onCommentTap: { msg in
+                                                        showComingSoonToast(msg)
+                                                    },
+                                                    onRankoTap: { _ in
+                                                        selectedList = list
+                                                    },
+                                                    onProfileTap: { _ in }
+                                                )
+                                            } else if list.type == "tier" {
+                                                TierListExploreView(
+                                                    listData: list,
+                                                    onCommentTap: { msg in
+                                                        showComingSoonToast(msg)
+                                                    },
+                                                    onRankoTap: { _ in
+                                                        selectedList = list
+                                                    },
+                                                    onProfileTap: { _ in }
+                                                )
+                                            }
                                         }
                                     }
                                     .scrollTargetLayout()
@@ -625,6 +646,23 @@ struct ExploreView: View {
                 )
                 .interactiveDismissDisabled()
         }
+        
+        .fullScreenCover(item: $selectedList) { list in
+            if list.type == "default" {
+                DefaultListSpectate(rankoID: list.id, onClone: {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        clonedList = list
+                    }
+                })
+            } else if list.type == "tier" {
+                TierListPersonal(rankoID: list.id, onSave: { _ in } )
+            }
+        }
+        
+        .fullScreenCover(item: $clonedList) { list in
+            DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, selectedRankoItems: list.items, onSave: { _ in})
+        }
+        
         .onAppear {
             user_data.userID = Auth.auth().currentUser?.uid ?? "0"
             listViewID = UUID()
@@ -697,6 +735,8 @@ struct DefaultListExploreView: View {
     @State private var spectateProfile: Bool = false
     @State private var openShareView: Bool = false
     var onCommentTap: (String) -> Void
+    var onRankoTap: (String) -> Void
+    var onProfileTap: (String) -> Void
     
     private var sortedItems: [RankoItem] {
         listData.items.sorted { ($1.votes, $0.rank) < ($0.votes, $1.rank) }
@@ -1216,9 +1256,11 @@ struct DefaultListExploreView: View {
     }
 }
 
-struct GroupListExploreView: View {
+struct TierListExploreView: View {
     let listData: RankoList
-    var showToastHelper: (String) -> Void
+    var onCommentTap: (String) -> Void
+    var onRankoTap: (String) -> Void
+    var onProfileTap: (String) -> Void
 
     private var adjustedItems: [RankoItem] {
         listData.items.map { item in
@@ -1237,17 +1279,15 @@ struct GroupListExploreView: View {
             listName: listData.listName,
             listDescription: listData.listDescription,
             type: listData.type,
-            categoryName: "Albums",
-            categoryIcon: "circle.circle",
-            categoryColour: 0xFFFFFF,
+            categoryName: listData.categoryName,
+            categoryIcon: listData.categoryIcon,
+            categoryColour: listData.categoryColour,
             isPrivate: listData.isPrivate,
             userCreator: listData.userCreator,
             timeCreated: listData.timeUpdated,
             timeUpdated: listData.timeUpdated,
             items: adjustedItems
-        ), onCommentTap: { msg in
-            showToastHelper(msg)
-          })
+        ), onCommentTap: onCommentTap, onRankoTap: onRankoTap, onProfileTap: onProfileTap)
     }
 }
 

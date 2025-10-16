@@ -25,7 +25,7 @@ let layoutTemplates: [LayoutTemplate] = [
     LayoutTemplate(name: "Radar Layout",    description: "Statistical Overview",          imageName: "RadarLayout",    category: "Other",       disabled: true),
     LayoutTemplate(name: "Timeline Layout", description: "Show Best for Each Year",       imageName: "TimelineLayout", category: "Other",       disabled: true),
     LayoutTemplate(name: "Default List",    description: "Standard list layout",          imageName: "DefaultList",    category: "Popular",     disabled: false),
-    LayoutTemplate(name: "Group List",      description: "Grouped items layout",          imageName: "GroupList",      category: "Popular",     disabled: false),
+    LayoutTemplate(name: "Group List",      description: "Grouped items layout",          imageName: "TierList",      category: "Popular",     disabled: false),
     LayoutTemplate(name: "Tier List",       description: "Rank items into tiers",         imageName: "TierList",       category: "Popular",     disabled: true),
     LayoutTemplate(name: "Football Lineup", description: "Set up a team formation",       imageName: "FootballLineup", category: "Sports",      disabled: true),
     LayoutTemplate(name: "World Map",       description: "Rank Countries",                imageName: "WorldMap",       category: "Geography",   disabled: true),

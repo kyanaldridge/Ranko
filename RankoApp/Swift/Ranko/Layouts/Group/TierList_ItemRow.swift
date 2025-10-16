@@ -1,5 +1,5 @@
 //
-//  GroupList_ItemRow.swift
+//  TierList_ItemRow.swift
 //  RankoTestViewer
 //
 //  Created by Kyan Aldridge on 10/6/2025.
@@ -8,7 +8,7 @@
 import SwiftUI
 
 // MARK: – Row Subview for a Selected Item
-struct GroupListItemRow: View {
+struct TierListItemRow: View {
     let item: RankoItem
 
     private var badge: some View {
