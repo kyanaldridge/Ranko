@@ -170,7 +170,7 @@ struct SettingsView: View {
                 )
                 .interactiveDismissDisabled()
         }
-        .sheet(isPresented: $rankoProView) {
+        .fullScreenCover(isPresented: $rankoProView) {
             RankoPlatinumView()
                 .navigationTransition(
                     .zoom(sourceID: "Ranko Platinum", in: transition)
@@ -370,96 +370,146 @@ func clearAllCache() {
     print("✅ All caches cleared")
 }
 
+typealias RenewalInfo = Product.SubscriptionInfo.RenewalInfo
+typealias RenewalState = Product.SubscriptionInfo.RenewalState
+
 enum SubscriptionDebugger {
     static func printAll() async {
         let user = UserInformation.shared
         print("🧾 ===== SUBSCRIPTION DEBUG @ \(fmt(Date())) =====")
 
-        var sawAny = false
         let platinumPlans: Set<String> = ["platinum_weekly","platinum_monthly","platinum_yearly"]
 
+        var activeTx: StoreKit.Transaction?
+        var activeStatusRenewalInfo: RenewalInfo?
+        var activeStatusRenewalState: RenewalState?
+        var sawAny = false
+
+        // Iterate + choose the "most active" entitlement in the platinum group
         for await result in StoreKit.Transaction.currentEntitlements {
             switch result {
             case .verified(let tx):
                 guard tx.productType == .autoRenewable,
                       platinumPlans.contains(tx.productID) else { continue }
                 sawAny = true
-                await updateAndPrint(for: tx, user: user)   // 👈 writes happen on MainActor inside
-                print("------------------------------------------------")
+
+                // fetch status for this product id
+                if let prod = await product(for: tx.productID),
+                   let status = try? await prod.subscription?.status.first {
+
+                    // prefer state .subscribed
+                    let isSubscribed = (status.state == .subscribed)
+                    let txIsBetter: Bool = {
+                        guard let cur = activeTx else { return true }
+                        if isSubscribed, activeStatusRenewalState != .subscribed { return true }
+                        if let a = tx.expirationDate, let b = cur.expirationDate { return a > b }
+                        return false
+                    }()
+
+                    if txIsBetter {
+                        activeTx = tx
+                        if case .verified(let r) = status.renewalInfo {
+                            activeStatusRenewalInfo = r
+                        } else {
+                            activeStatusRenewalInfo = nil
+                        }
+                    }
+                }
+
             case .unverified(let tx, let err):
                 print("⚠️ unverified \(tx.productID): \(err.localizedDescription)")
             }
         }
 
-        if !sawAny {
+        if !sawAny || activeTx == nil {
             await MainActor.run {
+                user.platinumAnyActive = false
                 user.platinumUser = false
                 user.platinumStatus = "Not Active"
+                user.platinumAutoRenewPreferenceID = nil
+                user.platinumAutoRenewPreferencePrice = nil
             }
             print("ℹ️ no active platinum entitlement found")
+            print("✅ ===== END SUBSCRIPTION DEBUG =================")
+            return
         }
 
+        // Write details for the chosen active entitlement
+        await updateAndPrint(for: activeTx!, renewalInfo: activeStatusRenewalInfo, user: user)
         print("✅ ===== END SUBSCRIPTION DEBUG =================")
     }
 
     // ⬇️ gather off-main, then assign on-main
     private static func updateAndPrint(for tx: StoreKit.Transaction,
+                                       renewalInfo: RenewalInfo?,
                                        user: UserInformation) async {
-        // Compute everything we need (off main thread is fine)
-        let product = await product(for: tx.productID)
+        // current product + status
+        let currentProduct = await product(for: tx.productID)
+
         var renewalState = 0
         var willAutoRenew = false
         var renewalDate: Date?
         var expirationReason: String?
         var isInBillingRetry = false
+        var autoRenewPreferenceID: String?
+        var autoRenewPreferencePrice: String?
 
-        if let sub = product?.subscription {
+        if let sub = currentProduct?.subscription {
             do {
                 if let s = try await sub.status.first {
                     renewalState = s.state.rawValue
                     if case .verified(let r) = s.renewalInfo {
                         willAutoRenew = r.willAutoRenew
                         renewalDate = r.renewalDate
-                        print("1")
                         expirationReason = r.expirationReason.map { String(describing: $0) }
                         isInBillingRetry = r.isInBillingRetry
+                        autoRenewPreferenceID = r.autoRenewPreference   // ← next plan (if set)
+
+                        if let nextID = autoRenewPreferenceID,
+                           let nextProd = await product(for: nextID) {
+                            autoRenewPreferencePrice = nextProd.displayPrice
+                        }
                     }
                 }
             } catch {
                 print("⚠️ couldn’t fetch subscription.status(): \(error)")
             }
         }
-        
+
         let renewalStateVal      = renewalState
         let willAutoRenewVal     = willAutoRenew
         let renewalDateVal       = renewalDate
         let expirationReasonVal  = expirationReason
         let isInBillingRetryVal  = isInBillingRetry
+        let autoPrefIDVal        = autoRenewPreferenceID
+        let autoPrefPriceVal     = autoRenewPreferencePrice
 
-        // Now write to @AppStorage on the main actor
+        // Now write to @AppStorage / @Published on the main actor
         await MainActor.run {
+            user.platinumAnyActive = true
+
             user.platinumPlan = tx.productID
             user.platinumID = Int(tx.id)
             user.platinumOriginalID = Int(tx.originalID)
             user.platinumPurchaseDate = tx.purchaseDate
             user.platinumExpireDate = tx.expirationDate
             user.platinumRevocationDate = tx.revocationDate
+            user.platinumSubscriptionGroupID = tx.subscriptionGroupID
 
             if #available(iOS 17.4, *), let t = tx.price {
                 user.platinumPrice = (t as NSDecimalNumber).doubleValue
             }
 
-            // ✅ use the immutable copies here
             user.platinumRenewalState     = renewalStateVal
             user.platinumWillAutoRenew    = willAutoRenewVal
             user.platinumRenewalDate      = renewalDateVal
             user.platinumExpirationReason = expirationReasonVal
             user.platinumIsInBillingRetry = isInBillingRetryVal
 
-            // keep this on main too
-            user.platinumUser = willAutoRenewVal
+            user.platinumAutoRenewPreferenceID    = autoPrefIDVal       // ← next plan, if any
+            user.platinumAutoRenewPreferencePrice = autoPrefPriceVal     // ← display price for next plan
 
-            // status calc…
+            // “Active” vs “Expired/Revoked”
             if let exp = tx.expirationDate, exp < Date() {
                 user.platinumStatus = "Expired"
             } else if tx.revocationDate != nil {
@@ -467,53 +517,21 @@ enum SubscriptionDebugger {
             } else {
                 user.platinumStatus = "Active"
             }
-        }
-        
-        print("id: \(tx.id)")
-        print("expirationDate: \(String(describing: tx.expirationDate ?? nil))")
-        print("price: \(String(describing: tx.price ?? nil))")
-        print("productID: \(tx.productID)")
-        print("productType: \(tx.productType)")
-        print("purchaseDate: \(tx.purchaseDate)")
-        print("advancedCommerceInfo: \(String(describing: tx.advancedCommerceInfo ?? nil))")
-        print("appAccountToken: \(String(describing: tx.appAccountToken ?? nil))")
-        print("appBundleID: \(tx.appBundleID)")
-        print("appTransactionID: \(tx.appTransactionID)")
-        print("currency: \(String(describing: tx.currency ?? nil))")
-        print("deviceVerification: \(tx.deviceVerification)")
-        print("deviceVerificationNonce: \(tx.deviceVerificationNonce)")
-        print("environment: \(tx.environment)")
-        print("isUpgraded: \(tx.isUpgraded)")
-        print("jsonRepresentation: \(tx.jsonRepresentation)")
-        print("offer: \(String(describing: tx.offer ?? nil))")
-        print("originalID: \(tx.originalID)")
-        print("originalPurchaseDate: \(tx.originalPurchaseDate)")
-        print("ownershipType: \(tx.ownershipType)")
-        print("reason: \(tx.reason)")
-        print("revocationDate: \(String(describing: tx.revocationDate ?? nil))")
-        print("revocationReason: \(String(describing: tx.revocationReason ?? nil))")
-        print("signedDate: \(tx.signedDate)")
-        print("storefront: \(tx.storefront)")
-        print("subscriptionGroupID: \(String(describing: tx.subscriptionGroupID ?? nil))")
-        print("debugDescription: \(tx.debugDescription)")
-        print("hashValue: \(tx.hashValue)")
-        print("webOrderLineItemID: \(String(describing: tx.webOrderLineItemID))")
-        
-        user.platinumUser = user.platinumWillAutoRenew
 
-        // Printing can stay off-main
+            // Keep legacy "user" boolean: true only if set to auto-renew
+            user.platinumUser = willAutoRenewVal
+        }
+
+        // Debug print
         print("""
         🏷️ plan: \(user.platinumPlan ?? "nil")
         id/original: \(user.platinumID ?? 0)/\(user.platinumOriginalID ?? 0)
         purchased: \(fmt(tx.purchaseDate))
         expires: \(fmt(tx.expirationDate))
-        revoked: \(fmt(tx.revocationDate))
-        price: \(user.platinumPrice ?? -1)
-        renewalState: \(user.platinumRenewalState ?? 0)
         willAutoRenew: \(user.platinumWillAutoRenew)
         renewalDate: \(fmt(user.platinumRenewalDate))
-        expirationReason: \(user.platinumExpirationReason ?? "nil")
-        inBillingRetry: \(user.platinumIsInBillingRetry)
+        autoRenewPreferenceID: \(user.platinumAutoRenewPreferenceID ?? "nil")
+        autoRenewPreferencePrice: \(user.platinumAutoRenewPreferencePrice ?? "nil")
         status: \(user.platinumStatus)
         """)
     }
@@ -539,6 +557,32 @@ struct SubscriptionFeatures: Identifiable {
     let description: String
 }
 
+
+
+struct DemoScrollViewOffsetView: View {
+    @State private var offset = CGFloat.zero
+    var body: some View {
+        ScrollView {
+            VStack {
+                ForEach(0..<100) { i in
+                    Text("Item \(i)").padding()
+                }
+            }.background(GeometryReader {
+                Color.clear.preference(key: ViewOffsetKey.self,
+                    value: -$0.frame(in: .named("scroll")).origin.y)
+            })
+            .onPreferenceChange(ViewOffsetKey.self) { print("offset >> \($0)") }
+        }.coordinateSpace(name: "scroll")
+    }
+}
+
+struct ViewOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = .zero
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue() // take latest
+    }
+}
+
 // MARK: - RankoPlatinumView
 struct RankoPlatinumView: View {
     @Environment(\.dismiss) private var dismiss
@@ -552,6 +596,15 @@ struct RankoPlatinumView: View {
     @State private var isSyncing = false
     @State private var purchaseInFlight: String?
     @State private var showManageSubscriptions = false
+    @State private var offset = CGFloat.zero
+    
+    private func sizeForOffset(_ offset: CGFloat,
+                               minSize: CGFloat = 16,
+                               maxSize: CGFloat = 22,
+                               threshold: CGFloat = 50) -> CGFloat {
+        let t = min(max(offset / threshold, 0), 1) // 0..1
+        return maxSize + (minSize - maxSize) * t   // linear interpolation
+    }
     
     // sample features
     private let features: [SubscriptionFeatures] = [
@@ -563,76 +616,76 @@ struct RankoPlatinumView: View {
     ]
     
     var body: some View {
-        VStack(spacing: 0) {
-            // dismiss button
-            HStack {
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 18, weight: .black))
-                        .padding(10)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .foregroundColor(.black.opacity(0.75))
-                .padding(.trailing, 16)
-                .padding(.top, 12)
-            }
-            
-            // header
-            VStack(spacing: 14) {
-                Image("Platinum_AppIcon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 120)
-                    .shadow(radius: 8, y: 4)
-                
-                Text("BECOME A PLATINUM MEMBER")
-                    .font(.custom("Nunito-Black", size: 22))
-                    .kerning(1.1)
-                    .foregroundColor(.black)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-            }
-            .padding(.top, 6)
-            
-            // tabs
-            Picker("", selection: $currentTab) {
-                ForEach(PlatinumTab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            
-            // content
-            Group {
-                switch currentTab {
-                case .features:
-                    featuresTab()
-                case .plans:
-                    if user.platinumUser {
-                        subscribedView()
-                    } else {
-                        plansTab()
+        NavigationView {
+            ZStack {
+                Group {
+                    switch currentTab {
+                    case .features:
+                        featuresTab()
+                    case .plans:
+                        if (user.platinumStatus == "Active") {
+                            subscribedView()
+                        } else {
+                            plansTab()
+                        }
                     }
                 }
             }
-            .padding(.top, 10)
-            
-        }
-        .background(Color.white.ignoresSafeArea())
-        .task {
-            print("RankoPlatinumView Appears")
-            await loadProducts()
-            await SubscriptionDebugger.printAll()       // 👈 refresh on appear
-        }
-        .task {
-            print("Detected Change in Subscriptions")
-            for await _ in StoreKit.Transaction.updates {
-                await SubscriptionDebugger.printAll()   // 👈 refresh on subscription change
+            .background(Color.white.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)      // ensure a visible nav bar
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    // compute sizes from current offset
+                    let dyn = sizeForOffset(offset)        // 22 → 16 as you scroll 0→50
+                    HStack(spacing: 10) {
+                        Image("Platinum_AppIcon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: dyn, height: dyn)               // 22x22 → 16x16
+                            .clipShape(RoundedRectangle(cornerRadius: 6)) // keep your corner style
+
+                        Text("RankoPlatinum")
+                            .font(.custom("Nunito-Black", size: dyn))     // 22 → 16
+
+                        Spacer()
+
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .bold))
+                                .padding(8)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .foregroundStyle(.black.opacity(0.8))
+                        }
+                    }
+                    .frame(width: CGFloat(user.deviceWidth - 32))
+                }
+
+                // BOTTOM
+                ToolbarItem(placement: .bottomBar) {
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                            currentTab = (currentTab == .features) ? .plans : .features
+                        }
+                    } label: {
+                        Text(currentTab == .features ? "Look At Plans" : "Look At Features")
+                            .font(.custom("Nunito-Black", size: 16))
+                            .padding(.horizontal, 10)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(.black)
+                    .foregroundStyle(Color(.white))
+                }
+            }
+            // (optional) force visible bar if your styles hide it somewhere else:
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbarBackground(.visible, for: .bottomBar)
+            .toolbarColorScheme(.light, for: .bottomBar)
+            .task { await loadProducts(); await SubscriptionDebugger.printAll() }
+            .task {
+                for await _ in StoreKit.Transaction.updates { await SubscriptionDebugger.printAll() }
             }
         }
     }
@@ -640,107 +693,515 @@ struct RankoPlatinumView: View {
     // MARK: - Features
     private func featuresTab() -> some View {
         ScrollView {
-            VStack(spacing: 16) {
-                ForEach(features) { f in
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: f.icon)
-                            .font(.system(size: 18, weight: .bold))
-                            .frame(width: 36, height: 36)
-                            .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(f.title)
-                                .font(.system(size: 16, weight: .semibold))
-                            Text(f.description)
-                                .font(.system(size: 14))
-                                .foregroundColor(.black.opacity(0.65))
-                        }
-                        Spacer()
-                    }
-                    .padding(14)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 14))
-                    .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 3)
+            VStack(alignment: .leading, spacing: 22) {
+
+                // COMPARISON TABLE
+                ComparisonTable(
+                    rows: [
+                        .init(label: "Max Rankos",
+                              freeValue: "15",
+                              platinumValue: "Unlimited",
+                              icon: "list.bullet.rectangle"),
+                        .init(label: "Items per Ranko",
+                              freeValue: "20",
+                              platinumValue: "Unlimited",
+                              icon: "square.stack.3d.down.forward"),
+                        .init(label: "Featured Rankos",
+                              freeValue: "5",
+                              platinumValue: "30",
+                              icon: "pin.fill"),
+                        .init(label: "Ranko Votes",
+                              freeValue: "10",
+                              platinumValue: "30",
+                              icon: "hand.thumbsup.fill")
+                    ],
+                    isPlatinum: user.platinumStatus == "Active"
+                )
+                .padding(.horizontal, 16)
+
+                // CREATIVE / POWER FEATURES
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Everything you’ll unlock")
+                        .font(.custom("Nunito-Black", size: 18))
+                        .padding(.horizontal, 16)
+
+                    FeatureGrid(items: [
+                        .init(title: "Custom Images",          icon: "photo.fill",
+                              desc: "add your own images to rankos"),
+                        .init(title: "Save As Image",          icon: "square.and.arrow.down.fill",
+                              desc: "export rankos to your camera roll"),
+                        .init(title: "Tags",                   icon: "tag.fill",
+                              desc: "organise with smart tags"),
+                        .init(title: "Folders",                icon: "folder.fill",
+                              desc: "group rankos your way"),
+                        .init(title: "Offline Download",       icon: "arrow.down.circle.fill",
+                              desc: "view rankos without internet"),
+                        .init(title: "Platinum App Icons",     icon: "app.fill",
+                              desc: "exclusive alternate icons"),
+                        .init(title: "Clone Others’ Rankos",   icon: "doc.on.doc.fill",
+                              desc: "copy and customise instantly"),
+                        .init(title: "Save Others’ Rankos",    icon: "bookmark.fill",
+                              desc: "keep favourites in your library"),
+                        .init(title: "Archive Rankos",         icon: "archivebox.fill",
+                              desc: "declutter without deleting"),
+                        .init(title: "Recover Deleted",        icon: "arrow.uturn.backward.circle.fill",
+                              desc: "view & restore deletions"),
+                        .init(title: "Filter Community",       icon: "line.3.horizontal.decrease.circle.fill",
+                              desc: "powerful community filters"),
+                        .init(title: "Platinum Themes",        icon: "paintpalette.fill",
+                              desc: "extra themes, fonts, borders"),
+                        .init(title: "Support Developer",            icon: "hands.sparkles.fill",
+                              desc: "please help me out so I can continue making the app better :)"),
+                        .init(title: "More Coming",            icon: "sparkles",
+                              desc: "continuous new perks")
+                    ])
                     .padding(.horizontal, 16)
                 }
-                
-                Button {
-                    withAnimation { currentTab = .plans }
-                } label: {
-                    Text("LOOK AT PLANS")
-                        .font(.custom("Nunito-Black", size: 16))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.black, in: RoundedRectangle(cornerRadius: 14))
-                        .foregroundColor(.white)
+                .padding(.bottom, 24)
+            }
+            .padding(.top, 10)
+            .background(
+                GeometryReader {
+                    Color.clear.preference(key: ViewOffsetKey.self,
+                                           value: -$0.frame(in: .named("scroll")).origin.y)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 28)
-                
-                Button("Manage My Subscriptions") {
-                    showManageSubscriptions = true
+            )
+            .onPreferenceChange(ViewOffsetKey.self) { newOffset in
+                withAnimation(.easeOut(duration: 0.15)) {
+                    offset = newOffset
                 }
-                .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
-                .padding(.bottom, 20)
+            }
+        }
+        .coordinateSpace(name: "scroll")
+    }
+    
+    private struct ComparisonRow: Identifiable {
+        let id = UUID()
+        let label: String
+        let freeValue: String
+        let platinumValue: String
+        let icon: String
+    }
+
+    private struct ComparisonTable: View {
+        let rows: [ComparisonRow]
+        let isPlatinum: Bool
+
+        private var columns: [GridItem] {
+            [GridItem(.flexible(minimum: 60)),
+             GridItem(.flexible(minimum: 60))]
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                // header
+                HStack {
+                    Text("Compare")
+                        .font(.custom("Nunito-Black", size: 18))
+                    Spacer()
+                }
+                .padding(.bottom, 4)
+
+                // column labels
+                HStack {
+                    Spacer()
+                    Text("Free")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 100)
+                    Text("RankoPlatinum")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 100)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 6)
+                .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+
+                // rows
+                VStack(spacing: 10) {
+                    ForEach(rows) { r in
+                        HStack(alignment: .center) {
+                            HStack(spacing: 8) {
+                                Image(systemName: r.icon)
+                                    .frame(width: 18)
+                                Text(r.label)
+                                    .font(.custom("Nunito-Black", size: 14))
+                            }
+                            Spacer(minLength: 12)
+                            Text(r.freeValue)
+                                .font(.custom("Nunito-Black", size: 12))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .frame(width: 100)
+                                .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 8))
+
+                            if r.platinumValue == "Unlimited" {
+                                Image(systemName: "infinity")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(Color(hex: 0xFFFFFF))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .frame(width: 100)
+                                    .background(
+                                        Color(hex: 0x546ABE),
+                                        in: RoundedRectangle(cornerRadius: 8)
+                                    )
+                            } else {
+                                Text(r.platinumValue)
+                                    .font(.custom("Nunito-Black", size: 12))
+                                    .foregroundStyle(Color(hex: 0xFFFFFF))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .frame(width: 100)
+                                    .background(
+                                        Color(hex: 0x546ABE),
+                                        in: RoundedRectangle(cornerRadius: 8)
+                                    )
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                    }
+                }
+                .padding(10)
+                .background(.white, in: RoundedRectangle(cornerRadius: 14))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: 6)
+            }
+        }
+    }
+
+    // MARK: - FeatureGrid cards
+    private struct FeatureGridItem: Identifiable {
+        let id = UUID()
+        let title: String
+        let icon: String
+        let desc: String
+    }
+
+    private struct FeatureGrid: View {
+        let items: [FeatureGridItem]
+
+        private var columns: [GridItem] {
+            [GridItem(.flexible(minimum: 140), spacing: 12),
+             GridItem(.flexible(minimum: 140), spacing: 12)]
+        }
+
+        var body: some View {
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(items) { item in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: item.icon)
+                                .font(.custom("Nunito-Black", size: 14))
+                                .frame(width: 30, height: 30)
+                                .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+                            Text(item.title)
+                                .font(.custom("Nunito-Black", size: 14))
+                        }
+                        Text(item.desc)
+                            .font(.custom("Nunito-Black", size: 11))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                }
             }
         }
     }
     
     // MARK: - Subscribed View
     private func subscribedView() -> some View {
-        VStack(spacing: 20) {
-            Text("You’re currently subscribed to **\(prettyPlanName(user.platinumPlan))**")
-                .font(.system(size: 16))
-            
-            if let expire = user.platinumExpireDate {
-                Text("Expires on \(expire.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
+        // helpers
+        func productFor(_ id: String?) -> Product? {
+            guard let id else { return nil }
+            return products.first(where: { $0.id == id })
+        }
+        func prettyPlanName(_ id: String?) -> String {
+            switch id {
+            case "platinum_weekly":  return "Weekly"
+            case "platinum_monthly": return "Monthly"
+            case "platinum_yearly":  return "Yearly"
+            default: return "—"
             }
-            
-            Button {
-                Task {
-                    if let scene = UIApplication.shared.connectedScenes
-                        .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-                        try? await AppStore.showManageSubscriptions(in: scene)
+        }
+        func displayPrice(for id: String?) -> String {
+            if let p = productFor(id) { return p.displayPrice }
+            return "—"
+        }
+        func timeRemainingString(until end: Date) -> String {
+            let now = Date()
+            if end <= now { return "0s" }
+            let comps = Calendar.current.dateComponents([.day,.hour,.minute], from: now, to: end)
+            let d = comps.day ?? 0, h = comps.hour ?? 0, m = comps.minute ?? 0
+            if d > 0 { return "\(d)d \(h)h \(m)m" }
+            if h > 0 { return "\(h)h \(m)m" }
+            return "\(m)m"
+        }
+        func formatted(_ date: Date?) -> String {
+            guard let date else { return "—" }
+            return date.formatted(date: .abbreviated, time: .shortened)
+        }
+
+        // pull current + next
+        let currentPlanID  = user.platinumPlan
+        let currentPlan    = prettyPlanName(currentPlanID)
+        let currentPrice   = displayPrice(for: currentPlanID)
+        let isTrialNow     = (user.platinumPrice ?? 0) == 0 && user.platinumExpireDate != nil
+        let willAutoRenew  = user.platinumWillAutoRenew
+        let renewalDate    = user.platinumRenewalDate
+        let expiryDate     = user.platinumExpireDate
+        let nextPlanID     = user.platinumAutoRenewPreferenceID
+        let nextPlanName   = prettyPlanName(nextPlanID)
+        let nextPlanPrice  = user.platinumAutoRenewPreferencePrice ?? displayPrice(for: nextPlanID)
+        let status         = user.platinumStatus
+
+        return ScrollView {
+            VStack(spacing: 14) {
+
+                // ===== SUMMARY CARD =====
+                InfoCard {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .frame(width: 36, height: 36)
+                            .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 8) {
+                                Text("Your Platinum")
+                                    .font(.custom("Nunito-Black", size: 17))
+                                StatusPill(text: status, scheme: status == "Active" ? .green : .gray)
+                            }
+                            Text("You’re on the **\(currentPlan)** plan.")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
                     }
                 }
-            } label: {
-                Text("Manage Subscription")
-                    .font(.custom("Nunito-Black", size: 15))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.black, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+
+                // ===== CURRENT PERIOD CARD (trial or paid) =====
+                InfoCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(isTrialNow ? "Free Trial" : "Current Period")
+                            .font(.custom("Nunito-Black", size: 16))
+
+                        if isTrialNow {
+                            if let end = expiryDate {
+                                StatRow(icon: "hourglass.tophalf.filled",
+                                        title: "Ends",
+                                        value: formatted(end))
+                                StatRow(icon: "timer",
+                                        title: "Time Remaining",
+                                        value: timeRemainingString(until: end))
+                            }
+                            StatRow(icon: "creditcard",
+                                    title: (nextPlanID != nil && nextPlanID != currentPlanID) ? "Then You’ll Be Charged" : "Next Billing",
+                                    value: formatted(renewalDate))
+                            if nextPlanID != nil && nextPlanID != currentPlanID {
+                                StatRow(icon: "arrow.right.arrow.left.circle.fill",
+                                        title: "Upcoming Plan",
+                                        value: "\(nextPlanName) at \(nextPlanPrice)")
+                            } else if willAutoRenew {
+                                StatRow(icon: "tag.fill",
+                                        title: "Plan & Price",
+                                        value: "\(currentPlan) at \(currentPrice)")
+                            } else {
+                                StatRow(icon: "nosign",
+                                        title: "Auto-Renew",
+                                        value: "Cancelled — privileges end on \(formatted(expiryDate))")
+                            }
+                        } else {
+                            if !willAutoRenew {
+                                StatRow(icon: "calendar.badge.exclamationmark",
+                                        title: "Plan Ends",
+                                        value: formatted(expiryDate))
+                                Text("You’ve cancelled — you’ll **lose Platinum privileges** after this date.")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 2)
+                            } else if let nextID = nextPlanID, nextID != currentPlanID {
+                                StatRow(icon: "calendar",
+                                        title: "Next Billing",
+                                        value: formatted(renewalDate))
+                                StatRow(icon: "arrow.triangle.2.circlepath.circle.fill",
+                                        title: "Switching To",
+                                        value: "\(nextPlanName) at \(nextPlanPrice)")
+                            } else {
+                                StatRow(icon: "calendar",
+                                        title: "Next Billing",
+                                        value: formatted(renewalDate))
+                                StatRow(icon: "tag.fill",
+                                        title: "Plan & Price",
+                                        value: "\(currentPlan) at \(currentPrice)")
+                            }
+
+                            if let end = expiryDate {
+                                Divider().padding(.vertical, 6)
+                                StatRow(icon: "clock",
+                                        title: "Current Period Ends",
+                                        value: formatted(end))
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+
+                // ===== MANAGE / ACTIONS CARD =====
+                InfoCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Manage")
+                            .font(.custom("Nunito-Black", size: 16))
+
+                        HStack(spacing: 10) {
+                            Button {
+                                Task {
+                                    if let scene = UIApplication.shared.connectedScenes
+                                        .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+                                        try? await AppStore.showManageSubscriptions(in: scene)
+                                        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s
+                                        await SubscriptionDebugger.printAll()
+                                    }
+                                }
+                            } label: {
+                                Label("Manage Subscription", systemImage: "gearshape.fill")
+                                    .font(.custom("Nunito-Black", size: 14))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color.black, in: RoundedRectangle(cornerRadius: 12))
+                                    .foregroundColor(.white)
+                            }
+
+                            Button {
+                                Task {
+                                    isSyncing = true
+                                    defer { isSyncing = false }
+                                    try? await AppStore.sync()
+                                    await SubscriptionDebugger.printAll()
+                                }
+                            } label: {
+                                if isSyncing {
+                                    ProgressView().frame(maxWidth: .infinity)
+                                } else {
+                                    Label("Restore Purchases", systemImage: "arrow.clockwise")
+                                        .font(.custom("Nunito-Black", size: 14))
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                            .foregroundColor(.black)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-            .padding(.horizontal, 16)
+            .background(
+                GeometryReader {
+                    Color.clear.preference(key: ViewOffsetKey.self,
+                                           value: -$0.frame(in: .named("scroll")).origin.y)
+                }
+            )
+            .onPreferenceChange(ViewOffsetKey.self) { newOffset in
+                withAnimation(.easeOut(duration: 0.15)) { offset = newOffset }
+            }
         }
-        .padding(.top, 24)
+        .coordinateSpace(name: "scroll")
+    }
+    
+    // Simple card container
+    private struct InfoCard<Content: View>: View {
+        @ViewBuilder var content: () -> Content
+        var body: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                content()
+            }
+            .padding(16)
+            .background(.white, in: RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.08), radius: 10, y: 6)
+        }
+    }
+
+    // Stat row with icon + title + value
+    private struct StatRow: View {
+        let icon: String
+        let title: String
+        let value: String
+        var body: some View {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: icon)
+                    .frame(width: 18)
+                    .foregroundColor(.black.opacity(0.8))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.custom("Nunito-Black", size: 13))
+                        .foregroundColor(.black.opacity(0.8))
+                    Text(value)
+                        .font(.system(size: 14))
+                        .foregroundColor(.black)
+                }
+                Spacer()
+            }
+        }
+    }
+
+    // Little status pill
+    private struct StatusPill: View {
+        enum Scheme { case green, gray, orange, red }
+        let text: String
+        var scheme: Scheme = .green
+        var bg: Color {
+            switch scheme {
+            case .green:  return Color.green.opacity(0.15)
+            case .gray:   return Color.black.opacity(0.08)
+            case .orange: return Color.orange.opacity(0.18)
+            case .red:    return Color.red.opacity(0.15)
+            }
+        }
+        var fg: Color {
+            switch scheme {
+            case .green:  return .green
+            case .gray:   return .secondary
+            case .orange: return .orange
+            case .red:    return .red
+            }
+        }
+        var body: some View {
+            Text(text.uppercased())
+                .font(.custom("Nunito-Black", size: 11))
+                .foregroundColor(fg)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(bg, in: Capsule())
+        }
     }
     
     // MARK: - Plans
     private func plansTab() -> some View {
-        VStack(spacing: 14) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
+        ScrollView {
+            VStack(spacing: 14) {
+                VStack(spacing: 3) {
                     ForEach(sortedProducts(products), id: \.id) { product in
                         PlanCard(product: product,
                                  isActive: user.platinumPlan == product.id,
-                                 isLoading: purchaseInFlight == product.id) {
+                                 isLoading: purchaseInFlight == product.id,
+                                 showIntro: shouldShowIntro(for: product)) {          // ← NEW
                             Task {
                                 purchaseInFlight = product.id
                                 defer { purchaseInFlight = nil }
-                                
                                 do {
                                     let result = try await product.purchase()
                                     print("🛒 purchase result:", result)
-                                    
-                                    if case .success(let verification) = result {
-                                        if case .verified = verification {
-                                            // simply refresh entitlements & fill AppStorage
-                                            print("Detected Successful Payment")
-                                            await SubscriptionDebugger.printAll()
-                                        }
+                                    if case .success(let verification) = result, case .verified = verification {
+                                        print("Detected Successful Payment")
+                                        await SubscriptionDebugger.printAll() // refresh UI
                                     }
                                 } catch {
                                     print("🛒 purchase error:", error.localizedDescription)
@@ -751,39 +1212,86 @@ struct RankoPlatinumView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
-            }
-            
-            Button {
-                Task {
-                    isSyncing = true
-                    defer { isSyncing = false }
-                    try? await AppStore.sync()
-                    print("Detected Restore in Purchases")
-                    await SubscriptionDebugger.printAll()
-                }
-            } label: {
-                if isSyncing { ProgressView() }
-                Text("Restore Purchases")
-            }
-            .padding(.top, 6)
-            
-            Button {
-                Task {
-                    if let scene = UIApplication.shared.connectedScenes
-                        .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-                        try? await AppStore.showManageSubscriptions(in: scene)
+                
+                Button {
+                    Task {
+                        isSyncing = true
+                        defer { isSyncing = false }
+                        try? await AppStore.sync()
+                        print("Detected Restore in Purchases")
+                        await SubscriptionDebugger.printAll()
                     }
+                } label: {
+                    if isSyncing { ProgressView() }
+                    Text("Restore Purchases")
+                        .font(.custom("Nunito-Black", size: 15))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.orange, in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundColor(.white)
                 }
-            } label: {
-                Text("Manage Subscription")
-                    .font(.custom("Nunito-Black", size: 15))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.black, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+                
+                Button {
+                    Task {
+                        print("opening manage subscriptions...")
+                        if let scene = UIApplication.shared.connectedScenes
+                            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+                            
+                            // open Apple's subscription management sheet
+                            try? await AppStore.showManageSubscriptions(in: scene)
+                            
+                            // small delay to let user close it before re-querying StoreKit
+                            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s
+                            
+                            print("🔁 refreshing privileges after manage sheet closed...")
+                            await SubscriptionDebugger.printAll()   // re-loads entitlement info into UserInformation
+                        }
+                    }
+                } label: {
+                    Text("Manage Subscription")
+                        .font(.custom("Nunito-Black", size: 15))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.black, in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
+            .background(
+                GeometryReader {
+                    Color.clear.preference(key: ViewOffsetKey.self,
+                                           value: -$0.frame(in: .named("scroll")).origin.y)
+                }
+            )
+            .onPreferenceChange(ViewOffsetKey.self) { newOffset in
+                withAnimation(.easeOut(duration: 0.15)) { offset = newOffset }
+            }
         }
+        .coordinateSpace(name: "scroll")
+    }
+    
+    private func shouldShowIntro(for product: Product) -> Bool {
+        // if the product has no introductory offer defined, don't show anything
+        guard let _ = product.subscription?.introductoryOffer else { return false }
+
+        // if we don't know the user's group yet, be conservative and show it
+        guard let currentGroup = user.platinumSubscriptionGroupID else { return true }
+
+        // if this product is outside the user's current/most-recent subscription group,
+        // Apple usually allows intro eligibility ⇒ show the line.
+        if product.subscription?.subscriptionGroupID != currentGroup { return true }
+
+        // same group as the one the user has/had:
+        // - if the user is currently in a $0 intro period for THIS product, show it
+        //   (you already set price=0 for current intro transactions)
+        if (user.platinumPrice ?? 1) == 0, user.platinumPlan == product.id {
+            return true
+        }
+
+        // otherwise they've already consumed the intro for this group ⇒ hide it
+        return false
     }
     
     private func prettyPlanName(_ id: String?) -> String {
@@ -805,74 +1313,79 @@ struct RankoPlatinumView: View {
         do { products = try await Product.products(for: Set(productIDs)) }
         catch { print("❌ loadProducts error:", error) }
     }
-}
+    
+    // MARK: - PlanCard
+    private struct PlanCard: View {
+        @StateObject private var user = UserInformation.shared
+        let product: Product
+        let isActive: Bool
+        let isLoading: Bool
+        let showIntro: Bool          // ← NEW
+        let onPurchase: () -> Void
 
-// MARK: - PlanCard
-private struct PlanCard: View {
-    let product: Product
-    let isActive: Bool
-    let isLoading: Bool
-    let onPurchase: () -> Void
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(planName(for: product.id).uppercased())
-                .font(.custom("Nunito-Black", size: 13))
-                .foregroundColor(.black.opacity(0.7))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.black.opacity(0.06), in: Capsule())
-            
-            Text("\(freePeriod(for: product.id)), then".uppercased())
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.black.opacity(0.6))
-            
-            Text(product.displayPrice)
-                .font(.system(size: 28, weight: .black))
-                .foregroundColor(.black)
-            
-            if let period = product.subscription?.subscriptionPeriod {
-                Text("per \(period.unit.localizedUnit)")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black.opacity(0.6))
-            }
-            
-            Spacer(minLength: 0)
-            
-            Button(action: onPurchase) {
-                HStack {
-                    if isLoading { ProgressView().tint(.white) }
-                    Text(isLoading ? "Processing…" : "Choose Plan")
-                        .font(.custom("Nunito-Black", size: 15))
+        var body: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(planName(for: product.id).uppercased())
+                    .font(.custom("Nunito-Black", size: 13))
+                    .foregroundColor(.black.opacity(0.7))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.06), in: Capsule())
+
+                // ⬇️ only show the "one week/month free, then" line when eligible
+                if showIntro {
+                    Text("\(freePeriod(for: product.id)), then".uppercased())
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.black.opacity(0.6))
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(isActive ? Color.black.opacity(0.15) : Color.black,
-                            in: RoundedRectangle(cornerRadius: 12))
-                .foregroundColor(isActive ? .black : .white)
+                
+                HStack {
+                    Text(product.displayPrice)
+                        .font(.system(size: 28, weight: .black))
+                        .foregroundColor(.black)
+                    if let period = product.subscription?.subscriptionPeriod {
+                        Text("per \(period.unit.localizedUnit)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.black.opacity(0.6))
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Button(action: onPurchase) {
+                    HStack {
+                        if isLoading { ProgressView().tint(.white) }
+                        Text(isLoading ? "Processing…" : "Choose \(planName(for: product.id)) Plan")
+                            .font(.custom("Nunito-Black", size: 15))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.black, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundColor(.white)
+                }
+            }
+            .padding(16)
+            .frame(width: CGFloat(user.deviceWidth - 32))
+            .background(.white, in: RoundedRectangle(cornerRadius: 18))
+            .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 5)
+        }
+        
+        private func planName(for id: String) -> String {
+            switch id {
+            case "platinum_weekly":  return "Weekly"
+            case "platinum_monthly": return "Monthly"
+            case "platinum_yearly":  return "Yearly"
+            default:                 return product.displayName
             }
         }
-        .padding(16)
-        .frame(width: 260, height: 220)
-        .background(.white, in: RoundedRectangle(cornerRadius: 18))
-        .shadow(color: .black.opacity(0.05), radius: 12, x: 0, y: 8)
-    }
-    
-    private func planName(for id: String) -> String {
-        switch id {
-        case "platinum_weekly":  return "Weekly"
-        case "platinum_monthly": return "Monthly"
-        case "platinum_yearly":  return "Yearly"
-        default:                 return product.displayName
-        }
-    }
-    
-    private func freePeriod(for id: String) -> String {
-        switch id {
-        case "platinum_weekly":  return "one week free"
-        case "platinum_monthly": return "one month free"
-        case "platinum_yearly":  return "one month free"
-        default:                 return ""
+        
+        private func freePeriod(for id: String) -> String {
+            switch id {
+            case "platinum_weekly":  return "one week free"
+            case "platinum_monthly": return "one month free"
+            case "platinum_yearly":  return "one month free"
+            default:                 return ""
+            }
         }
     }
 }

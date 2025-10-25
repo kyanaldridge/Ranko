@@ -138,7 +138,6 @@ struct DefaultListSpectate: View {
     @State private var draftError: String? = nil
 
     // hold personal images picked for new items -> uploaded on publish
-    @State private var pendingPersonalImages: [String: UIImage] = [:]  // itemID -> image
     @State private var isSaved = false
     @State private var showCloneSheet = false
     @State private var showExportSheet = false
@@ -507,7 +506,6 @@ struct DefaultListSpectate: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(Color.white.opacity(0.92), for: .navigationBar)
             .interactiveDismissDisabled(progressLoading) // block sheet swipe
             .disabled(progressLoading)                   // block touches
             .refreshable {
@@ -517,20 +515,6 @@ struct DefaultListSpectate: View {
                 loadListFromFirebase()
                 refreshItemImages()
             }
-            //        .fullScreenCover(isPresented: $showCloneSheet) {
-            //            DefaultListView(
-            //                rankoName: rankoName,
-            //                description: description,
-            //                isPrivate: isPrivate,
-            //                category: SampleCategoryChip(
-            //                    id: categoryName,
-            //                    name: categoryName,
-            //                    icon: categoryIcon,
-            //                    colour: categoryColour,
-            //                    onSave: { _ in }
-            //                )
-            //            )
-            //        }
             .sheet(isPresented: $showExportSheet) {
                 NavigationStack {
                     Form {

@@ -112,6 +112,10 @@ final class UserInformation: ObservableObject { // App Wide User Variables
     @AppStorage("platinum_expirationReason") var platinumExpirationReason: String?
     @AppStorage("platinum_isInBillingRetry") var platinumIsInBillingRetry: Bool = false
     @AppStorage("platinum_status") var platinumStatus: String = "Not Active"
+    @Published var platinumAutoRenewPreferenceID: String?        // e.g. "platinum_yearly"
+    @Published var platinumAutoRenewPreferencePrice: String?     // display string like "A$79.99"
+    @Published var platinumAnyActive: Bool = false               // true if any active entitlement right now
+    @Published var platinumSubscriptionGroupID: String?
     
     @AppStorage("user_customiser_appIcon") var appIcon: String = "Nunito"
     @AppStorage("user_customiser_appTheme") var appTheme: String = "Default"

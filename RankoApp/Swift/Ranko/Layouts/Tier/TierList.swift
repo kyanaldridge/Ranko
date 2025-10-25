@@ -1,8 +1,8 @@
 //
-//  TierList_Personal.swift
+//  TierList.swift
 //  RankoTestViewer
 //
-//  Created by Kyan Aldridge on 10/6/2025.
+//  Created by Kyan Aldridge on 28/5/2025.
 //
 
 import SwiftUI
@@ -28,8 +28,207 @@ private extension CGPoint {
     func dot(_ p: CGPoint) -> CGFloat { x*p.x + y*p.y }
 }
 
+extension DatabaseReference {
+    func setValueAsync(_ value: Any) async throws {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            self.setValue(value) { err, _ in
+                if let err = err {
+                    cont.resume(throwing: err)
+                } else {
+                    cont.resume()
+                }
+            }
+        }
+    }
+}
+
+protocol OrderedKnob: CaseIterable, Hashable, Identifiable {
+    static var ordered: [Self] { get }
+}
+
 private extension CGRect {
     var center: CGPoint { .init(x: midX, y: midY) }
+}
+
+extension RowLayout: OrderedKnob {
+    static var ordered: [RowLayout] { [.wrap, .noWrap] }
+}
+extension ContentDisplay: OrderedKnob {
+    static var ordered: [ContentDisplay] { [.textAndImage, .textOnly, .imageOnly] }
+}
+extension ItemSize: OrderedKnob {
+    static var ordered: [ItemSize] { [.small, .medium, .large] }
+}
+
+enum RowLayout: String, CaseIterable, Hashable, Identifiable { case wrap, noWrap
+    var id: String { rawValue }
+    var title: String { self == .wrap ? "Wrapped" : "No Wrap" }
+    var icon: String { self == .wrap ? "inset.filled.topleft.topright.bottomhalf.rectangle" : "square.grid.3x1.below.line.grid.1x2.fill" }
+}
+
+enum ContentDisplay: String, CaseIterable, Hashable, Identifiable { case textAndImage, textOnly, imageOnly
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .textAndImage: return "Default"
+        case .textOnly:     return "Text Only"
+        case .imageOnly:    return "Image Only"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .textAndImage: return "text.below.photo.fill"
+        case .textOnly:     return "textformat"
+        case .imageOnly:    return "photo"
+        }
+    }
+}
+
+enum ItemSize: String, CaseIterable, Hashable, Identifiable { case small, medium, large
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .small:  return "Small"
+        case .medium: return "Medium"
+        case .large:  return "Large"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .small:  return "circle.grid.3x3.fill"
+        case .medium: return "square.grid.2x2.fill"
+        case .large:  return "square.fill"
+        }
+    }
+    var thumb: CGFloat { self == .small ? 52 : (self == .medium ? 74 : 120) }
+    var nameFont: CGFloat { self == .small ? 12 : (self == .medium ? 14 : 16) }
+    var descFont: CGFloat { self == .small ? 10 : (self == .medium ? 12 : 13) }
+}
+
+// MARK: - Tiers
+enum Tier: Int, CaseIterable, Identifiable {
+    case s, a, b, c, d, e, f
+    var id: Int { rawValue }
+
+    var letter: String {
+        switch self {
+        case .s: return "S"
+        case .a: return "A"
+        case .b: return "B"
+        case .c: return "C"
+        case .d: return "D"
+        case .e: return "E"
+        case .f: return "F"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .s: return "Legendary"
+        case .a: return "Excellent"
+        case .b: return "Solid"
+        case .c: return "Average"
+        case .d: return "Weak"
+        case .e: return "Poor"
+        case .f: return "Useless"
+        }
+    }
+
+    var color: Color {
+        // tuned to match the sample look
+        switch self {
+        case .s: return Color(hex: 0xC44536) // red
+        case .a: return Color(hex: 0xBF7B2F) // orange
+        case .b: return Color(hex: 0xBFA254) // gold
+        case .c: return Color(hex: 0x4DA35A) // green
+        case .d: return Color(hex: 0x3F7F74) // teal
+        case .e: return Color(hex: 0x3F63A7) // blue
+        case .f: return Color(hex: 0x6C46B3) // purple
+        }
+    }
+}
+
+// The colored square tier box (letter + tiny label)
+struct TierBox: View {
+    let tier: Tier
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(tier.letter)
+                .font(.system(size: 18, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.top, 6)
+                .padding(.horizontal, 16)
+
+            Text(tier.label)
+                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.95))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.bottom, 6)
+                .padding(.horizontal, 6)
+        }
+        .frame(minWidth: 70, minHeight: 50)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(tier.color)
+        )
+        .padding(8)
+        .contextMenu {
+            Button(role: .destructive) {
+                
+            } label: {
+                Label("Delete Tier", systemImage: "trash")
+            }
+        }
+    }
+}
+
+// MARK: - Tier config model (editable)
+struct TierConfig: Identifiable, Hashable {
+    let id: String = UUID().uuidString
+    var code: String      // e.g. "S"
+    var label: String     // e.g. "Legendary"
+    var colorHex: Int     // 0xRRGGBB
+}
+
+extension TierConfig {
+    // full catalog S…Z
+    static let letters: [String] = [
+        "S","A","B","C","D","E","F",
+        "G","H","I","J","K","L","M","N","O","P","Q","R","S2","T","U","V","W","X","Y","Z"
+    ]
+    static let labels: [String] = [
+        "Legendary","Excellent","Solid","Average","Weak","Poor","Useless",
+        "Decent","Okay","Meh","Flawed","Bad","Trash","Low","Bottom",
+        "Minor","Subpar","Rough","Edge","Spare","Under","Vague","Weary","Worn","Xtra","Yield","Zero"
+    ]
+    static let colorsHex: [Int] = [
+        0xC44536, 0xBF7B2F, 0xBFA254, 0x4DA35A, 0x3F7F74, 0x3F63A7, 0x6C46B3,
+        0xA24A3A, 0xA46C33, 0xA89060, 0x3F9251, 0x3A6F69, 0x365A95, 0x5C45A6,
+        0x8F3F33, 0x945F2E, 0x9F8458, 0x368647, 0x316B62, 0x2F568A, 0x523F98,
+        0x7E362B, 0x86572A, 0x927C52, 0x2F7940, 0x2A6158, 0x274E80, 0x47388C
+    ]
+
+    static func defaultForPosition(_ idx: Int) -> TierConfig {
+        let i = max(0, min(idx, letters.count - 1))
+        // special-case already baked in: index 2 = B / Solid / 0xBFA254
+        return TierConfig(code: letters[i], label: labels[i], colorHex: colorsHex[i])
+    }
+
+    /// Use this for first-open in TierListView so you start with exactly N tiers.
+    static func starter(_ count: Int = 3) -> [TierConfig] {
+        return (0..<max(0, count)).map { defaultForPosition($0) }
+    }
+}
+
+// MARK: - Color <-> HEX helpers
+extension Color {
+    init(hex: Int) {
+        let r = Double((hex >> 16) & 0xFF) / 255.0
+        let g = Double((hex >> 8)  & 0xFF) / 255.0
+        let b = Double(hex & 0xFF) / 255.0
+        self = Color(red: r, green: g, blue: b)
+    }
 }
 
 #if canImport(UIKit)
@@ -53,12 +252,8 @@ private func colorToHex(_ color: Color) -> Int {
 }
 #endif
 
-private extension Optional where Wrapped == String {
-    var nilIfEmpty: String? { (self?.isEmpty ?? true) ? nil : self }
-}
-
 // MARK: - GROUP LIST VIEW
-struct TierListPersonal: View {
+struct TierListView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var user_data = UserInformation.shared
     
@@ -66,34 +261,29 @@ struct TierListPersonal: View {
     @AppStorage("group_content_mode") private var contentMode: ContentDisplay = .textAndImage
     @AppStorage("group_size_mode")    private var sizeMode: ItemSize = .medium
     
-    // Required property
-    let rankoID: String
-    
     // MARK: - RANKO LIST DATA
-    @State private var rankoName: String = ""
-    @State private var description: String = ""
-    @State private var isPrivate: Bool = false
+    @State private var rankoID: String = UUID().uuidString
+    @State private var rankoName: String
+    @State private var description: String
+    @State private var isPrivate: Bool
     @State private var categoryName: String = "Unknown"
     @State private var categoryIcon: String = "questionmark"
     @State private var categoryColour: String = "0x000000"
     @State private var tags: [String] = []
     
-    // Original values (to revert if needed)
-    @State private var originalRankoName: String = ""
-    @State private var originalDescription: String = ""
-    @State private var originalIsPrivate: Bool = false
+    // to revert to old values
+    @State private var originalRankoName: String
+    @State private var originalDescription: String
+    @State private var originalIsPrivate: Bool
     @State private var originalCategoryName: String = ""
     @State private var originalCategoryIcon: String = ""
     @State private var originalCategoryColour: String = ""
     
     // Sheet states
-    @State private var possiblyEdited = false
     @State private var showTabBar = true
     @State private var showEmbeddedStickyPoolSheet = false
     @State var showEditDetailsSheet = false
     @State var showAddItemsSheet = false
-    @State private var onSave: (RankoItem) -> Void
-    private let onDelete: (() -> Void)?
     
     @State private var addButtonTapped: Bool = false
     @State private var editButtonTapped: Bool = false
@@ -105,7 +295,6 @@ struct TierListPersonal: View {
     
     @State private var exitFrame: CGRect = .zero
     @State private var saveFrame: CGRect = .zero
-    @State private var cancelFrame: CGRect = .zero
     @State private var deleteFrame: CGRect = .zero
     
     // Blank Items composer
@@ -114,17 +303,8 @@ struct TierListPersonal: View {
     @State private var draftError: String? = nil
     @Namespace private var transition
     
-    // MARK: - ITEM VARIABLES
-    @State private var unGroupedItems: [RankoItem] = []
-    @State private var groupedItems: [[RankoItem]]
-    @State private var selectedDetailItem: RankoItem? = nil
-    
     // MARK: - OTHER VARIABLES (INC. TOAST)
     @State private var hoveredRow: Int? = nil
-    
-    @State private var tiers: [TierConfig] = TierConfig.starter(3)
-    @State private var stagingTiers: [TierConfig] = []   // ← working copy for the sheet
-    @State private var showTierEditor = false
     
     @State private var imageReloadToken = UUID()
     
@@ -150,31 +330,79 @@ struct TierListPersonal: View {
     
     // hold personal images picked for new items -> uploaded on publish
     @State private var pendingPersonalImages: [String: UIImage] = [:]  // itemID -> image
-    // MARK: - INITIALISER
-    init(
-        rankoID: String,
-        rankoName: String? = nil,
-        description: String? = nil,
-        isPrivate: Bool? = nil,
-        groupedItems: [[RankoItem]] = [],     // ← fix type & default
-        onSave: @escaping (RankoItem) -> Void,
-        onDelete: (() -> Void)? = nil
-    ) {
-        self.rankoID = rankoID
-        self.onDelete = onDelete
-        _rankoName = State(initialValue: rankoName ?? "")
-        _description = State(initialValue: description ?? "")
-        _isPrivate = State(initialValue: isPrivate ?? false)
-        _groupedItems = State(initialValue: groupedItems)       // ← no force-cast
-        _onSave = State(initialValue: onSave)
+    
+    
+    // MARK: - ITEM VARIABLES
+        @State private var unGroupedItems: [RankoItem] = []
+        @State private var groupedItems: [[RankoItem]]
+        @State private var selectedDetailItem: RankoItem? = nil
 
-        _originalRankoName = State(initialValue: rankoName ?? "")
-        _originalDescription = State(initialValue: description ?? "")
-        _originalIsPrivate = State(initialValue: isPrivate ?? false)
-        _originalCategoryName = State(initialValue: categoryName)
-        _originalCategoryIcon = State(initialValue: categoryIcon)
-        _originalCategoryColour = State(initialValue: categoryColour)
-    }
+        private let seedItems: [RankoItem]
+
+        @State private var tiers: [TierConfig] = TierConfig.starter(3)
+        @State private var stagingTiers: [TierConfig] = []
+        @State private var showTierEditor = false
+
+        // ─────────────────────────────────────────────────────────────────────────────
+        // 1) make this STATIC so it doesn't touch `self` during init
+        private static func organizeItemsIntoRows(_ items: [RankoItem], minRowCount: Int) -> [[RankoItem]] {
+            @inline(__always)
+            func decode(_ r: Int) -> (row: Int, pos: Int) {
+                if r >= 1000 { return (max(1, r / 1000), max(1, r % 1000)) }
+                return (1, max(1, r))
+            }
+            let maxRowFromData = items.map { decode($0.rank).row }.max() ?? 0
+            let rowCount = max(minRowCount, maxRowFromData)
+
+            var buckets = Array(repeating: [RankoItem](), count: rowCount)
+            for it in items {
+                let (row, _) = decode(it.rank)
+                let idx = min(max(1, row), rowCount) - 1
+                buckets[idx].append(it)
+            }
+            for i in buckets.indices {
+                buckets[i].sort { a, b in
+                    let pa = decode(a.rank).pos, pb = decode(b.rank).pos
+                    if pa != pb { return pa < pb }
+                    if a.rank != b.rank { return a.rank < b.rank }
+                    return a.id < b.id
+                }
+            }
+            return buckets
+        }
+
+        // MARK: - INITIALISER
+        init(
+            rankoName: String,
+            description: String,
+            isPrivate: Bool,
+            groupedItems items: [RankoItem]? = nil
+        ) {
+            _rankoName   = State(initialValue: rankoName)
+            _description = State(initialValue: description)
+            _isPrivate   = State(initialValue: isPrivate)
+
+            // store the incoming items for later
+            self.seedItems = items ?? []
+
+            // first layout using a fixed minimum (don’t reference any @State yet)
+            let initialMinRows = 3
+            if !self.seedItems.isEmpty {
+                _groupedItems = State(
+                    initialValue: Self.organizeItemsIntoRows(self.seedItems, minRowCount: initialMinRows)
+                )
+            } else {
+                _groupedItems = State(initialValue: [])
+            }
+
+            // 2) initialize "original*" WITHOUT touching other @State vars
+            _originalRankoName      = State(initialValue: rankoName)
+            _originalDescription    = State(initialValue: description)
+            _originalIsPrivate      = State(initialValue: isPrivate)
+            _originalCategoryName   = State(initialValue: "Unknown")
+            _originalCategoryIcon   = State(initialValue: "questionmark")
+            _originalCategoryColour = State(initialValue: "0x000000")
+        }
     
     enum WrapMode: String, CaseIterable { case wrap, noWrap }
     
@@ -520,8 +748,8 @@ struct TierListPersonal: View {
                                                     )
                                                     .simultaneousGesture(
                                                         LongPressGesture(minimumDuration: 0.0).onEnded { _ in
-                                                            print("Blank would open")
                                                             withAnimation { addButtonTapped = false }
+                                                            openBlankComposer()
                                                             let impact = UIImpactFeedbackGenerator(style: .heavy)
                                                             impact.prepare()
                                                             impact.impactOccurred(intensity: 1.0)
@@ -669,11 +897,11 @@ struct TierListPersonal: View {
                                             .gesture(
                                                 LongPressGesture(minimumDuration: 0.01)
                                                     .onEnded { _ in
-                                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                                                            exitButtonTapped.toggle()
+                                                        if exitButtonTapped {
+                                                            withAnimation { exitButtonTapped = false }
+                                                        } else {
+                                                            withAnimation { exitButtonTapped = true }
                                                         }
-                                                        let impact = UIImpactFeedbackGenerator(style: .soft)
-                                                        impact.prepare(); impact.impactOccurred(intensity: 0.8)
                                                     }
                                             )
                                         }
@@ -683,17 +911,16 @@ struct TierListPersonal: View {
                                         .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
                                         .overlay(alignment: .top) {
                                             if exitButtonTapped {
-                                                HStack(spacing: -10) {
-                                                    // DELETE
+                                                HStack {
+                                                    // Delete
                                                     VStack(spacing: 5) {
                                                         Image(systemName: "trash.fill")
                                                             .resizable().scaledToFit()
-                                                            .frame(width: 17,
-                                                                   height: 17)
+                                                            .frame(width: 20, height: 20)
                                                         Text("Delete")
-                                                            .font(.custom("Nunito-Black", size: 10))
+                                                            .font(.custom("Nunito-Black", size: 11))
                                                     }
-                                                    .frame(width: 60, height: 60)
+                                                    .frame(width: 65, height: 65)
                                                     .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
                                                     .background(
                                                         GeometryReader { gp in
@@ -702,50 +929,24 @@ struct TierListPersonal: View {
                                                                 .onChange(of: gp.size) { _, _ in deleteFrame = gp.frame(in: .named("exitbar")) }
                                                         }
                                                     )
-                                                    .onTapGesture {
-                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                        impact.prepare(); impact.impactOccurred(intensity: 1.0)
-                                                        withAnimation { exitButtonTapped = false }
-                                                        showDeleteAlert = true
-                                                    }
-                                                    .offset(y: -40)
-                                                    
-                                                    // CANCEL (new) → dismiss
-                                                    VStack(spacing: 5) {
-                                                        Image(systemName: "xmark.circle.fill")
-                                                            .resizable().scaledToFit()
-                                                            .frame(width: 17,
-                                                                   height: 17)
-                                                        Text("Cancel")
-                                                            .font(.custom("Nunito-Black", size: 10))
-                                                    }
-                                                    .frame(width: 60, height: 60)
-                                                    .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
-                                                    .background(
-                                                        GeometryReader { gp in
-                                                            Color.clear
-                                                                .onAppear { cancelFrame = gp.frame(in: .named("exitbar")) }   // 👈 capture Cancel frame
-                                                                .onChange(of: gp.size) { _, _ in cancelFrame = gp.frame(in: .named("exitbar")) }
+                                                    .simultaneousGesture(
+                                                        LongPressGesture(minimumDuration: 0.0).onEnded { _ in
+                                                            withAnimation { DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { dismiss() } }
+                                                            let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                            impact.prepare()
+                                                            impact.impactOccurred(intensity: 1.0)
                                                         }
                                                     )
-                                                    .onTapGesture {
-                                                        let impact = UIImpactFeedbackGenerator(style: .medium)
-                                                        impact.prepare(); impact.impactOccurred(intensity: 0.9)
-                                                        withAnimation { exitButtonTapped = false }
-                                                        dismiss()
-                                                    }
-                                                    .offset(y: -55)
                                                     
-                                                    // SAVE
+                                                    // Save
                                                     VStack(spacing: 5) {
                                                         Image(systemName: "square.and.arrow.down.fill")
                                                             .resizable().scaledToFit()
-                                                            .frame(width: 17,
-                                                                   height: 17)
+                                                            .frame(width: 20, height: 20)
                                                         Text("Save")
-                                                            .font(.custom("Nunito-Black", size: 10))
+                                                            .font(.custom("Nunito-Black", size: 11))
                                                     }
-                                                    .frame(width: 60, height: 60)
+                                                    .frame(width: 65, height: 65)
                                                     .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
                                                     .background(
                                                         GeometryReader { gp in
@@ -754,14 +955,17 @@ struct TierListPersonal: View {
                                                                 .onChange(of: gp.size) { _, _ in saveFrame = gp.frame(in: .named("exitbar")) }
                                                         }
                                                     )
-                                                    .onTapGesture {
-                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                        impact.prepare(); impact.impactOccurred(intensity: 1.0)
-                                                        withAnimation { exitButtonTapped = false }
-                                                        startSave()
-                                                    }
-                                                    .offset(y: -40)
+                                                    .simultaneousGesture(
+                                                        LongPressGesture(minimumDuration: 0.0).onEnded { _ in
+                                                            withAnimation { exitButtonTapped = false }
+                                                            let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                            impact.prepare()
+                                                            impact.impactOccurred(intensity: 1.0)
+                                                            startPublishAndDismiss()  // ← NEW
+                                                        }
+                                                    )
                                                 }
+                                                .offset(y: -55)
                                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                                                 .zIndex(50)
                                                 .allowsHitTesting(true)
@@ -925,34 +1129,12 @@ struct TierListPersonal: View {
                     .padding(.bottom, 10)
                 }
             }
-            .overlay {
-                if progressLoading {
-                    ZStack {
-                        Color.black.opacity(0.35).ignoresSafeArea()
-                        VStack(spacing: 10) {
-                            ProgressView("Saving Ranko…") // 👈 your requested copy
-                                .padding(.vertical, 8)
-                            Text("Waiting for Firebase + Algolia")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
-                        .padding(18)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    }
-                    .transition(.opacity)
-                    .zIndex(999)
-                }
-            }
             .onAppear {
-                loadListFromFirebase()
+                guard !seedItems.isEmpty else { return }
+                let exactMinRows = max(3, tiers.count)      // respect your configured tiers
+                groupedItems = TierListView.organizeItemsIntoRows(seedItems, minRowCount: exactMinRows)
             }
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .tint(Color(hex: 0x000000))
-                }
                 ToolbarItem(placement: .principal) {
                     RankoToolbarTitleStack(
                         name: rankoName,
@@ -1000,28 +1182,33 @@ struct TierListPersonal: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(Color.white.opacity(0.92), for: .navigationBar)
-            .interactiveDismissDisabled(progressLoading) // block sheet swipe
-            .disabled(progressLoading)                   // block touches
-            .alert("Couldn't save", isPresented: .init(
+            .interactiveDismissDisabled(progressLoading) // block pull-to-dismiss on sheets while saving
+            .disabled(progressLoading)                   // block interactions while saving
+            .alert("Couldn't publish", isPresented: .init(
                 get: { publishError != nil },
                 set: { if !$0 { publishError = nil } }
             )) {
-                Button("Retry") { startSave() }
-                Button("Cancel", role: .cancel) { }
+                Button("Retry") {
+                    startPublishAndDismiss()
+                }
+                Button("Cancel", role: .cancel) {
+                    // 🔥 Nuke only if the user gives up
+                    Task { await deleteRankoPersonalFolderAsync(rankoID: rankoID) }
+                }
             } message: {
                 Text(publishError ?? "Something went wrong.")
             }
             .refreshable {
                 refreshItemImages()
             }
-            .sheet(isPresented: $showAddItemsSheet, onDismiss: {
+            .fullScreenCover(isPresented: $showAddItemsSheet, onDismiss: {
                 // When FilterChipPickerView closes, trigger the embeddedStickyPoolView sheet
                 showEmbeddedStickyPoolSheet = true
             }) {
-                FilterChipPickerView(
-                    selectedRankoItems: $unGroupedItems
-                )
+//                FilterChipPickerView(
+//                    selectedRankoItems: $unGroupedItems
+//                )
+                CategoriesView()
             }
             .sheet(isPresented: $showEditDetailsSheet) {
                 DefaultListEditDetails(
@@ -1154,315 +1341,8 @@ struct TierListPersonal: View {
                     }
                 )
             }
-//            .alert(isPresented: $showDeleteAlert) {
-//                CustomDialog(
-//                    title: "Delete Ranko?",
-//                    content: "Are you sure you want to delete your Ranko.",
-//                    image: .init(
-//                        content: "trash.fill",
-//                        background: .red,
-//                        foreground: .white
-//                    ),
-//                    button1: .init(
-//                        content: "Delete",
-//                        background: .red,
-//                        foreground: .white,
-//                        action: { _ in
-//                            showDeleteAlert = false
-//                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-//                                removeFeaturedRanko(rankoID: rankoID) { success in }
-//                                deleteRanko() { success in
-//                                    if success {
-//                                        print("🎉 Fields updated in Algolia")
-//                                    } else {
-//                                        print("⚠️ Failed to update fields")
-//                                    }
-//                                }
-//                                onDelete!()
-//                                dismiss()
-//                            }
-//                        }
-//                    ),
-//                    button2: .init(
-//                        content: "Cancel",
-//                        background: .orange,
-//                        foreground: .white,
-//                        action: { _ in
-//                            showDeleteAlert = false
-//                        }
-//                    )
-//                )
-//                .transition(.blurReplace.combined(with: .push(from: .bottom)))
-//            }
             .interactiveDismissDisabled(true)
         }
-    }
-    
-    private func intFromAny(_ v: Any?) -> Int? {
-        if let i = v as? Int { return i }
-        if let d = v as? Double { return Int(d) }
-        if let s = v as? String, let i = Int(s) { return i }
-        return nil
-    }
-
-    private func doubleFromAny(_ v: Any?) -> Double? {
-        if let d = v as? Double { return d }
-        if let i = v as? Int { return Double(i) }
-        if let s = v as? String, let d = Double(s) { return d }
-        return nil
-    }
-
-    /// normalizes hex like "#FFC800", "0xFFC800", "FFC800", "FC8" → "0xRRGGBB" (no alpha)
-    private func normalizeHexString(_ s: Any?) -> String {
-        guard var raw = (s as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return "0x514343" }
-        raw = raw.lowercased()
-        if raw.hasPrefix("#")  { raw.removeFirst() }
-        if raw.hasPrefix("0x") { raw.removeFirst(2) }
-        if raw.count == 3 { // shorthand RGB
-            raw = raw.map { String(repeating: $0, count: 2) }.joined()
-        }
-        // strip alpha if 8 chars
-        if raw.count == 8 { raw = String(raw.prefix(6)) }
-        return "0x" + raw.uppercased()
-    }
-
-    /// builds decimal rank if missing (row + position/10000)
-    private func decimalRank(row: Int, position: Int) -> Double {
-        Double(row) + (Double(position) / 10000.0)
-    }
-
-    /// take a decimal rank and return (row, position) if server didn’t store Row/Position
-    private func rowPos(from decimal: Double) -> (row: Int, pos: Int) {
-        let row = Int(floor(decimal))
-        let pos = max(1, Int(round((decimal - floor(decimal)) * 10000.0)))
-        return (row, pos)
-    }
-
-    private func parseHexUInt(_ s: String) -> UInt? {
-        var str = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        if str.lowercased().hasPrefix("0x") { str.removeFirst(2) }
-        return UInt(str, radix: 16)
-    }
-    
-    @inline(__always)
-    private func dbg(_ msg: String) {
-        print("🧪 [TierListPersonal] \(msg)")
-    }
-
-    // MARK: - Loader
-    private func loadListFromFirebase() {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(rankoID)
-        
-        dbg("➡️ starting load for path: /RankoData/\(rankoID)")
-        progressLoading = true
-        
-        ref.observeSingleEvent(of: .value, with: { snap in
-            guard snap.exists() else {
-                dbg("❌ snapshot doesn't exist for \(self.rankoID)")
-                DispatchQueue.main.async { self.progressLoading = false }
-                return
-            }
-            guard let dict = snap.value as? [String: Any] else {
-                dbg("❌ couldn't cast snapshot.value → [String:Any]. raw=\(String(describing: snap.value))")
-                DispatchQueue.main.async { self.progressLoading = false }
-                return
-            }
-            dbg("Checkpoint A — root keys: \(Array(dict.keys).sorted())")
-            
-            // ── DETAILS (name/desc/type/user) ─────────────────────────────────
-            let details = dict["RankoDetails"] as? [String: Any] ?? [:]
-            dbg("Checkpoint B — RankoDetails keys: \(Array(details.keys).sorted())")
-            
-            guard
-                let name   = details["name"] as? String,
-                let desc   = details["description"] as? String,
-                let type   = details["type"] as? String,
-                let userID = details["user_id"] as? String
-            else {
-                dbg("❌ DETAILS guard failed. values: " +
-                    "name=\(String(describing: details["name"])) " +
-                    "desc=\(String(describing: details["description"])) " +
-                    "type=\(String(describing: details["type"])) " +
-                    "user_id=\(String(describing: details["user_id"]))")
-                DispatchQueue.main.async { self.progressLoading = false }
-                return
-            }
-            
-            let tags = details["tags"] as? [String] ?? []
-            
-            // ── PRIVACY (nested object) ───────────────────────────────────────
-            let privacy = dict["RankoPrivacy"] as? [String: Any] ?? [:]
-            let privacyBool = (privacy["private"] as? Bool) ?? false
-            dbg("Checkpoint C — privacy.private=\(privacyBool)")
-            
-            // ── DATE/TIME (nested object) ─────────────────────────────────────
-            let dt = dict["RankoDateTime"] as? [String: Any] ?? [:]
-            let created = (dt["created"] as? String) ?? ""
-            let updated = (dt["updated"] as? String) ?? created
-            dbg("Checkpoint D — created=\(created) updated=\(updated)")
-            
-            // ── CATEGORY (nested) ─────────────────────────────────────────────
-            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
-            let catName  = (cat["name"] as? String) ?? ""
-            let catIcon  = (cat["icon"] as? String) ?? ""
-            let catColourUInt: UInt = {
-                if let s = cat["colour"] as? String { return parseHexUInt(s) ?? 0xFFFFFF }
-                if let n = cat["colour"] as? Int   { return UInt(n) }
-                return 0xFFFFFF
-            }()
-            dbg("Checkpoint E — Category name='\(catName)' icon='\(catIcon)' colour=\(String(format:"0x%06X", catColourUInt))")
-            
-            // ── TIERS (array, 1-based, first element null) ────────────────────
-            // Example (index 1..7): { Code:"S", ColorHex:12862774, Index:1, Label:"Legendary" }
-            let tiersAny = dict["RankoTiers"]
-            let tiersArray = tiersAny as? [Any] ?? []     // allow null @ index 0
-            dbg("Checkpoint F — tiers array count=\(tiersArray.count) (expect >= 2 with index 0 null)")
-            
-            struct RankoTierLight { let index:Int; let code:String; let label:String; let colorHexInt:Int }
-            
-            let loadedTiers: [RankoTierLight] = tiersArray.compactMap { e in
-                guard let t = e as? [String: Any] else { return nil }    // skips the leading null
-                guard
-                    let idx = intFromAny(t["Index"]),
-                    let code = t["Code"] as? String,
-                    let label = t["Label"] as? String
-                else { return nil }
-                // ColorHex in your export is an Int (e.g., 12862774)
-                let colorInt = intFromAny(t["ColorHex"]) ?? 0xBFA254
-                return RankoTierLight(index: idx, code: code, label: label, colorHexInt: colorInt)
-            }
-                .sorted { $0.index < $1.index }
-            
-            dbg("Checkpoint G — parsed tiers: \(loadedTiers.map { "#\($0.index)=\($0.code):\($0.label)@\(String(format:"0x%06X", $0.colorHexInt))" })")
-            
-            let finalTierConfigs: [TierConfig] = {
-                let mapped = loadedTiers.map { TierConfig(code: $0.code, label: $0.label, colorHex: $0.colorHexInt) }
-                return mapped.isEmpty ? TierConfig.starter(3) : mapped
-            }()
-            dbg("Checkpoint H — TierConfig count: \(finalTierConfigs.count)")
-            
-            // ── ITEMS ─────────────────────────────────────────────────────────
-            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
-            dbg("Checkpoint I — items node found: \(itemsDict.count) entries")
-            
-            let items: [RankoItem] = itemsDict.compactMap { (itemID, item) -> RankoItem? in
-                guard
-                    let itemName  = item["ItemName"] as? String,
-                    let itemDesc  = item["ItemDescription"] as? String,
-                    let itemImage = item["ItemImage"] as? String
-                else {
-                    dbg("⚠️ item '\(itemID)' missing required fields. keys=\(Array(item.keys))")
-                    return nil
-                }
-                
-                let rankFloat  = doubleFromAny(item["ItemRank"]) ?? 0.0
-                let votes      = intFromAny(item["ItemVotes"]) ?? 0
-                
-                let record = RankoRecord(
-                    objectID: itemID,
-                    ItemName: itemName,
-                    ItemDescription: itemDesc,
-                    ItemCategory: (item["ItemCategory"] as? String) ?? "category",
-                    ItemImage: itemImage,
-                    ItemGIF: (item["ItemGIF"] as? String).nilIfEmpty,
-                    ItemVideo: (item["ItemVideo"] as? String).nilIfEmpty,
-                    ItemAudio: (item["ItemAudio"] as? String).nilIfEmpty
-                )
-                
-                return RankoItem(
-                    id: itemID,
-                    rank: Int(rankFloat * 10000),     // keep a stable sort if needed
-                    votes: votes,
-                    record: record,
-                    playCount: intFromAny(item["PlayCount"]) ?? 0
-                )
-            }
-            
-            dbg("Checkpoint J — parsed items: \(items.count)")
-            
-            // group by tier index:
-            // if no explicit per-item tier index exists, derive it from integer part of ItemRank (e.g., 1.0001 → tier 1)
-            let tierCount = max(finalTierConfigs.count, 1)
-            var rows = Array(repeating: [RankoItem](), count: tierCount)
-            
-            // quick map for lookup
-            let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
-            
-            // try explicit keys first; if none, fallback to derived
-            var hadExplicit = false
-            for (itemID, raw) in itemsDict {
-                if let idx1 = ["ItemTierIndex", "TierIndex", "Tier"].compactMap({ intFromAny(raw[$0]) }).first,
-                   let itm = byID[itemID], idx1 >= 1, idx1 <= tierCount {
-                    rows[idx1 - 1].append(itm)
-                    hadExplicit = true
-                }
-            }
-            
-            if !hadExplicit {
-                dbg("ℹ️ no explicit per-item tier index found; deriving from ItemRank’s integer part")
-                for (itemID, raw) in itemsDict {
-                    let rankFloat = doubleFromAny(raw["ItemRank"]) ?? 0.0
-                    let idx = min(max(Int(floor(rankFloat)), 1), tierCount)   // 1-based
-                    if let itm = byID[itemID] {
-                        rows[idx - 1].append(itm)
-                    }
-                }
-            }
-            
-            let finalRows: [[RankoItem]] = rows.map { $0.sorted { $0.rank < $1.rank } }
-            dbg("Checkpoint K — grouped rows counts by tier: \(finalRows.map(\.count))")
-            
-            // ── PUSH INTO UI (MAIN THREAD) ────────────────────────────────────
-            DispatchQueue.main.async {
-                self.progressLoading = false
-                
-                // toolbar title stack inputs
-                self.rankoName      = name
-                self.description    = desc
-                self.isPrivate      = privacyBool
-                self.categoryName   = catName
-                self.categoryIcon   = catIcon
-                self.categoryColour = "0x" + String(catColourUInt, radix: 16, uppercase: true)
-                self.tags           = tags
-                
-                // tiers + items
-                self.tiers          = finalTierConfigs
-                self.unGroupedItems = items.sorted { $0.rank < $1.rank }
-                self.groupedItems   = finalRows
-                
-                // originals (for revert)
-                self.originalRankoName = self.rankoName
-                self.originalDescription = self.description
-                self.originalIsPrivate = self.isPrivate
-                self.originalCategoryName = self.categoryName
-                self.originalCategoryIcon = self.categoryIcon
-                self.originalCategoryColour = self.categoryColour
-                
-                self.imageReloadToken = UUID()
-                
-                dbg("✅ UI state updated — name='\(self.rankoName)' tiers=\(self.tiers.count) rows=\(self.groupedItems.count)")
-            }
-        })
-    }
-
-    /// Parses "YYYYMMDDhhmmss" or seconds-since-epoch to Date.
-    private func parseYYYYMMDDhhmmss(_ any: Any?) -> Date? {
-        if let s = any as? String {
-            // try strict "yyyyMMddHHmmss"
-            let f = DateFormatter()
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.dateFormat = "yyyyMMddHHmmss"
-            if let d = f.date(from: s) { return d }
-            // try seconds since epoch in string
-            if let secs = TimeInterval(s) { return Date(timeIntervalSince1970: secs) }
-        } else if let n = any as? TimeInterval {
-            return Date(timeIntervalSince1970: n)
-        } else if let i = any as? Int {
-            return Date(timeIntervalSince1970: TimeInterval(i))
-        }
-        return nil
     }
     
     private func deleteSelectedItems() {
@@ -3363,6 +3243,25 @@ struct TierListPersonal: View {
         }
     }
     
+    @MainActor
+    private func startPublishAndDismiss() {
+        guard categoryName != "" else {
+            publishError = "Please pick a category before saving."
+            return
+        }
+        progressLoading = true
+        Task {
+            do {
+                try await publishRanko()
+                progressLoading = false
+                dismiss()
+            } catch {
+                progressLoading = false
+                publishError = error.localizedDescription
+            }
+        }
+    }
+    
     func normalizeHexString(_ value: String) -> String {
         var s = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("0x") || s.hasPrefix("0X") { s.removeFirst(2) }
@@ -3373,102 +3272,147 @@ struct TierListPersonal: View {
         return String(format: "0x%06X", intVal)
     }
     
-    private func startSave() {
-        // Basic guard like DefaultList
-        guard !categoryName.isEmpty else {
-            publishError = "Please pick a category before saving."
+    private func publishRanko() async throws {
+        // 1) upload all personal images first (hard gate)
+        try await uploadPersonalImagesAsync()
+
+        // 2) now that uploads succeeded, rewrite ItemImage URLs for the affected items
+        let urlBase = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/rankoPersonalImages%2F\(rankoID)%2F"
+
+        for rowIdx in groupedItems.indices {
+            for itemIdx in groupedItems[rowIdx].indices {
+                let item = groupedItems[rowIdx][itemIdx]
+                let itemID = item.id
+                guard pendingPersonalImages[itemID] != nil else { continue }
+
+                let newURL = "\(urlBase)\(itemID).jpg?alt=media&token="
+                let updatedRecord = item.record.withItemImage(newURL)
+                let updatedItem = item.withRecord(updatedRecord)
+                groupedItems[rowIdx][itemIdx] = updatedItem
+            }
+        }
+
+        // 3) proceed with both saves
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { try await saveRankedListToAlgoliaAsync() }
+            group.addTask { try await saveRankedListToFirebaseAsync() }
+            try await group.waitForAll()
+        }
+
+        // 4) clear cache on success
+        pendingPersonalImages.removeAll()
+    }
+    
+    func saveRankedListToAlgoliaAsync() async throws {
+        guard categoryName != "" else {
+            print("❌ Cannot save: no category selected")
             return
         }
-        progressLoading = true
-        publishError = nil
 
-        let group = DispatchGroup()
-        var firebaseOK = false
-        var algoliaOK = false
-        var firstError: String?
+        let now = Date()
+        let aedtFormatter = DateFormatter()
+        aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
+        aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
+        aedtFormatter.dateFormat = "yyyyMMddHHmmss"
+        let rankoDateTime = aedtFormatter.string(from: now)
 
-        // 1) Firebase
-        group.enter()
-        updateTierListInFirebase { success, err in
-            firebaseOK = success
-            if !success, firstError == nil { firstError = err ?? "Firebase save failed." }
-            group.leave()
-        }
+        // 1) Build Group List Codable Struct
+        let listRecord = RankoListAlgolia(
+            objectID:         rankoID,
+            RankoName:        rankoName,
+            RankoDescription: description,
+            RankoType:        "default",
+            RankoPrivacy:     isPrivate,
+            RankoStatus:      "active",
+            RankoCategory:    categoryName,
+            RankoUserID:      user_data.userID,
+            RankoCreated:    rankoDateTime,
+            RankoUpdated:    rankoDateTime,
+            RankoLikes:       0,
+            RankoComments:    0,
+            RankoVotes:       0
+        )
 
-        // 2) Algolia (partial updates)
-        group.enter()
-        updateTierListInAlgolia(
-            rankoID: rankoID,
-            newName: rankoName,
-            newDescription: description,
-            newCategory: categoryName,
-            isPrivate: isPrivate
-        ) { success in
-            algoliaOK = success
-            if !success, firstError == nil { firstError = "Algolia update failed." }
-            group.leave()
-        }
-
-        group.notify(queue: .main) {
-            progressLoading = false
-            if firebaseOK && algoliaOK {
-                print("Saved RankoID: \(rankoID) --- \(rankoName)")
-                dismiss()
-                
-            } else {
-                publishError = firstError ?? "Failed to save."
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            listsIndex.saveObject(listRecord) { result in
+                switch result {
+                case .success:
+                    cont.resume()
+                case .failure(let err):
+                    cont.resume(throwing: err)
+                }
             }
         }
     }
-    
-    private func updateTierListInFirebase(completion: @escaping (Bool, String?) -> Void) {
+
+    @MainActor
+    func saveRankedListToFirebaseAsync() async throws {
+        // 1) Must have a category
+        guard categoryName != "" else {
+            print("❌ Cannot save: no category selected")
+            return
+        }
+
         let db = Database.database().reference()
 
-        // 1) Items map (id -> fields)
-        // Row indices are 1-based (tier 1..N). Position is 1..rowCount.
-        var itemsDict: [String: Any] = [:]
+        // 2) Build items with decimal ranks + tier linkage
+        var rankoItemsDict: [String: Any] = [:]
+
         for (rowIdx, row) in groupedItems.enumerated() {
             let rowNumber = rowIdx + 1
-            for (pos, item) in row.enumerated() {
-                let position = pos + 1
-                // Maintain your decimal rank style: row + position/10000
-                let decimal = decimalRank(rowNumber: rowNumber, position: position)
+            _ = tierConfigForRow(rowIdx)
 
-                let rec = item.record
-                itemsDict[item.id] = [
-                    "ItemID":          item.id,
-                    "ItemName":        rec.ItemName,
-                    "ItemDescription": rec.ItemDescription,
-                    "ItemCategory":    rec.ItemCategory,
-                    "ItemImage":       rec.ItemImage,
-                    "ItemGIF":         rec.ItemGIF ?? "",
-                    "ItemVideo":       rec.ItemVideo ?? "",
-                    "ItemAudio":       rec.ItemAudio ?? "",
-                    "ItemRank":        decimal,
-                    "ItemRow":         rowNumber,
-                    "ItemPosition":    position,
-                    "ItemVotes":       item.votes,
+            for (posIdx, item) in row.enumerated() {
+                let position = posIdx + 1
+                let rankDouble = decimalRank(rowNumber: rowNumber, position: position)
+
+                // unique key per item node in RankoItems
+                let itemID = UUID().uuidString
+
+                rankoItemsDict[itemID] = [
+                    "ItemID":          itemID,
+                    "ItemName":        item.itemName,
+                    "ItemDescription": item.itemDescription,
+                    "ItemImage":       item.itemImage,
+
+                    // 👇 NEW: decimal rank format
+                    "ItemRank":        rankDouble,       // Double: 1.0001, 4.0012, …
+
+                    "ItemVotes":       0,
+
+                    // keep your extra media/stat fields
+                    "ItemGIF":         item.itemGIF,
+                    "ItemVideo":       item.itemVideo,
+                    "ItemAudio":       item.itemAudio,
                     "PlayCount":       item.playCount
                 ]
             }
         }
 
-        // 2) Category object (string hex like "0xFFC800")
+        // 3) Timestamps
+        let now = Date()
+        let aedtFormatter = DateFormatter()
+        aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
+        aedtFormatter.timeZone = TimeZone(identifier: "Australia/Sydney")
+        aedtFormatter.dateFormat = "yyyyMMddHHmmss"
+        let rankoDateTime = aedtFormatter.string(from: now)
+
+        // 4) Category object (use your existing normalizer)
+        let colourString: String = normalizeHexString(categoryColour)
         let categoryDict: [String: Any] = [
-            "colour": categoryColour,
+            "colour": colourString,
             "icon":   categoryIcon,
             "name":   categoryName
         ]
 
-        // 3) Details / Privacy / Stats
+        // 5) Details / Privacy / Stats
         let normalizedTags: [String] = tags.isEmpty ? ["ranko", categoryName.lowercased()] : tags
-        let now = Int(Date().timeIntervalSince1970)
 
         let rankoDetails: [String: Any] = [
             "id":          rankoID,
             "name":        rankoName,
             "description": description,
-            "type":        "group",
+            "type":        "tier",
             "user_id":     user_data.userID,
             "tags":        normalizedTags,
             "region":      "AUS",
@@ -3493,137 +3437,46 @@ struct TierListPersonal: View {
             "clones": 0
         ]
 
-        // 4) Tiers block from your `tiers` model
-        let tiersDict = tiersPayload(from: tiers) // uses your helper below
+        // 6) NEW: tiers block
+        let rankoTiers = tiersPayload(from: tiers)
 
-        // 5) Final payload
+        // 7) Full payload (single write shape)
         let payload: [String: Any] = [
-            "RankoDetails":    rankoDetails,
-            "RankoCategory":   categoryDict,
-            "RankoPrivacy":    rankoPrivacy,
-            "RankoStatistics": rankoStats,
-            "RankoDateTime":   ["updated": now, "created": now],
-            "RankoTiers":      tiersDict,
-            "RankoItems":      itemsDict,
+            // blocks shaped like your sample schema
+            "RankoDetails":      rankoDetails,
+            "RankoCategory":     categoryDict,
+            "RankoPrivacy":   rankoPrivacy,
+            "RankoStatistics":   rankoStats,
+            "RankoDateTime":     ["updated": rankoDateTime, "created": rankoDateTime],
+            "RankoTiers":        rankoTiers,
+            "RankoItems":        rankoItemsDict,
 
-            // init empties to match your schema
-            "RankoLikes":      [:],
-            "RankoComments":   [:]
+            // init empty maps
+            "RankoLikes":        [:],
+            "RankoComments":     [:]
         ]
 
-        // 6) Run both writes like you do elsewhere (list + mirror under user)
-        let listRef  = db.child("RankoData").child(rankoID)
-        let userRef  = db.child("UserData").child(user_data.userID)
-                        .child("UserRankos").child("UserActiveRankos").child(rankoID)
-
-        let writes = DispatchGroup()
-        var ok1 = false, ok2 = false
-        var err: String?
-
-        writes.enter()
-        listRef.setValue(payload) { e, _ in
-            ok1 = (e == nil)
-            if let e = e { err = "set list: \(e.localizedDescription)" }
-            writes.leave()
+        // 8) Write the Ranko and mirror under the user (async/await)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await db.child("RankoData")
+                            .child(self.rankoID)
+                            .setValueAsync(payload)
+            }
+            group.addTask {
+                try await db.child("UserData")
+                            .child(self.user_data.userID)
+                            .child("UserRankos")
+                            .child("UserActiveRankos")
+                            .child(self.rankoID)
+                            .setValueAsync(categoryName)
+            }
+            try await group.waitForAll()
         }
 
-        writes.enter()
-        userRef.setValue(categoryName) { e, _ in
-            ok2 = (e == nil)
-            if let e = e, err == nil { err = "mirror user node: \(e.localizedDescription)" }
-            writes.leave()
-        }
-
-        writes.notify(queue: .main) {
-            completion(ok1 && ok2, ok1 && ok2 ? nil : (err ?? "unknown firebase error"))
-        }
+        print("✅ List saved with decimal ranks + tier metadata")
     }
     
-    private func updateTierListInAlgolia(
-        rankoID: String,
-        newName: String,
-        newDescription: String,
-        newCategory: String,
-        isPrivate: Bool,
-        completion: @escaping (Bool) -> Void
-    ) {
-        let client = SearchClient(
-            appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-            apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
-        )
-        let index = client.index(withName: "RankoLists")
-
-        // Partial updates — mirror DefaultListPersonal
-        let updates: [(ObjectID, PartialUpdate)] = [
-            (ObjectID(rawValue: rankoID), .update(attribute: "RankoName",        value: .string(newName))),
-            (ObjectID(rawValue: rankoID), .update(attribute: "RankoDescription", value: .string(newDescription))),
-            (ObjectID(rawValue: rankoID), .update(attribute: "RankoCategory",    value: .string(newCategory))),
-            (ObjectID(rawValue: rankoID), .update(attribute: "RankoPrivacy",     value: .bool(isPrivate)))
-        ]
-
-        index.partialUpdateObjects(updates: updates) { result in
-            switch result {
-            case .success:
-                completion(true)
-            case .failure(let err):
-                print("⚠️ Algolia error:", err.localizedDescription)
-                completion(false)
-            }
-        }
-    }
-    
-    func removeFeaturedRanko(rankoID: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
-            // No user; nothing to delete
-            completion(.success(()))
-            return
-        }
-        
-        let featuredRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserRankos")
-            .child("UserFeaturedRankos")
-        
-        // 1) Load all featured slots
-        featuredRef.getData { error, snapshot in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            
-            guard let snap = snapshot, snap.exists() else {
-                // No featured entries at all
-                completion(.success(()))
-                return
-            }
-            
-            // 2) Find the slot whose value == rankoID
-            var didRemove = false
-            for case let child as DataSnapshot in snap.children {
-                if let value = child.value as? String, value == rankoID {
-                    didRemove = true
-                    // 3) Remove that child entirely
-                    featuredRef.child(child.key).removeValue { removeError, _ in
-                        if let removeError = removeError {
-                            completion(.failure(removeError))
-                        } else {
-                            // Optionally reload your local state here:
-                            // self.tryLoadFeaturedRankos()
-                            completion(.success(()))
-                        }
-                    }
-                    break
-                }
-            }
-            
-            // 4) If no match was found, still report success
-            if !didRemove {
-                completion(.success(()))
-            }
-        }
-    }
     
     // Wrap Firebase setValue into async/await
     private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
@@ -3646,49 +3499,6 @@ struct TierListPersonal: View {
             ]
         }
         return dict
-    }
-    
-    private func deleteRanko(completion: @escaping (Bool) -> Void
-    ) {
-        let db = Database.database().reference()
-        
-        let statusUpdate: [String: Any] = [
-            "RankoStatus": "deleted"
-        ]
-        
-        let listRef = db.child("RankoData").child(rankoID)
-        
-        // ✅ Update list fields
-        listRef.updateChildValues(statusUpdate) { error, _ in
-            if let err = error {
-                print("❌ Failed to update list fields: \(err.localizedDescription)")
-            } else {
-                print("✅ List fields updated successfully")
-            }
-        }
-        
-        let client = SearchClient(
-            appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-            apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)
-        )
-        let index = client.index(withName: "RankoLists")
-
-        // ✅ Prepare partial updates
-        let updates: [(ObjectID, PartialUpdate)] = [
-            (ObjectID(rawValue: rankoID), .update(attribute: "RankoStatus", value: "deleted"))
-        ]
-
-        // ✅ Perform batch update in Algolia
-        index.partialUpdateObjects(updates: updates) { result in
-            switch result {
-            case .success(let response):
-                print("✅ Ranko list status updated successfully:", response)
-                completion(true)
-            case .failure(let error):
-                print("❌ Failed to update Ranko list status:", error.localizedDescription)
-                completion(false)
-            }
-        }
     }
     
     // MARK: – Helpers & DropDelegate
@@ -4172,6 +3982,12 @@ private func withTimeout<T>(seconds: Double, _ op: @escaping () async throws -> 
     }
 }
 
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
 private extension UUID {
     var string: String { uuidString }
 }
@@ -4214,3 +4030,4 @@ private extension RankoItem {
         )
     }
 }
+

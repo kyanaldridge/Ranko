@@ -655,7 +655,11 @@ struct ExploreView: View {
                     }
                 })
             } else if list.type == "tier" {
-                TierListPersonal(rankoID: list.id, onSave: { _ in } )
+                TierListSpectate(rankoID: list.id, onClone: {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        clonedList = list
+                    }
+                })
             }
         }
         

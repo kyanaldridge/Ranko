@@ -549,7 +549,7 @@ struct HomeView: View {
                         } else {
                             LazyVStack(alignment: .leading, spacing: 16) {
                                 ForEach(feedLists, id: \.id) { list in
-                                    if list.type == "group" {
+                                    if list.type == "tier" {
                                         TierListHomeView(
                                             listData: list,
                                             onCommentTap: { msg in
@@ -630,12 +630,20 @@ struct HomeView: View {
                     }
                 })
             } else if list.type == "tier" {
-                TierListPersonal(rankoID: list.id, onSave: { _ in } )
+                TierListSpectate(rankoID: list.id, onClone: {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        clonedList = list
+                    }
+                })
             }
         }
         
         .fullScreenCover(item: $clonedList) { list in
-            DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, selectedRankoItems: list.items, onSave: { _ in})
+            if list.type == "default" {
+                DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, selectedRankoItems: list.items, onSave: { _ in})
+            } else if list.type == "tier" {
+                TierListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, groupedItems: list.items)
+            }
         }
         
         // MARK: – reset "listViewID" whenever HomeView comes back on screen

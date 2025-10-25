@@ -716,7 +716,6 @@ struct DefaultListPersonal: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(Color.white.opacity(0.92), for: .navigationBar)
             .interactiveDismissDisabled(progressLoading) // block sheet swipe
             .disabled(progressLoading)                   // block touches
             .alert("Couldn't save", isPresented: .init(

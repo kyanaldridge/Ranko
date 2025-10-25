@@ -762,7 +762,6 @@ struct DefaultListView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(Color.white.opacity(0.92), for: .navigationBar)
             .interactiveDismissDisabled(progressLoading) // block pull-to-dismiss on sheets while saving
             .disabled(progressLoading)                   // block interactions while saving
             .alert("Couldn't publish", isPresented: .init(
