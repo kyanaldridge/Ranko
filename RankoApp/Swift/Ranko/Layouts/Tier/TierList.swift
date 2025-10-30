@@ -333,76 +333,77 @@ struct TierListView: View {
     
     
     // MARK: - ITEM VARIABLES
-        @State private var unGroupedItems: [RankoItem] = []
-        @State private var groupedItems: [[RankoItem]]
-        @State private var selectedDetailItem: RankoItem? = nil
+    @State private var unGroupedItems: [RankoItem] = []
+    @State private var groupedItems: [[RankoItem]]
+    @State private var selectedDetailItem: RankoItem? = nil
 
-        private let seedItems: [RankoItem]
+    private let seedItems: [RankoItem]
 
-        @State private var tiers: [TierConfig] = TierConfig.starter(3)
-        @State private var stagingTiers: [TierConfig] = []
-        @State private var showTierEditor = false
+    @State private var tiers: [TierConfig] = TierConfig.starter(3)
+    @State private var stagingTiers: [TierConfig] = []
+    @State private var showTierEditor = false
+    @State private var itemsWereJustAdded = false
 
-        // ─────────────────────────────────────────────────────────────────────────────
-        // 1) make this STATIC so it doesn't touch `self` during init
-        private static func organizeItemsIntoRows(_ items: [RankoItem], minRowCount: Int) -> [[RankoItem]] {
-            @inline(__always)
-            func decode(_ r: Int) -> (row: Int, pos: Int) {
-                if r >= 1000 { return (max(1, r / 1000), max(1, r % 1000)) }
-                return (1, max(1, r))
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 1) make this STATIC so it doesn't touch `self` during init
+    private static func organizeItemsIntoRows(_ items: [RankoItem], minRowCount: Int) -> [[RankoItem]] {
+        @inline(__always)
+        func decode(_ r: Int) -> (row: Int, pos: Int) {
+            if r >= 1000 { return (max(1, r / 1000), max(1, r % 1000)) }
+            return (1, max(1, r))
+        }
+        let maxRowFromData = items.map { decode($0.rank).row }.max() ?? 0
+        let rowCount = max(minRowCount, maxRowFromData)
+        
+        var buckets = Array(repeating: [RankoItem](), count: rowCount)
+        for it in items {
+            let (row, _) = decode(it.rank)
+            let idx = min(max(1, row), rowCount) - 1
+            buckets[idx].append(it)
+        }
+        for i in buckets.indices {
+            buckets[i].sort { a, b in
+                let pa = decode(a.rank).pos, pb = decode(b.rank).pos
+                if pa != pb { return pa < pb }
+                if a.rank != b.rank { return a.rank < b.rank }
+                return a.id < b.id
             }
-            let maxRowFromData = items.map { decode($0.rank).row }.max() ?? 0
-            let rowCount = max(minRowCount, maxRowFromData)
+        }
+        return buckets
+    }
 
-            var buckets = Array(repeating: [RankoItem](), count: rowCount)
-            for it in items {
-                let (row, _) = decode(it.rank)
-                let idx = min(max(1, row), rowCount) - 1
-                buckets[idx].append(it)
-            }
-            for i in buckets.indices {
-                buckets[i].sort { a, b in
-                    let pa = decode(a.rank).pos, pb = decode(b.rank).pos
-                    if pa != pb { return pa < pb }
-                    if a.rank != b.rank { return a.rank < b.rank }
-                    return a.id < b.id
-                }
-            }
-            return buckets
+    // MARK: - INITIALISER
+    init(
+        rankoName: String,
+        description: String,
+        isPrivate: Bool,
+        groupedItems items: [RankoItem]? = nil
+    ) {
+        _rankoName   = State(initialValue: rankoName)
+        _description = State(initialValue: description)
+        _isPrivate   = State(initialValue: isPrivate)
+
+        // store the incoming items for later
+        self.seedItems = items ?? []
+
+        // first layout using a fixed minimum (don’t reference any @State yet)
+        let initialMinRows = 3
+        if !self.seedItems.isEmpty {
+            _groupedItems = State(
+                initialValue: Self.organizeItemsIntoRows(self.seedItems, minRowCount: initialMinRows)
+            )
+        } else {
+            _groupedItems = State(initialValue: [])
         }
 
-        // MARK: - INITIALISER
-        init(
-            rankoName: String,
-            description: String,
-            isPrivate: Bool,
-            groupedItems items: [RankoItem]? = nil
-        ) {
-            _rankoName   = State(initialValue: rankoName)
-            _description = State(initialValue: description)
-            _isPrivate   = State(initialValue: isPrivate)
-
-            // store the incoming items for later
-            self.seedItems = items ?? []
-
-            // first layout using a fixed minimum (don’t reference any @State yet)
-            let initialMinRows = 3
-            if !self.seedItems.isEmpty {
-                _groupedItems = State(
-                    initialValue: Self.organizeItemsIntoRows(self.seedItems, minRowCount: initialMinRows)
-                )
-            } else {
-                _groupedItems = State(initialValue: [])
-            }
-
-            // 2) initialize "original*" WITHOUT touching other @State vars
-            _originalRankoName      = State(initialValue: rankoName)
-            _originalDescription    = State(initialValue: description)
-            _originalIsPrivate      = State(initialValue: isPrivate)
-            _originalCategoryName   = State(initialValue: "Unknown")
-            _originalCategoryIcon   = State(initialValue: "questionmark")
-            _originalCategoryColour = State(initialValue: "0x000000")
-        }
+        // 2) initialize "original*" WITHOUT touching other @State vars
+        _originalRankoName      = State(initialValue: rankoName)
+        _originalDescription    = State(initialValue: description)
+        _originalIsPrivate      = State(initialValue: isPrivate)
+        _originalCategoryName   = State(initialValue: "Unknown")
+        _originalCategoryIcon   = State(initialValue: "questionmark")
+        _originalCategoryColour = State(initialValue: "0x000000")
+    }
     
     enum WrapMode: String, CaseIterable { case wrap, noWrap }
     
@@ -1201,15 +1202,6 @@ struct TierListView: View {
             .refreshable {
                 refreshItemImages()
             }
-            .fullScreenCover(isPresented: $showAddItemsSheet, onDismiss: {
-                // When FilterChipPickerView closes, trigger the embeddedStickyPoolView sheet
-                showEmbeddedStickyPoolSheet = true
-            }) {
-//                FilterChipPickerView(
-//                    selectedRankoItems: $unGroupedItems
-//                )
-                CategoriesView()
-            }
             .sheet(isPresented: $showEditDetailsSheet) {
                 DefaultListEditDetails(
                     rankoName: rankoName,
@@ -1261,25 +1253,6 @@ struct TierListView: View {
                 )
                 .presentationDetents([.large])
             }
-            .sheet(isPresented: $showEmbeddedStickyPoolSheet) {
-                embeddedStickyPoolView
-                    .interactiveDismissDisabled(true) // prevents accidental swipe-down
-                    .presentationDetents([.height(110)]) // customize detents if needed
-                    .presentationDragIndicator(.hidden)
-                    .presentationBackgroundInteraction(.enabled)
-                    .onChange(of: unGroupedItems.count) { _, newValue in
-                        if newValue == 0 {
-                            withAnimation {
-                                showEmbeddedStickyPoolSheet = false  // Hide only the embedded view
-                            }
-                        }
-                    }
-                    .onAppear {
-                        if unGroupedItems.isEmpty {
-                            showEmbeddedStickyPoolSheet = false
-                        }
-                    }
-            }
             .sheet(item: $selectedDetailItem) { tappedItem in
                 let rowIndex = groupedItems.firstIndex { row in
                     row.contains { $0.id == tappedItem.id }
@@ -1325,10 +1298,23 @@ struct TierListView: View {
                     }
                 }
             }
+            .fullScreenCover(isPresented: $showAddItemsSheet) {
+                AddItemsPickerSheet(selectedRankoItems: $unGroupedItems)
+                    .presentationDetents([.large])
+                    .interactiveDismissDisabled(true)
+                    .navigationTransition(.zoom(sourceID: "sampleButton", in: transition))
+            }
+            .onChange(of: showAddItemsSheet) { wasShowing, isShowing in
+                // When the add items sheet closes, check if we should show the pool
+                if wasShowing && !isShowing {
+                    showStickyPoolIfNeeded()
+                }
+            }
+            
             .fullScreenCover(isPresented: $showBlankItemsFS, onDismiss: {
-                // reset again so next open is clean (even if user cancelled)
                 blankDrafts = [BlankItemDraft()]
                 draftError = nil
+                showStickyPoolIfNeeded()
             }) {
                 BlankItemsComposer(
                     rankoID: rankoID,
@@ -1337,9 +1323,41 @@ struct TierListView: View {
                     canAddMore: blankDrafts.count < 10,
                     onCommit: {
                         appendDraftsToSelectedRanko()
-                        showEmbeddedStickyPoolSheet = true
                     }
                 )
+            }
+
+            // 4. Update your embeddedStickyPoolSheet configuration:
+
+            .sheet(isPresented: $showEmbeddedStickyPoolSheet) {
+                embeddedStickyPoolView
+                    .interactiveDismissDisabled(false)
+                    .presentationDetents([.height(160)])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackgroundInteraction(.enabled)
+                    .presentationBackground(.clear)
+            }
+//            .onChange(of: unGroupedItems.count) { oldCount, newCount in
+//                // Auto-hide when empty
+//                if newCount == 0 && showEmbeddedStickyPoolSheet {
+//                    withAnimation {
+//                        showEmbeddedStickyPoolSheet = false
+//                    }
+//                }
+//                // Auto-show when items added (and no blocking sheets)
+//                else if newCount > 0 && newCount > oldCount {
+//                    showStickyPoolIfNeeded()
+//                }
+//            }
+
+             //4. Also watch for when items are dragged out of pool into tiers
+            .onChange(of: groupedItems.flatMap { $0 }.count) { _, _ in
+                // If pool became empty due to dragging, hide it
+                if unGroupedItems.isEmpty && showEmbeddedStickyPoolSheet {
+                    withAnimation {
+                        showEmbeddedStickyPoolSheet = false
+                    }
+                }
             }
             .interactiveDismissDisabled(true)
         }
@@ -1397,6 +1415,22 @@ struct TierListView: View {
         guard !groupedItems.isEmpty else { return }
         imageReloadToken = UUID() // change identity → rows/images rebuild
     }
+    
+    private func showStickyPoolIfNeeded() {
+        // Only show if:
+        // 1. There are items
+        // 2. Sheet isn't already showing
+        // 3. No other fullscreen sheets are active
+        if !unGroupedItems.isEmpty &&
+           !showEmbeddedStickyPoolSheet &&
+           !showAddItemsSheet &&
+           !showBlankItemsFS {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                showEmbeddedStickyPoolSheet = true
+            }
+        }
+    }
+
     
     // MARK: - Tier Editor Sheet
     struct TierEditorSheet: View {
@@ -3143,61 +3177,131 @@ struct TierListView: View {
         let placeholderURL = "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/placeholderImages%2FitemPlaceholder.png?alt=media&token="
         var nextRank = (unGroupedItems.map(\.rank).max() ?? 0) + 1
 
-        for draft in blankDrafts {
-            let newItemID = UUID().uuidString
-            let url = draft.itemImageURL ?? placeholderURL
+        print("🔍 Starting append: unGroupedItems.count = \(unGroupedItems.count)")
+        print("🔍 blankDrafts.count = \(blankDrafts.count)")
 
+        for draft in blankDrafts {
+            // Generate a unique 12-character ID for this item
+            let itemID = randomString(length: 12)
+            
+            // Use the uploaded URL if available, otherwise use placeholder
+            let imageURL = draft.itemImageURL ?? placeholderURL
+
+            // Create the RankoRecord
             let rec = RankoRecord(
-                objectID: newItemID,
+                objectID: itemID,
                 ItemName: draft.name,
                 ItemDescription: draft.description,
                 ItemCategory: "",
-                ItemImage: url,
-                ItemGIF: draft.gif,
-                ItemVideo: draft.video,
-                ItemAudio: draft.audio
+                ItemImage: imageURL,
+                ItemGIF: draft.gif.isEmpty ? nil : draft.gif,
+                ItemVideo: draft.video.isEmpty ? nil : draft.video,
+                ItemAudio: draft.audio.isEmpty ? nil : draft.audio
             )
-            let item = RankoItem(id: newItemID, rank: nextRank, votes: 0, record: rec, playCount: 0)
+            
+            // Create the RankoItem
+            let item = RankoItem(
+                id: itemID,
+                rank: nextRank,
+                votes: 0,
+                record: rec,
+                playCount: 0
+            )
+            
+            print("✅ Adding item: \(item.itemName) (ID: \(itemID))")
             unGroupedItems.append(item)
             nextRank += 1
         }
 
+        print("🔍 After append: unGroupedItems.count = \(unGroupedItems.count)")
+
+        // Reset the drafts
         blankDrafts = [BlankItemDraft()]
         draftError = nil
     }
     
     // MARK: - EMBEDDED STICKY POOL
     private var embeddedStickyPoolView: some View {
-        VStack(spacing: 6) {
-            Text(showSelectionBar
-                 ? "Selection active — dragging is disabled here"
-                 : "Drag the below items to groups")
-                .font(.caption2)
-                .foregroundColor(.gray)
-                .padding(.top, 3)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(unGroupedItems) { item in
-                        // ⛔️ No selection UI in the sticky pool
-                        TierItemCell(
-                            item: item,
-                            contentDisplay: contentMode,
-                            itemSize: sizeMode,
-                            showSelectionBar: false,        // <- force OFF
-                            isSelected: false,
-                            onSelect: { _ in }               // unused
-                        )
-                        // Only allow dragging when not in selection mode
-                        .modifier(DragIfEnabled(enabled: !showSelectionBar, id: item.id))
-                    }
+        VStack(spacing: 8) {
+            // Header with item count and close button
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "tray.full.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(Color(hex: 0x6D400F))
+                    
+                    Text("Item Pool")
+                        .font(.custom("Nunito-Black", size: 14))
+                        .foregroundColor(Color(hex: 0x6D400F))
+                    
+                    Text("(\(unGroupedItems.count))")
+                        .font(.custom("Nunito-Black", size: 12))
+                        .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                
+                Spacer()
+                
+                Button {
+                    withAnimation {
+                        showEmbeddedStickyPoolSheet = false
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            
+            // Instructions
+            Text(showSelectionBar
+                 ? "Selection active — dragging is disabled"
+                 : "Drag items below to add them to tiers")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 16)
+            
+            // Items scroll view
+            if unGroupedItems.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 24))
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text("No items in pool")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(unGroupedItems) { item in
+                            TierItemCell(
+                                item: item,
+                                contentDisplay: contentMode,
+                                itemSize: sizeMode,
+                                showSelectionBar: false,
+                                isSelected: false,
+                                onSelect: { _ in }
+                            )
+                            .modifier(DragIfEnabled(enabled: !showSelectionBar, id: item.id))
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                }
             }
         }
         .frame(maxWidth: .infinity)
-        // Only allow dropping when not in selection mode
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.1), radius: 8, y: -2)
+        )
         .modifier(StickyPoolDropModifier(
             enabled: !showSelectionBar,
             itemRows: $groupedItems,

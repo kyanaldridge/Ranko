@@ -8,12 +8,21 @@
 import Foundation
 
 enum Secrets {
+    
     static var algoliaAppID: String {
         return getPlistValue(for: "ALGOLIA_APP_ID")
     }
 
     static var algoliaAPIKey: String {
         return getPlistValue(for: "ALGOLIA_API_KEY")
+    }
+    
+    static var geographyAlgoliaAppID: String {
+        return getPlistValue(for: "ALGOLIA_GEOGRAPHY_ID")
+    }
+
+    static var geographyAlgoliaAPIKey: String {
+        return getPlistValue(for: "ALGOLIA_GEOGRAPHY_KEY")
     }
     
     static var firebaseToken: String {

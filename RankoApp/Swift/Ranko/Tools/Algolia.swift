@@ -16,42 +16,65 @@ typealias AQuery     = AlgoliaSearchClient.Query
 typealias AJSON      = AlgoliaSearchClient.JSON
 
 class AlgoliaAddRecords<T: Decodable> {
-    // MARK: - Editable Variables -
-    private let AlgoliaIndex: String
-    private let AlgoliaFilters: String?
-    private let AlgoliaQuery: String?
-    private let AlgoliaHitsPerPage: Int
-    
-    // MARK: - Important Variables -
-    private var client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID), apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
+    // MARK: Config captured from init
+    private let appID: String
+    private let apiKey: String
+    private let indexName: String
+    private let filters: String?
+    private let defaultQuery: String?
+    private let hitsPerPage: Int
+
+    // MARK: Internal
+    private let client: SearchClient
     private let index: AIndex
 
-
+    /// Primary initializer (per-step creds)
     init(
+        AlgoliaAppID: String,
+        AlgoliaAPIKey: String,
         AlgoliaIndex: String,
         AlgoliaFilters: String? = nil,
         AlgoliaQuery: String = "",
         AlgoliaHitsPerPage: Int = 20
     ) {
-        self.AlgoliaIndex = AlgoliaIndex
-        self.AlgoliaFilters = AlgoliaFilters
-        self.AlgoliaQuery = AlgoliaQuery
-        self.AlgoliaHitsPerPage = AlgoliaHitsPerPage
+        self.appID = AlgoliaAppID
+        self.apiKey = AlgoliaAPIKey
+        self.indexName = AlgoliaIndex
+        self.filters = AlgoliaFilters
+        self.defaultQuery = AlgoliaQuery
+        self.hitsPerPage = AlgoliaHitsPerPage
 
-        self.client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-                                   apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
+        self.client = SearchClient(
+            appID: ApplicationID(rawValue: AlgoliaAppID),
+            apiKey: APIKey(rawValue: AlgoliaAPIKey)
+        )
         self.index = client.index(withName: IndexName(rawValue: AlgoliaIndex))
+    }
+
+    /// Convenience initializer (fallback → Secrets)
+    convenience init(
+        AlgoliaIndex: String,
+        AlgoliaFilters: String? = nil,
+        AlgoliaQuery: String = "",
+        AlgoliaHitsPerPage: Int = 20
+    ) {
+        self.init(
+            AlgoliaAppID: Secrets.algoliaAppID,
+            AlgoliaAPIKey: Secrets.algoliaAPIKey,
+            AlgoliaIndex: AlgoliaIndex,
+            AlgoliaFilters: AlgoliaFilters,
+            AlgoliaQuery: AlgoliaQuery,
+            AlgoliaHitsPerPage: AlgoliaHitsPerPage
+        )
     }
 
     // MARK: - Fetch & Decode
     func fetchData(completion: @escaping (Result<[T], Error>) -> Void) {
-        var query = Query(AlgoliaQuery)
-        query.hitsPerPage = AlgoliaHitsPerPage
-        if let filters = AlgoliaFilters {
-            query.filters = filters
-        }
+        var q = Query(defaultQuery ?? "")
+        q.hitsPerPage = hitsPerPage
+        if let f = filters { q.filters = f }
 
-        index.search(query: query) { result in
+        index.search(query: q) { result in
             switch result {
             case .success(let response):
                 do {
@@ -61,7 +84,6 @@ class AlgoliaAddRecords<T: Decodable> {
                     }
                     completion(.success(objects))
                 } catch {
-                    print("❌ Decoding failed: \(error)")
                     completion(.failure(error))
                 }
             case .failure(let error):
@@ -69,17 +91,15 @@ class AlgoliaAddRecords<T: Decodable> {
             }
         }
     }
-    
-    func search(query: String, offset: Int, length: Int, completion: @escaping ([T], Int) -> Void) {
-        var algoliaQuery = Query(query)
-        algoliaQuery.offset = offset
-        algoliaQuery.length = length
-        algoliaQuery.analytics = false
-        if let filters = AlgoliaFilters {
-            algoliaQuery.filters = filters
-        }
 
-        index.search(query: algoliaQuery) { result in
+    func search(query: String, offset: Int, length: Int, completion: @escaping ([T], Int) -> Void) {
+        var q = Query(query)
+        q.offset = offset
+        q.length = length
+        q.analytics = false
+        if let f = filters { q.filters = f }
+
+        index.search(query: q) { result in
             switch result {
             case .success(let response):
                 do {
@@ -87,7 +107,7 @@ class AlgoliaAddRecords<T: Decodable> {
                         let data = try JSONEncoder().encode(hit.object)
                         return try JSONDecoder().decode(T.self, from: data)
                     }
-                    completion(objects, response.nbHits!) // ← total hits count
+                    completion(objects, response.nbHits ?? 0)
                 } catch {
                     print("❌ Decoding failed: \(error)")
                     completion([], 0)
@@ -138,6 +158,8 @@ struct AddItemView: View {
         self.filterChip = filterChip
         self.existingCount = existingCount
         self._algoliaAddRecords = State(wrappedValue: AlgoliaAddRecords(
+            AlgoliaAppID: "ALGOLIA_APP_ID",
+            AlgoliaAPIKey: "ALGOLIA_API_KEY",
             AlgoliaIndex: filterChip.nameIndex,
             AlgoliaFilters: filterChip.filter
         ))
@@ -713,6 +735,8 @@ struct AddItemGroupView: View {
         self.filterChip = filterChip
         self.existingCount = existingCount
         self._algoliaAddRecords = State(wrappedValue: AlgoliaAddRecords(
+            AlgoliaAppID: "ALGOLIA_APP_ID",
+            AlgoliaAPIKey: "ALGOLIA_API_KEY",
             AlgoliaIndex: filterChip.nameIndex,
             AlgoliaFilters: filterChip.filter
         ))

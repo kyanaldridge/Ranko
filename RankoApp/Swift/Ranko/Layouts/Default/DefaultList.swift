@@ -781,13 +781,11 @@ struct DefaultListView: View {
             .refreshable {
                 refreshItemImages()
             }
-            .sheet(isPresented: $showAddItemsSheet) {
-                FilterChipPickerView(selectedRankoItems: $selectedRankoItems)
-                    .presentationDetents([.height(480)])
+            .fullScreenCover(isPresented: $showAddItemsSheet) {
+                AddItemsPickerSheet(selectedRankoItems: $selectedRankoItems)
+                    .presentationDetents([.large])
                     .interactiveDismissDisabled(true)
-                    .navigationTransition(
-                        .zoom(sourceID: "sampleButton", in: transition)
-                    )
+                    .navigationTransition(.zoom(sourceID: "sampleButton", in: transition))
             }
             .sheet(isPresented: $editButtonTapped) {
                 DefaultListEditDetails(
