@@ -61,9 +61,9 @@ struct DefaultListView: View {
     @State private var rankoName: String
     @State private var description: String
     @State private var isPrivate: Bool
-    @State private var categoryName: String = "Unknown"
-    @State private var categoryIcon: String = "questionmark"
-    @State private var categoryColour: String = "0x000000"
+    @State private var categoryName: String
+    @State private var categoryIcon: String
+    @State private var categoryColour: UInt
     @State private var tags: [String] = []
     
     // to revert to old values
@@ -72,11 +72,12 @@ struct DefaultListView: View {
     @State private var originalIsPrivate: Bool
     @State private var originalCategoryName: String = ""
     @State private var originalCategoryIcon: String = ""
-    @State private var originalCategoryColour: String = ""
+    @State private var originalCategoryColour: UInt = 0xFFFFFF
 
     // Sheet states
     @State var showEditItemSheet = false
     @State var showAddItemsSheet = false
+    @State var showAddItemsButtonSheet = false
     @State var showEditDetailsSheet = false
     @State var showReorderSheet = false
     @State var showExitSheet = false
@@ -131,6 +132,7 @@ struct DefaultListView: View {
     
     // Blank Items composer
     @State private var showBlankItemsFS = false
+    @State private var showBlankItemsButtonFS = false
     @State private var blankDrafts: [BlankItemDraft] = [BlankItemDraft()] // start with 1
     @State private var draftError: String? = nil
 
@@ -141,12 +143,18 @@ struct DefaultListView: View {
         rankoName: String,
         description: String,
         isPrivate: Bool,
+        categoryName: String,
+        categoryIcon: String,
+        categoryColour: UInt,
         selectedRankoItems: [RankoItem] = [],
         onSave: @escaping (RankoItem) -> Void
     ) {
         _rankoName   = State(initialValue: rankoName)
         _description = State(initialValue: description)
         _isPrivate   = State(initialValue: isPrivate)
+        _categoryName   = State(initialValue: categoryName)
+        _categoryIcon = State(initialValue: categoryIcon)
+        _categoryColour   = State(initialValue: categoryColour)
         _selectedRankoItems = State(initialValue: selectedRankoItems)
         _onSave = State(initialValue: onSave)
 
@@ -165,7 +173,7 @@ struct DefaultListView: View {
         @Binding var isPrivate: Bool
         let categoryName: String
         let categoryIcon: String
-        let categoryColour: String
+        let categoryColour: UInt
         @Binding var showEditDetailsSheet: Bool
         var onTapPrivacy: (() -> Void)?
         var onTapCategory: (() -> Void)?
@@ -340,6 +348,35 @@ struct DefaultListView: View {
                                                             onSave(updatedItem)
                                                         }
                                                     }
+                                            }
+                                            
+                                            if selectedRankoItems.count == 0 {
+                                                HStack {
+                                                    Button {
+                                                        showBlankItemsButtonFS = true
+                                                    } label: {
+                                                        Text("Add Blank Items")
+                                                            .font(.custom("Nunito-Black", size: 15))
+                                                    }
+                                                    .tint(Color.red)
+                                                    .foregroundStyle(Color.white)
+                                                    .buttonStyle(.glassProminent)
+                                                    .matchedTransitionSource(
+                                                        id: "emptyBlankButton", in: transition
+                                                    )
+                                                    Button {
+                                                        showAddItemsButtonSheet = true
+                                                    } label: {
+                                                        Text("Add Sample Items")
+                                                            .font(.custom("Nunito-Black", size: 15))
+                                                    }
+                                                    .tint(Color.red)
+                                                    .foregroundStyle(Color.white)
+                                                    .buttonStyle(.glassProminent)
+                                                    .matchedTransitionSource(
+                                                        id: "emptySampleButton", in: transition
+                                                    )
+                                                }
                                             }
                                         }
                                         .id(imageReloadToken)
@@ -787,6 +824,12 @@ struct DefaultListView: View {
                     .interactiveDismissDisabled(true)
                     .navigationTransition(.zoom(sourceID: "sampleButton", in: transition))
             }
+            .fullScreenCover(isPresented: $showAddItemsButtonSheet) {
+                AddItemsPickerSheet(selectedRankoItems: $selectedRankoItems)
+                    .presentationDetents([.large])
+                    .interactiveDismissDisabled(true)
+                    .navigationTransition(.zoom(sourceID: "emptySampleButton", in: transition))
+            }
             .sheet(isPresented: $editButtonTapped) {
                 DefaultListEditDetails(
                     rankoName: rankoName,
@@ -847,6 +890,16 @@ struct DefaultListView: View {
                     canAddMore: blankDrafts.count < 10,
                     onCommit: { appendDraftsToSelectedRanko() }
                 )
+            }
+            .fullScreenCover(isPresented: $showBlankItemsButtonFS) {
+                BlankItemsComposer(
+                    rankoID: rankoID,                  // 👈 add this
+                    drafts: $blankDrafts,
+                    error: $draftError,
+                    canAddMore: blankDrafts.count < 10,
+                    onCommit: { appendDraftsToSelectedRanko() }
+                )
+                .navigationTransition(.zoom(sourceID: "emptyBlankButton", in: transition))
             }
             .onAppear {
                 refreshItemImages()
@@ -1000,7 +1053,7 @@ struct DefaultListView: View {
         let ts = formatter.string(from: now)
 
         let categoryDict: [String: Any] = [
-            "colour": categoryColour,
+            "colour": String(categoryColour),
             "icon":   categoryIcon,
             "name":   categoryName
         ]
@@ -2150,11 +2203,11 @@ struct DefaultListEditDetails: View {
     @State private var isPrivate: Bool
     @State private var categoryName: String = ""
     @State private var categoryIcon: String = ""
-    @State private var categoryColour: String = ""
+    @State private var categoryColour: UInt = 0xFFFFFF
     @State private var selectedCategoryChip: SampleCategoryChip?
     @State private var initialCategoryName: String = ""
     @State private var initialCategoryIcon: String = ""
-    @State private var initialCategoryColour: String = ""
+    @State private var initialCategoryColour: UInt = 0xFFFFFF
 
     // MARK: – UI state
     @FocusState private var nameFocused: Bool
@@ -2172,7 +2225,7 @@ struct DefaultListEditDetails: View {
     @State private var rankoNameShake: CGFloat = 0
     private var isValid: Bool { !rankoName.isEmpty }
 
-    private let onSave: (String, String, Bool, String, String, String) -> Void
+    private let onSave: (String, String, Bool, String, String, UInt) -> Void
 
     init(
         rankoName: String,
@@ -2180,8 +2233,8 @@ struct DefaultListEditDetails: View {
         isPrivate: Bool,
         categoryName: String,
         categoryIcon: String,
-        categoryColour: String,
-        onSave: @escaping (String, String, Bool, String, String, String) -> Void
+        categoryColour: UInt,
+        onSave: @escaping (String, String, Bool, String, String, UInt) -> Void
     ) {
         self.onSave = onSave
         _rankoName  = State(initialValue: rankoName)

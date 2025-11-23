@@ -73,9 +73,9 @@ struct DefaultListPersonal: View {
     @State private var rankoName: String = ""
     @State private var description: String = ""
     @State private var isPrivate: Bool = false
-    @State private var categoryName: String = "Unknown"
-    @State private var categoryIcon: String = "questionmark"
-    @State private var categoryColour: String = "0x000000"
+    @State private var categoryName: String
+    @State private var categoryIcon: String
+    @State private var categoryColour: UInt
     
     // Original values (to revert if needed)
     @State private var originalRankoName: String = ""
@@ -83,7 +83,7 @@ struct DefaultListPersonal: View {
     @State private var originalIsPrivate: Bool = false
     @State private var originalCategoryName: String = ""
     @State private var originalCategoryIcon: String = ""
-    @State private var originalCategoryColour: String = ""
+    @State private var originalCategoryColour: UInt = 0xFFFFFF
     
     // Sheets & states
     @State private var possiblyEdited = false
@@ -136,6 +136,9 @@ struct DefaultListPersonal: View {
         rankoName: String? = nil,
         description: String? = nil,
         isPrivate: Bool? = nil,
+        categoryName: String,
+        categoryIcon: String,
+        categoryColour: UInt,
         selectedRankoItems: [RankoItem] = [],
         onSave: @escaping (RankoItem) -> Void,
         onDelete: (() -> Void)? = nil
@@ -145,6 +148,9 @@ struct DefaultListPersonal: View {
         _rankoName = State(initialValue: rankoName ?? "")
         _description = State(initialValue: description ?? "")
         _isPrivate = State(initialValue: isPrivate ?? false)
+        _categoryName = State(initialValue: categoryName)
+        _categoryIcon = State(initialValue: categoryIcon)
+        _categoryColour = State(initialValue: categoryColour)
         _selectedRankoItems = State(initialValue: selectedRankoItems)
         _onSave = State(initialValue: onSave)
         
@@ -163,7 +169,7 @@ struct DefaultListPersonal: View {
         @Binding var isPrivate: Bool
         let categoryName: String
         let categoryIcon: String
-        let categoryColour: String
+        let categoryColour: UInt
         @Binding var showEditDetailsSheet: Bool
         var onTapPrivacy: (() -> Void)?
         var onTapCategory: (() -> Void)?
@@ -1089,7 +1095,7 @@ struct DefaultListPersonal: View {
                 isPrivate = priv
                 categoryName = catName
                 categoryIcon = catIcon
-                categoryColour = catColour
+                categoryColour = UInt(catColour) ?? 0xFFFFFF
                 
                 selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
                 
@@ -1099,7 +1105,7 @@ struct DefaultListPersonal: View {
                 originalIsPrivate = priv
                 originalCategoryName = catName
                 originalCategoryIcon = catIcon
-                originalCategoryColour = catColour
+                originalCategoryColour = UInt(catColour) ?? 0xFFFFFF
                 return
             }
             
@@ -1142,7 +1148,7 @@ struct DefaultListPersonal: View {
             isPrivate = priv
             categoryName = catName
             categoryIcon = catIcon
-            categoryColour = catColour
+            categoryColour = UInt(catColour) ?? 0xFFFFFF
             selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
             
             originalRankoName = name
@@ -1150,7 +1156,7 @@ struct DefaultListPersonal: View {
             originalIsPrivate = priv
             originalCategoryName = catName
             originalCategoryIcon = catIcon
-            originalCategoryColour = catColour
+            originalCategoryColour = UInt(catColour) ?? 0xFFFFFF
         }
     }
     

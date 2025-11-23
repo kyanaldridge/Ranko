@@ -576,6 +576,9 @@ struct ProfileView: View {
             if list.type == "default" {
                 DefaultListPersonal(
                   rankoID: list.id,
+                  categoryName: list.categoryName,
+                  categoryIcon: list.categoryIcon,
+                  categoryColour: list.categoryColour,
                   onSave: { _ in
                       listViewID     = UUID()
                       isLoadingLists = true
@@ -2107,6 +2110,9 @@ struct SearchRankosView: View {
                         if list.type == "default" {
                             DefaultListPersonal(
                                 rankoID: list.id,
+                                categoryName: list.categoryName,
+                                categoryIcon: list.categoryIcon,
+                                categoryColour: list.categoryColour,
                                 onSave: { _ in dismiss() },
                                 onDelete: { dismiss() }
                             )
@@ -2761,6 +2767,9 @@ struct SearchRankosView2: View {
                 if list.type == "default" {
                     DefaultListPersonal(
                         rankoID: list.id,
+                        categoryName: list.categoryName,
+                        categoryIcon: list.categoryIcon,
+                        categoryColour: list.categoryColour,
                         onSave: { _ in dismiss() },
                         onDelete: { dismiss() }
                     )

@@ -170,35 +170,6 @@ struct RankoCategoryInfo: Codable, Hashable {
     let colour: UInt
 }
 
-struct RankoRecord: Codable, Identifiable, Equatable, Hashable {
-    let objectID: String
-    let ItemName: String
-    let ItemDescription: String
-    let ItemCategory: String
-    let ItemImage: String
-
-    // ⬇️ make media fields optional so decoding won’t require them
-    let ItemGIF: String?
-    let ItemVideo: String?
-    let ItemAudio: String?
-
-    var id: String { objectID }
-}
-
-struct RankoItem: Identifiable, Codable, Equatable, Hashable {
-    let id: String            // ← will hold our random 12-char code
-    var rank: Int             // ← selection order
-    var votes: Int
-    let record: RankoRecord
-    var itemName: String { record.ItemName }
-    var itemDescription: String { record.ItemDescription }
-    var itemImage: String { record.ItemImage }
-    var itemGIF: String   { record.ItemGIF   ?? "" }
-    var itemVideo: String { record.ItemVideo ?? "" }
-    var itemAudio: String { record.ItemAudio ?? "" }
-    var playCount: Int
-}
-
 struct RankoTier: Codable, Hashable, Identifiable {
     // Your loader currently uses the Firebase dictionary key as "index".
     // In TierList_Personal you build it from a String key (e.g. "1", "2").

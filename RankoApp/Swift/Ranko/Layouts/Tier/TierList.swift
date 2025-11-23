@@ -266,9 +266,9 @@ struct TierListView: View {
     @State private var rankoName: String
     @State private var description: String
     @State private var isPrivate: Bool
-    @State private var categoryName: String = "Unknown"
-    @State private var categoryIcon: String = "questionmark"
-    @State private var categoryColour: String = "0x000000"
+    @State private var categoryName: String
+    @State private var categoryIcon: String
+    @State private var categoryColour: UInt
     @State private var tags: [String] = []
     
     // to revert to old values
@@ -277,7 +277,7 @@ struct TierListView: View {
     @State private var originalIsPrivate: Bool
     @State private var originalCategoryName: String = ""
     @State private var originalCategoryIcon: String = ""
-    @State private var originalCategoryColour: String = ""
+    @State private var originalCategoryColour: UInt = 0xFFFFFF
     
     // Sheet states
     @State private var showTabBar = true
@@ -377,11 +377,17 @@ struct TierListView: View {
         rankoName: String,
         description: String,
         isPrivate: Bool,
+        categoryName: String,
+        categoryIcon: String,
+        categoryColour: UInt,
         groupedItems items: [RankoItem]? = nil
     ) {
         _rankoName   = State(initialValue: rankoName)
         _description = State(initialValue: description)
         _isPrivate   = State(initialValue: isPrivate)
+        _categoryName   = State(initialValue: categoryName)
+        _categoryIcon = State(initialValue: categoryIcon)
+        _categoryColour   = State(initialValue: categoryColour)
 
         // store the incoming items for later
         self.seedItems = items ?? []
@@ -402,7 +408,7 @@ struct TierListView: View {
         _originalIsPrivate      = State(initialValue: isPrivate)
         _originalCategoryName   = State(initialValue: "Unknown")
         _originalCategoryIcon   = State(initialValue: "questionmark")
-        _originalCategoryColour = State(initialValue: "0x000000")
+        _originalCategoryColour = State(initialValue: 0x000000)
     }
     
     enum WrapMode: String, CaseIterable { case wrap, noWrap }
@@ -414,7 +420,7 @@ struct TierListView: View {
         @Binding var isPrivate: Bool
         let categoryName: String
         let categoryIcon: String
-        let categoryColour: String
+        let categoryColour: UInt
         @Binding var showEditDetailsSheet: Bool
         var onTapPrivacy: (() -> Void)?
         var onTapCategory: (() -> Void)?
@@ -730,15 +736,25 @@ struct TierListView: View {
                                         .overlay(alignment: .top) {
                                             if addButtonTapped {
                                                 HStack {
-                                                    // Delete
-                                                    VStack(spacing: 5) {
-                                                        Image(systemName: "square.dashed")
-                                                            .resizable().scaledToFit()
-                                                            .frame(width: 20, height: 20)
-                                                        Text("Blank")
-                                                            .font(.custom("Nunito-Black", size: 11))
+                                                    // Blank Button
+                                                    Button {
+                                                        withAnimation { addButtonTapped = false }
+                                                        openBlankComposer()
+                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                        impact.prepare()
+                                                        impact.impactOccurred(intensity: 1.0)
+                                                    } label: {
+                                                        VStack(spacing: 5) {
+                                                            Image(systemName: "square.dashed")
+                                                                .resizable().scaledToFit()
+                                                                .frame(width: 20, height: 20)
+                                                            Text("Blank")
+                                                                .font(.custom("Nunito-Black", size: 11))
+                                                        }
+                                                        .frame(width: 65, height: 65)
+                                                        .contentShape(Rectangle())
                                                     }
-                                                    .frame(width: 65, height: 65)
+                                                    .buttonStyle(.plain)
                                                     .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
                                                     .background(
                                                         GeometryReader { gp in
@@ -747,28 +763,28 @@ struct TierListView: View {
                                                                 .onChange(of: gp.size) { _, _ in blankFrame = gp.frame(in: .named("exitbar")) }
                                                         }
                                                     )
-                                                    .simultaneousGesture(
-                                                        LongPressGesture(minimumDuration: 0.0).onEnded { _ in
-                                                            withAnimation { addButtonTapped = false }
-                                                            openBlankComposer()
-                                                            let impact = UIImpactFeedbackGenerator(style: .heavy)
-                                                            impact.prepare()
-                                                            impact.impactOccurred(intensity: 1.0)
+                                                    // Sample Button
+                                                    Button {
+                                                        showAddItemsSheet = true
+                                                        withAnimation { addButtonTapped = false }
+                                                        let impact = UIImpactFeedbackGenerator(style: .heavy)
+                                                        impact.prepare()
+                                                        impact.impactOccurred(intensity: 1.0)
+                                                    } label: {
+                                                        VStack(spacing: 5) {
+                                                            Image(systemName: "square.dashed.inset.filled")
+                                                                .resizable().scaledToFit()
+                                                                .frame(width: 20, height: 20)
+                                                            Text("Sample")
+                                                                .font(.custom("Nunito-Black", size: 11))
+                                                                .matchedTransitionSource(
+                                                                    id: "sampleButton", in: transition
+                                                                )
                                                         }
-                                                    )
-                                                    
-                                                    // Save
-                                                    VStack(spacing: 5) {
-                                                        Image(systemName: "square.dashed.inset.filled")
-                                                            .resizable().scaledToFit()
-                                                            .frame(width: 20, height: 20)
-                                                        Text("Sample")
-                                                            .font(.custom("Nunito-Black", size: 11))
-                                                            .matchedTransitionSource(
-                                                                id: "sampleButton", in: transition
-                                                            )
+                                                        .frame(width: 65, height: 65)
+                                                        .contentShape(Rectangle())
                                                     }
-                                                    .frame(width: 65, height: 65)
+                                                    .buttonStyle(.plain)
                                                     .glassEffect(.regular.interactive().tint(Color(hex: 0xFFFFFF)))
                                                     .background(
                                                         GeometryReader { gp in
@@ -1760,6 +1776,8 @@ struct TierListView: View {
         let tier: TierConfig
         var body: some View {
             VStack(spacing: 2) {
+                Spacer(minLength: 0)
+                
                 Text(tier.code)
                     .font(.custom("Nunito-Black", size: 18))
                     .foregroundStyle(.white)
@@ -1773,6 +1791,8 @@ struct TierListView: View {
                     .minimumScaleFactor(0.7)
                     .padding(.bottom, 6)
                     .padding(.horizontal, 6)
+                
+                Spacer(minLength: 0)
             }
             .frame(minWidth: 70, minHeight: 50)
             .background(
@@ -3281,8 +3301,8 @@ struct TierListView: View {
                         ForEach(unGroupedItems) { item in
                             TierItemCell(
                                 item: item,
-                                contentDisplay: contentMode,
-                                itemSize: sizeMode,
+                                contentDisplay: .textAndImage,
+                                itemSize: .small,
                                 showSelectionBar: false,
                                 isSelected: false,
                                 onSelect: { _ in }
@@ -3502,9 +3522,8 @@ struct TierListView: View {
         let rankoDateTime = aedtFormatter.string(from: now)
 
         // 4) Category object (use your existing normalizer)
-        let colourString: String = normalizeHexString(categoryColour)
         let categoryDict: [String: Any] = [
-            "colour": colourString,
+            "colour": String(categoryColour),
             "icon":   categoryIcon,
             "name":   categoryName
         ]
@@ -3732,7 +3751,7 @@ struct TierListView: View {
                         .lineLimit(1)
                     if !item.itemDescription.isEmpty {
                         Text(item.itemDescription)
-                            .font(.system(size: itemSize.descFont, weight: .regular))
+                            .font(.custom("Nunito-Black", size: itemSize.descFont))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -3765,25 +3784,14 @@ struct TierListView: View {
         var onDeleteTier: (Int) -> Void = { _ in }
 
         var body: some View {
-            HStack(alignment: .top, spacing: 4) {
-                TierHeader(tier: tier)
-                    .contextMenu {
-                        Button { onEditTiers() } label: {
-                            Label("Edit Tiers…", systemImage: "pencil")
-                        }
-                        Divider()
-                        Button(role: .destructive) {
-                            onDeleteTier(rowIndex)
-                        } label: {
-                            Label(canDelete ? "Delete Tier" : "Delete Tier (empty only)", systemImage: "trash")
-                        }
-                        .disabled(!canDelete)
-                    }
-
+            ZStack {
                 switch layout {
                 case .noWrap:
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: itemSize == .large ? 8 : 4) {
+                            Rectangle()
+                                .fill(Color(.clear))
+                                .frame(width: 75)
                             ForEach(items) { item in
                                 cell(for: item)
                             }
@@ -3791,13 +3799,36 @@ struct TierListView: View {
                         .padding(8)
                     }
                 case .wrap:
-                    FlowLayout2(spacing: itemSize == .large ? 8 : 6) {
-                        ForEach(items) { item in
-                            cell(for: item)
+                    HStack {
+                        Rectangle()
+                            .fill(Color(.clear))
+                            .frame(width: 75)
+                        FlowLayout2(spacing: itemSize == .large ? 8 : 6) {
+                            ForEach(items) { item in
+                                cell(for: item)
+                            }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
+                }
+                
+                HStack {
+                    TierHeader(tier: tier)
+                        .opacity(0.8)
+                        .contextMenu {
+                            Button { onEditTiers() } label: {
+                                Label("Edit Tiers…", systemImage: "pencil")
+                            }
+                            Divider()
+                            Button(role: .destructive) {
+                                onDeleteTier(rowIndex)
+                            } label: {
+                                Label(canDelete ? "Delete Tier" : "Delete Tier (empty only)", systemImage: "trash")
+                            }
+                            .disabled(!canDelete)
+                        }
+                    Spacer(minLength: 0)
                 }
             }
             .frame(minHeight: 60)

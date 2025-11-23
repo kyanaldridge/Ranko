@@ -664,7 +664,7 @@ struct ExploreView: View {
         }
         
         .fullScreenCover(item: $clonedList) { list in
-            DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, selectedRankoItems: list.items, onSave: { _ in})
+            DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, categoryName: list.categoryName, categoryIcon: list.categoryIcon, categoryColour: list.categoryColour, selectedRankoItems: list.items, onSave: { _ in})
         }
         
         .onAppear {

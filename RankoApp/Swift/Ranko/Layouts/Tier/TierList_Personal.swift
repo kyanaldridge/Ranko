@@ -75,7 +75,7 @@ struct TierListPersonal: View {
     @State private var isPrivate: Bool = false
     @State private var categoryName: String = "Unknown"
     @State private var categoryIcon: String = "questionmark"
-    @State private var categoryColour: String = "0x000000"
+    @State private var categoryColour: UInt = 0xFFFFFF
     @State private var tags: [String] = []
     
     // Original values (to revert if needed)
@@ -84,7 +84,7 @@ struct TierListPersonal: View {
     @State private var originalIsPrivate: Bool = false
     @State private var originalCategoryName: String = ""
     @State private var originalCategoryIcon: String = ""
-    @State private var originalCategoryColour: String = ""
+    @State private var originalCategoryColour: UInt = 0xFFFFFF
     
     // Sheet states
     @State private var possiblyEdited = false
@@ -185,7 +185,7 @@ struct TierListPersonal: View {
         @Binding var isPrivate: Bool
         let categoryName: String
         let categoryIcon: String
-        let categoryColour: String
+        let categoryColour: UInt
         @Binding var showEditDetailsSheet: Bool
         var onTapPrivacy: (() -> Void)?
         var onTapCategory: (() -> Void)?
@@ -1421,7 +1421,7 @@ struct TierListPersonal: View {
                 self.isPrivate      = privacyBool
                 self.categoryName   = catName
                 self.categoryIcon   = catIcon
-                self.categoryColour = "0x" + String(catColourUInt, radix: 16, uppercase: true)
+                self.categoryColour = UInt("0x" + String(catColourUInt, radix: 16, uppercase: true)) ?? 0xFFFFFF
                 self.tags           = tags
                 
                 // tiers + items
@@ -3874,12 +3874,17 @@ struct TierListPersonal: View {
                         .padding(8)
                     }
                 case .wrap:
-                    FlowLayout2(spacing: itemSize == .large ? 8 : 6) {
-                        ForEach(items) { item in
-                            cell(for: item)
+                    HStack {
+                        Rectangle()
+                            .fill(Color(.clear))
+                            .frame(width: 75)
+                        FlowLayout2(spacing: itemSize == .large ? 8 : 6) {
+                            ForEach(items) { item in
+                                cell(for: item)
+                            }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
                 }
             }

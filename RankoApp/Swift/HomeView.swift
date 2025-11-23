@@ -637,12 +637,11 @@ struct HomeView: View {
                 })
             }
         }
-        
         .fullScreenCover(item: $clonedList) { list in
             if list.type == "default" {
-                DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, selectedRankoItems: list.items, onSave: { _ in})
+                DefaultListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, categoryName: list.categoryName, categoryIcon: list.categoryIcon, categoryColour: list.categoryColour, selectedRankoItems: list.items, onSave: { _ in})
             } else if list.type == "tier" {
-                TierListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, groupedItems: list.items)
+                TierListView(rankoName: list.listName, description: list.listDescription, isPrivate: false, categoryName: list.categoryName, categoryIcon: list.categoryIcon, categoryColour: list.categoryColour, groupedItems: list.items)
             }
         }
         

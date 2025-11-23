@@ -25,6 +25,14 @@ enum Secrets {
         return getPlistValue(for: "ALGOLIA_GEOGRAPHY_KEY")
     }
     
+    static var entertainmentAlgoliaAppID: String {
+        return getPlistValue(for: "ALGOLIA_ENTERTAINMENT_ID")
+    }
+
+    static var entertainmentAlgoliaAPIKey: String {
+        return getPlistValue(for: "ALGOLIA_ENTERTAINMENT_KEY")
+    }
+    
     static var firebaseToken: String {
         return getPlistValue(for: "FIREBASE_TOKEN")
     }

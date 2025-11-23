@@ -71,7 +71,7 @@ struct DefaultListSpectate: View {
     @State private var isPrivate: Bool = false
     @State private var categoryName: String = "Unknown"
     @State private var categoryIcon: String = "questionmark"
-    @State private var categoryColour: String = "0x000000"
+    @State private var categoryColour: UInt = 0xFFFFFF
     
     // Original values (to revert if needed)
     @State private var originalRankoName: String = ""
@@ -79,7 +79,7 @@ struct DefaultListSpectate: View {
     @State private var originalIsPrivate: Bool = false
     @State private var originalCategoryName: String = ""
     @State private var originalCategoryIcon: String = ""
-    @State private var originalCategoryColour: String = ""
+    @State private var originalCategoryColour: UInt = 0xFFFFFF
     
     // Sheets & states
     @State var showEditDetailsSheet = false
@@ -185,7 +185,7 @@ struct DefaultListSpectate: View {
         @Binding var isPrivate: Bool
         let categoryName: String
         let categoryIcon: String
-        let categoryColour: String
+        let categoryColour: UInt
         @Binding var showEditDetailsSheet: Bool
         var onTapPrivacy: (() -> Void)?
         var onTapCategory: (() -> Void)?
@@ -646,7 +646,7 @@ struct DefaultListSpectate: View {
                 isPrivate = priv
                 categoryName = catName
                 categoryIcon = catIcon
-                categoryColour = catColour
+                categoryColour = UInt(catColour) ?? 0xFFFFFF
 
                 selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
 
@@ -656,7 +656,7 @@ struct DefaultListSpectate: View {
                 originalIsPrivate = priv
                 originalCategoryName = catName
                 originalCategoryIcon = catIcon
-                originalCategoryColour = catColour
+                originalCategoryColour = UInt(catColour) ?? 0xFFFFFF
                 return
             }
 
@@ -699,7 +699,7 @@ struct DefaultListSpectate: View {
             isPrivate = priv
             categoryName = catName
             categoryIcon = catIcon
-            categoryColour = catColourUInt
+            categoryColour = UInt(catColourUInt) ?? 0xFFFFFF
             selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
 
             originalRankoName = name
@@ -707,7 +707,7 @@ struct DefaultListSpectate: View {
             originalIsPrivate = priv
             originalCategoryName = catName
             originalCategoryIcon = catIcon
-            originalCategoryColour = catColourUInt
+            originalCategoryColour = UInt(catColourUInt) ?? 0xFFFFFF
         }
     }
 
@@ -942,7 +942,7 @@ struct RankoExportView: View {
     let description: String
     let categoryName: String
     let categoryIcon: String?
-    let categoryColour: String
+    let categoryColour: UInt
     let creatorName: String?
     let items: [RankoItem]
     let darkMode: Bool

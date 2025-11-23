@@ -11,6 +11,7 @@ import FirebaseAppCheck
 import GoogleSignIn
 import GoogleSignInSwift
 import StoreKit
+import FirebaseCore
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
@@ -44,7 +45,7 @@ struct RankoApp: App {
     @State private var showLaunchScreen = true  // State to control visibility of the launch screen
     @State private var scale: CGFloat = 1
     @State private var opacity: Double = 1
-
+    
     var body: some Scene {
         WindowGroup {
             ZStack {
@@ -96,7 +97,7 @@ struct LaunchScreenView: View {
     var body: some View {
         ZStack {
             // The white background should fill the entire screen
-            Color(hex: 0xFFF5E2)
+            Color(hex: 0xFFFFFF)
                 .ignoresSafeArea()
             
             // Your ThreeRectanglesAnimation
