@@ -1553,7 +1553,11 @@ struct SubcategoryFlowHost: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarLeading) {
                 Button {
-                    goBack()
+                    if stepHistory.isEmpty {
+                        dismiss()
+                    } else {
+                        goBack()
+                    }
                 } label: {
                     Image(systemName: "chevron.backward")
                         .font(.system(size: 14, weight: .black))
@@ -1562,7 +1566,7 @@ struct SubcategoryFlowHost: View {
                 }
                 .buttonStyle(.glassProminent)
                 .tint(Color(hex: 0xFFFFFF))
-                .disabledWithOpacity(stepHistory.isEmpty)
+                //.disabledWithOpacity(stepHistory.isEmpty)
                 Button {
                     dismiss()
                     onDismiss()
@@ -3086,8 +3090,9 @@ private struct FirestoreStepView: View {
                             AsyncImage(url: URL(string: r.imageURL ?? "")) { $0.resizable() } placeholder: { Color.gray.opacity(0.15) }
                                 .scaledToFill().frame(width: 40, height: 40).clipShape(RoundedRectangle(cornerRadius: 6))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(r.name).font(.subheadline.weight(.semibold))
-                                if let d = r.desc, !d.isEmpty { Text(d).font(.caption).foregroundStyle(.secondary) }
+                                Text(r.name)
+                                .font(.custom("Nunito-Black", size: 15))
+                                if let d = r.desc, !d.isEmpty { Text(d).font(.custom("Nunito-Black", size: 11)).foregroundStyle(.secondary) }
                             }
                             Spacer()
                             Image(systemName: step.selectable
