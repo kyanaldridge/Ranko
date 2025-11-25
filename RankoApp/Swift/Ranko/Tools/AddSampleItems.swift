@@ -3048,7 +3048,7 @@ private struct FirestoreStepView: View {
     let sortDescendingOverride: Bool
     let forwardIDs: ([String]) -> Void
     let onSetVars: (([String:String]) -> Void)?
-    @State private var rowPayloads: [[String: Any]] = []   // parallel to rows by index
+    @State private var rowPayloadsByID: [String: [String: Any]] = [:]   // docID -> payload
     let onJump: ((Int) -> Void)?
     let runtimeFilters: [FirestoreFilter]
     let selectedStringFilters: [String : Set<String>]
@@ -3085,6 +3085,7 @@ private struct FirestoreStepView: View {
                 }
                 else {
                     List(rows) { r in
+                        let available = isAvailable(r)
                         let picked = selectedIDs.contains(r.id)
                         HStack(spacing: 12) {
                             AsyncImage(url: URL(string: r.imageURL ?? "")) { $0.resizable() } placeholder: { Color.gray.opacity(0.15) }
@@ -3095,14 +3096,17 @@ private struct FirestoreStepView: View {
                                 if let d = r.desc, !d.isEmpty { Text(d).font(.custom("Nunito-Black", size: 11)).foregroundStyle(.secondary) }
                             }
                             Spacer()
-                            Image(systemName: step.selectable
-                                  ? (picked ? "checkmark.circle.fill" : "plus.circle")
-                                  : "chevron.forward")
-                            .foregroundStyle(step.selectable ? tint : .secondary)
+                            let symbol: String = {
+                                if !available { return "slash.circle" }
+                                return step.selectable ? (picked ? "checkmark.circle.fill" : "plus.circle") : "chevron.forward"
+                            }()
+                            Image(systemName: symbol)
+                            .foregroundStyle(available ? (step.selectable ? tint : .secondary) : .secondary)
+                            .opacity(available ? 1.0 : 0.5)
                             .transition(.scale.combined(with: .opacity))
                         }
                         .contentShape(Rectangle())
-                        .onTapGesture { onTap(r) }
+                        .onTapGesture { if available { onTap(r) } }
                     }
                     .listStyle(.plain)
                 }
@@ -3391,12 +3395,19 @@ private struct FirestoreStepView: View {
         return q.limit(to: step.hitsPerPage)
     }
 
+    private func isAvailable(_ row: StepRow) -> Bool {
+        guard let payload = rowPayloadsByID[row.id] else { return true }
+        if let b = payload["availability"] as? Bool { return b }
+        if let n = payload["availability"] as? NSNumber { return n.boolValue }
+        if let s = payload["availability"] as? String { return (s as NSString).boolValue }
+        return true
+    }
+
     private func onTap(_ r: StepRow) {
         // always emit the picked ID so the next step can resolve its path (e.g. (album_id))
         let pickedID = r.id
         
-        if let idx = rows.firstIndex(where: { $0.id == r.id }), idx < rowPayloads.count {
-            let payload = rowPayloads[idx]
+        if let payload = rowPayloadsByID[r.id] {
             let newVars = captureVariables(from: payload, docID: pickedID)
             if !newVars.isEmpty { onSetVars?(newVars) }
             
@@ -3613,7 +3624,7 @@ private struct FirestoreStepView: View {
             // If searching, collect deterministically across pages and bypass naive clientFilter
             let trimmedQ = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedQ.isEmpty {
-                let (slice, total) = try await collectFilteredPage(base: base)
+                let (slice, total, payloads) = try await collectFilteredPage(base: base)
                 // Update identity & count so paging bar is correct while searching
                 let identity = makeIdentityString()
                 if identity != queryIdentity {
@@ -3622,6 +3633,7 @@ private struct FirestoreStepView: View {
                 }
                 totalCount = total
                 rows = slice
+                rowPayloadsByID = payloads
                 return
             }
             
@@ -3670,16 +3682,16 @@ private struct FirestoreStepView: View {
             }
 
             // map rows
-            var newPayloads: [[String: Any]] = []
+            var payloadMap: [String: [String: Any]] = [:]
             let mapped: [StepRow] = snap.documents.map { d in
                 let data = d.data()
-                newPayloads.append(data)
+                payloadMap[d.documentID] = data
                 let name = resolve(step.itemName, data) ?? (data["name"] as? String) ?? d.documentID
                 let desc = resolve(step.itemDescription, data)
                 let img  = resolveImage(step.itemImage, data)
                 return StepRow(id: d.documentID, name: name, desc: desc, imageURL: img)
             }
-            self.rowPayloads = newPayloads
+            self.rowPayloadsByID = payloadMap
 
             // apply client-side search against rendered name/desc; keep page size
             let filtered = clientFilter(mapped)
@@ -3754,22 +3766,24 @@ private struct FirestoreStepView: View {
     
     
     /// Collects enough pages server-side to apply client-side filtering deterministically for the current page.
-    /// Returns (rowsForCurrentPage, totalFilteredCount).
-    private func collectFilteredPage(base: Query) async throws -> ([StepRow], Int) {
+    /// Returns (rowsForCurrentPage, totalFilteredCount, payloadMap).
+    private func collectFilteredPage(base: Query) async throws -> ([StepRow], Int, [String: [String: Any]]) {
         let pageSize = max(1, step.hitsPerPage)
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        var payloads: [String: [String: Any]] = [:]
         guard !q.isEmpty else {
             // no search → just take current page from server
             let pageQ = pageQuery(base, page: currentPage)
             let snap = try await pageQ.getDocuments()
             let mapped: [StepRow] = snap.documents.map { d in
                 let data = d.data()
+                payloads[d.documentID] = data
                 let name = resolve(step.itemName, data) ?? (data["name"] as? String) ?? d.documentID
                 let desc = resolve(step.itemDescription, data)
                 let img  = resolveImage(step.itemImage, data)
                 return StepRow(id: d.documentID, name: name, desc: desc, imageURL: img)
             }
-            return (mapped, try await fetchCount(base))
+            return (mapped, try await fetchCount(base), payloads)
         }
 
         // When searching, we must scan forward pages and filter client-side
@@ -3790,6 +3804,7 @@ private struct FirestoreStepView: View {
             // Map rows for this server page
             let mapped: [StepRow] = snap.documents.map { d in
                 let data = d.data()
+                payloads[d.documentID] = data
                 let name = resolve(step.itemName, data) ?? (data["name"] as? String) ?? d.documentID
                 let desc = resolve(step.itemDescription, data)
                 let img  = resolveImage(step.itemImage, data)
@@ -3825,7 +3840,7 @@ private struct FirestoreStepView: View {
         let end   = min(filtered.count, start + pageSize)
         let pageSlice = (start < end) ? Array(filtered[start..<end]) : []
 
-        return (pageSlice, totalFiltered)
+        return (pageSlice, totalFiltered, payloads)
     }
 
     private func resolve(_ template: String, _ dict: [String: Any]) -> String? {
