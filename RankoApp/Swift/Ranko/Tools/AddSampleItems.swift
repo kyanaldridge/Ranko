@@ -1527,28 +1527,72 @@ struct SubcategoryFlowHost: View {
 
     @State private var ctx = FlowContext()
     @State private var currentStep = 0
+    @State private var stepHistory: [Int] = []
     @Namespace private var ns
 
+    private var initialStepIndex: Int {
+        steps.firstIndex(where: { $0.stepKey == "1" }) ?? 0
+    }
+
     var body: some View {
-        stepView(index: currentStep)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Title(tint: tint, text: subcategoryName)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        dismiss()
-                        onDismiss()
-                    } label: {
-                        Image(systemName: "checkmark")
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(tint)
+        Group {
+            if steps.indices.contains(currentStep) {
+                stepView(index: currentStep)
+            } else {
+                VStack {
+                    Spacer()
+                    Text("No steps configured for this subcategory.")
+                        .foregroundStyle(.secondary)
+                        .font(.footnote.weight(.semibold))
+                    Spacer()
                 }
             }
-            .tint(tint)
-            .onAppear { currentStep = 0 }
+        }
+        .navigationBarBackButtonHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarLeading) {
+                Button {
+                    goBack()
+                } label: {
+                    Image(systemName: "chevron.backward")
+                        .font(.system(size: 14, weight: .black))
+                        .foregroundStyle(Color(hex: 0x0000000))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.glassProminent)
+                .tint(Color(hex: 0xFFFFFF))
+                .disabledWithOpacity(stepHistory.isEmpty)
+                Button {
+                    dismiss()
+                    onDismiss()
+                } label: {
+                    Image(systemName: "chevron.backward.2")
+                        .font(.system(size: 14, weight: .black))
+                        .foregroundStyle(Color(hex: 0x0000000))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.glassProminent)
+                .tint(Color(hex: 0xFFFFFF))
+            }
+            ToolbarItem(placement: .principal) {
+                Title(tint: tint, text: subcategoryName)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    dismiss()
+                    onDismiss()
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .black))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.glassProminent)
+                .tint(tint)
+            }
+        }
+        .tint(tint)
+        .onAppear { resetFlow() }
     }
 
     private func stepKey(_ i: Int) -> String { "\(subcategoryName)-step-\(i)" }
@@ -1585,7 +1629,23 @@ struct SubcategoryFlowHost: View {
         .id(steps[i].id) // 👈 forces a brand-new state per step
     }
 
-    private func go(to idx: Int) { guard steps.indices.contains(idx) else { return }; currentStep = idx }
+    private func resetFlow() {
+        stepHistory.removeAll()
+        go(to: initialStepIndex, recordHistory: false)
+    }
+
+    private func goBack() {
+        guard let prev = stepHistory.popLast() else { return }
+        currentStep = prev
+    }
+
+    private func go(to idx: Int, recordHistory: Bool = true) {
+        guard steps.indices.contains(idx) else { return }
+        if recordHistory, idx != currentStep, steps.indices.contains(currentStep) {
+            stepHistory.append(currentStep)
+        }
+        currentStep = idx
+    }
 
     private struct Title: View { let tint: Color; let text: String; var body: some View { HStack(spacing: 8) { Image(systemName: "square.grid.2x2.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(tint); Text(text).font(.system(size: 16, weight: .black)).foregroundStyle(tint) } } }
 }
