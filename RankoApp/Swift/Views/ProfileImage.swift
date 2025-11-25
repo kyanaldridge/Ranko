@@ -9,7 +9,6 @@ import SwiftUI
 import UIKit
 import PhotosUI
 import Combine
-import Firebase
 import FirebaseStorage
 
 struct ImagePicker: UIViewControllerRepresentable {

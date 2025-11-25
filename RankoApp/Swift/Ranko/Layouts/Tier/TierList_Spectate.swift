@@ -6,9 +6,9 @@
 //
 
 import SwiftUI
-import Firebase
 import FirebaseAuth
 import FirebaseStorage
+import FirebaseDatabase
 import AlgoliaSearchClient
 
 private extension CGFloat {

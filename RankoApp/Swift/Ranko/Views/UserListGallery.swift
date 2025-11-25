@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Firebase
 import AlgoliaSearchClient
 
 // MARK: - UserDefaultListView

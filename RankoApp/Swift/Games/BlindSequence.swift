@@ -7,7 +7,7 @@
 
 import SwiftUI
 import FirebaseAnalytics
-import Firebase
+import FirebaseDatabase
 import Combine
 
 struct BlindSequence: View {

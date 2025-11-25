@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import Firebase
+import FirebaseDatabase
 import FirebaseAuth
 import FirebaseStorage
 import FirebaseAnalytics

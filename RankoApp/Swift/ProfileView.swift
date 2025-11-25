@@ -6,13 +6,13 @@
 //
 
 import SwiftUI
-import Firebase
 import FirebaseAnalytics
 import FirebaseStorage
 import AlgoliaSearchClient
 import InstantSearchSwiftUI
 import Foundation
 import FirebaseAuth
+import FirebaseDatabase
 import PhotosUI
 import SwiftData
 

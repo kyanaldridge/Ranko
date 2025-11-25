@@ -8,9 +8,9 @@
 import SwiftUI
 import InstantSearchSwiftUI
 import InstantSearchCore
-import Firebase
 import FirebaseAuth
 import FirebaseStorage
+import FirebaseDatabase
 import Foundation
 import AlgoliaSearchClient
 import UIKit

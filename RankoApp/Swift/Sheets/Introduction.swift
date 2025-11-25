@@ -7,7 +7,7 @@
 
 import SwiftUI
 import FirebaseAuth
-import Firebase
+import FirebaseDatabase
 import AlgoliaSearchClient
 
 extension View {

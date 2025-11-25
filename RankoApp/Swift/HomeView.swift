@@ -8,7 +8,8 @@
 import SwiftUI
 import PhotosUI
 import FirebaseStorage
-import Firebase
+import FirebaseDatabase
+import FirebaseAnalytics
 import FirebaseAuth
 import AlgoliaSearchClient
 

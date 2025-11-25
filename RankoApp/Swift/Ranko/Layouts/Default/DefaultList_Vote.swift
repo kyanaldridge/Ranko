@@ -7,7 +7,6 @@
 
 import SwiftUI
 import InstantSearchSwiftUI
-import Firebase
 import FirebaseAuth
 import FirebaseStorage
 import Foundation
