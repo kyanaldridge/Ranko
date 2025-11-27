@@ -159,6 +159,17 @@ struct FilterGroup: Hashable, Codable {
     let filters: [FilterGroupOption]
 }
 
+struct FilterButton: Identifiable, Hashable, Codable {
+    let id = UUID()
+    let name: String
+    let value: String
+    let field: String
+    let order: Int
+    let image: String?
+    let colorHex: String?
+    var color: Color? { colorHex.flatMap { Color(hexString: $0) } }
+}
+
 // Separate function to keep the “#if” clean.
 @inline(__always)
 private func _firestoreDatabaseInitAvailable() -> Bool {
@@ -323,6 +334,7 @@ struct SubcategoryDestinationConfig: Identifiable, Hashable {
     let variables: [String:String]
     let databaseID: String?
     let filterGroups: [FilterGroup]   // 👈 NEW
+    let filterButtons: [FilterButton]
 }
 
 struct StepRow: Identifiable, Hashable, Codable {
@@ -617,6 +629,17 @@ final class FiltersRepository: ObservableObject {
             return FilterGroup(groupName: name, order: order, type: type, filters: options)
         }.sorted { $0.order < $1.order }
 
+        let filterButtons: [FilterButton] = ((dict["filterButtons"] as? [[String: Any]]) ?? []).compactMap { m in
+            guard let name = m["name"] as? String,
+                  let value = m["value"] as? String,
+                  let field = m["field"] as? String
+            else { return nil }
+            let order = (m["order"] as? Int) ?? Int.max
+            let image = m["image"] as? String
+            let colorHex = m["color"] as? String
+            return FilterButton(name: name, value: value, field: field, order: order, image: image, colorHex: colorHex)
+        }.sorted { $0.order < $1.order }
+
         return SubcategoryDestinationConfig(
             stepKey: stepKey,
             viewType: type,
@@ -648,7 +671,8 @@ final class FiltersRepository: ObservableObject {
             nextStep: nextStep,
             variables: variables,
             databaseID: (dict["databaseID"] as? String)?.lowercased(),
-            filterGroups: filterGroups
+            filterGroups: filterGroups,
+            filterButtons: filterButtons
         )
     }
 }
@@ -1670,6 +1694,7 @@ private struct StepContentView: View {
     @State private var searchText = ""
     @State private var searchTextEmpty = true
     @State private var nonce = 0
+    @State private var selectedFilterButton: FilterButton? = nil
     
     @State private var showSortSheet = false
     @State private var sortIndex: Int = 0
@@ -1744,6 +1769,7 @@ private struct StepContentView: View {
                         sortDescendingOverride: sortDescending,
                         forwardIDs: { ids in if !step.selectable { onAdvance(ids) } },
                         onSetVars: { newVars in for (k, v) in newVars { ctx.vars[k] = v } },
+                        selectedFilterButton: $selectedFilterButton,
                         onJump: { jump in onJumpTo(jump) },
                         runtimeFilters: runtimeFilters,
                         selectedStringFilters: selectedStringFilters
@@ -1768,40 +1794,84 @@ private struct StepContentView: View {
         }
         .safeAreaInset(edge: .top) {
             if step.searchBar {
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .black))
-                            .foregroundStyle(searchTextEmpty ? Color(hex: 0x8A8A8D) : Color(hex: 0x000000))
-                        TextField("Search \(subcategoryName)...", text: $searchText)
-                            .font(.custom("Nunito-Black", size: 16))
-                            .foregroundStyle(searchTextEmpty ? Color(hex: 0x8A8A8D) : Color(hex: 0x000000))
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
-                            .submitLabel(.search)
-                            .onSubmit { nonce += 1 }
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16, weight: .black))
+                                .foregroundStyle(searchTextEmpty ? Color(hex: 0x8A8A8D) : Color(hex: 0x000000))
+                            TextField("Search \(subcategoryName)...", text: $searchText)
+                                .font(.custom("Nunito-Black", size: 16))
+                                .foregroundStyle(searchTextEmpty ? Color(hex: 0x8A8A8D) : Color(hex: 0x000000))
+                                .textInputAutocapitalization(.never)
+                                .disableAutocorrection(true)
+                                .submitLabel(.search)
+                                .onSubmit { nonce += 1 }
+                            
+                            if !searchText.isEmpty {
+                                Button { searchText = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.gray) }
+                            }
+                        }
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         
-                        if !searchText.isEmpty {
-                            Button { searchText = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.gray) }
+                        
+                        if !step.sortFields.isEmpty {
+                            Button {
+                                showSortSheet = true
+                            } label: {
+                                Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                                    .font(.system(size: 20, weight: .black))
+                                    .padding(.vertical, 0)
+                                    .padding(.horizontal, -5)
+                            }
+                            .buttonStyle(.glassProminent)
+                            .contentShape(Rectangle())
+                            .tint(tint.opacity(0.7))
+                            .accessibilityLabel("Sort & Filter")
                         }
                     }
-                    .padding(10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     
-                    
-                    if !step.sortFields.isEmpty {
-                        Button {
-                            showSortSheet = true
-                        } label: {
-                            Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                                .font(.system(size: 20, weight: .black))
-                                .padding(.vertical, 0)
-                                .padding(.horizontal, -5)
+                    if !step.filterButtons.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(step.filterButtons) { btn in
+                                    let isActive = selectedFilterButton?.value == btn.value && selectedFilterButton?.field == btn.field
+                                    let chipColor = btn.color ?? tint
+                                    Button {
+                                        toggleFilterButton(btn)
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            if let urlString = btn.image, let url = URL(string: urlString) {
+                                                AsyncImage(url: url) { img in
+                                                    img.resizable()
+                                                } placeholder: {
+                                                    Color.gray.opacity(0.15)
+                                                }
+                                                .scaledToFill()
+                                                .frame(width: 26, height: 26)
+                                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            }
+                                            Text(btn.name)
+                                                .font(.custom("Nunito-Black", size: 13))
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .fill(isActive ? chipColor.opacity(0.15) : Color(.systemBackground).opacity(0.6))
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .stroke(isActive ? chipColor : Color.gray.opacity(0.2), lineWidth: 1.2)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 4)
                         }
-                        .buttonStyle(.glassProminent)
-                        .contentShape(Rectangle())
-                        .tint(tint.opacity(0.7))
-                        .accessibilityLabel("Sort & Filter")
+                        .padding(.leading, 2)
                     }
                 }
                 .padding([.horizontal, .top])
@@ -1921,6 +1991,17 @@ private struct StepContentView: View {
             }
         }
     }
+    
+    private func toggleFilterButton(_ btn: FilterButton) {
+        if let current = selectedFilterButton,
+           current.field == btn.field,
+           current.value == btn.value {
+            selectedFilterButton = nil
+        } else {
+            selectedFilterButton = btn
+        }
+    }
+    
     private func isDesc(_ s: String?) -> Bool {
         guard let s = s?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
               !s.isEmpty else { return false }
@@ -3049,6 +3130,7 @@ private struct FirestoreStepView: View {
     let forwardIDs: ([String]) -> Void
     let onSetVars: (([String:String]) -> Void)?
     @State private var rowPayloadsByID: [String: [String: Any]] = [:]   // docID -> payload
+    @Binding var selectedFilterButton: FilterButton?
     let onJump: ((Int) -> Void)?
     let runtimeFilters: [FirestoreFilter]
     let selectedStringFilters: [String : Set<String>]
@@ -3124,6 +3206,11 @@ private struct FirestoreStepView: View {
             Task { await load() }
         }
         .onChange(of: submitNonce) { _, _ in
+            currentPage = 1
+            cursors.removeAll()
+            Task { await load() }
+        }
+        .onChange(of: selectedFilterButton) { _, _ in
             currentPage = 1
             cursors.removeAll()
             Task { await load() }
@@ -3360,6 +3447,7 @@ private struct FirestoreStepView: View {
         let rawPath   = step.firebaseIdPath
         let afterVars = interpolateVars(rawPath, with: vars)
         let finalPath = substituteIncomingIDs(afterVars, vars: vars)
+        let buttonKey = selectedFilterButton.map { "\($0.field)=\($0.value)" } ?? "-"
 
         // Stable signature of filters with already configured values
         let combinedFilters = step.firebaseFilters + runtimeFilters
@@ -3376,7 +3464,8 @@ private struct FirestoreStepView: View {
             "f=\(filterSig)",
             "q=\(searchText.lowercased())",
             "p=\(sortIndex)",
-            "d=\(sortDescendingOverride ? "1" : "0")"
+            "d=\(sortDescendingOverride ? "1" : "0")",
+            "btn=\(buttonKey)"
         ].joined(separator: "|")
     }
 
@@ -3401,6 +3490,14 @@ private struct FirestoreStepView: View {
         if let n = payload["availability"] as? NSNumber { return n.boolValue }
         if let s = payload["availability"] as? String { return (s as NSString).boolValue }
         return true
+    }
+
+    private func filterButtonFilters() -> [FirestoreFilter] {
+        guard let btn = selectedFilterButton else { return [] }
+        if let f = FirestoreFilter.make(field: btn.field, op: .isEqualTo, raw: btn.value, group: nil) {
+            return [f]
+        }
+        return []
     }
 
     private func onTap(_ r: StepRow) {
@@ -3603,7 +3700,8 @@ private struct FirestoreStepView: View {
 
             // Apply server-side filters (groups: OR within group, AND across groups)
             let chipFilters = makeSelectStringFilters(selectedStringFilters)
-            let combinedFilters = step.firebaseFilters + runtimeFilters + chipFilters
+            let buttonFilters = filterButtonFilters()
+            let combinedFilters = step.firebaseFilters + runtimeFilters + chipFilters + buttonFilters
             base = applyFirebaseFilters(base, filters: combinedFilters)
             
             if !runtimeFilters.isEmpty {
@@ -3615,6 +3713,9 @@ private struct FirestoreStepView: View {
                 print("🧪 [FS] Step filters:\n\t\(debugDescribeFilters(step.firebaseFilters))")
             } else {
                 print("🧪 [FS] Step filters: (none)")
+            }
+            if !buttonFilters.isEmpty {
+                print("🧪 [FS] Button filters:\n\t\(debugDescribeFilters(buttonFilters))")
             }
             print("🧪 [FS] Using combined filters:\n\t\(debugDescribeFilters(combinedFilters))")
 
@@ -3749,7 +3850,7 @@ private struct FirestoreStepView: View {
         print("[FS] parent resolved. lastKey='\(last)'")
         return (ref, last)
     }
-    
+
     private func clientFilter(_ input: [StepRow]) -> [StepRow] {
         let pageSize = max(1, step.hitsPerPage)
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
