@@ -48,6 +48,7 @@ struct ExploreView: View {
     @State private var listViewID = UUID()
     @State private var isLoadingLists = true
     @State private var initialOffset = 0.0
+    @State private var miniGameScrollID: MiniGame.ID?
     
     @State private var showToast = false
     @State private var toastMessage = ""
@@ -58,20 +59,15 @@ struct ExploreView: View {
     
     @State private var showBlindSequence = false
     
-    @State private var activeIndex: Int? = 12
-    
     let buttons: [MenuItemButtons] = [
-        .init(title: "Search Rankos", icon: "magnifyingglass", size: 13, message: "Search and filter through all public Rankos from the community – Coming Soon!", color: Color(hex: 0x6D400F)),
-        .init(title: "Random Picker", icon: "dice.fill", size: 14, message: "Pick a category, set filters, and let Ranko choose random items for you – Coming Soon!", color: Color(hex: 0x6D400F)),
-        .init(title: "Store", icon: "cart.fill", size: 12, message: "A future Store may let you trade in-game currency for items, themes, and app icons – Stay tuned!", color: Color(hex: 0x6D400F))
+        .init(title: "Search", icon: "magnifyingglass", size: 16, message: "Search and filter through all public Rankos from the community – Coming Soon!", color: Color(hex: 0x6D400F)),
+        .init(title: "Picker", icon: "dice.fill", size: 18, message: "Pick a category, set filters, and let Ranko choose random items for you – Coming Soon!", color: Color(hex: 0x6D400F)),
+        .init(title: "Store", icon: "cart.fill", size: 15, message: "A future Store may let you trade in-game currency for items, themes, and app icons – Stay tuned!", color: Color(hex: 0x6D400F))
     ]
     
     let miniGames: [MiniGame] = [
-        .init(name: "Blind Sequence", image: "BlindSequence", color: Color(hex: 0x791401), unlocked: "yes", message: "Maintenance works, please be patient"),
-        .init(name: "Keep 'N' Ditch", image: "KeepNDitch", color: Color(hex: 0xFFFFFF), unlocked: "no", message: "Face 10 random items (albums, animals, soft drinks—anything) one at a time and choose to keep or ditch without knowing what’s next. Only 5 can stay and 5 must go, so choose carefully — Keep 'N' Ditch is coming soon!"),
-        .init(name: "Outlier", image: "Outlier", color: Color(hex: 0xFFFFFF), unlocked: "no", message: "Find the least popular answers and aim for the lowest score – Outlier is coming soon!"),
-        .init(name: "Guessr", image: "Guessr", color: Color(hex: 0xFFFFFF), unlocked: "no", message: "Uncover clues, guess early, and score big – the Guessr mini-game is coming soon!"),
-        .init(name: "Coming Soon", image: "ComingSoon", color: Color(hex: 0xFFFFFF), unlocked: "no", message: "More features and exciting mini-games are on the way – stay tuned!")
+        .init(name: "Blind Sequence", image: "BlindSequenceImage", color: Color(hex: 0xBB3300), unlocked: "yes", message: "Maintenance works, please be patient"),
+        .init(name: "Coming Soon", image: "ComingSoonImage", color: Color(hex: 0x979797), unlocked: "no", message: "More features and exciting mini-games are on the way – stay tuned!")
     ]
 
     // ✅ NEW: in-memory feed state
@@ -403,154 +399,213 @@ struct ExploreView: View {
                         .padding(.horizontal, 30)
                         .padding(.top, 10)
                         
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 7) {
-                                ForEach(buttons) { button in
+                        // ZStack {
+                        //     RoundedRectangle(cornerRadius: 18)
+                        //         .fill(Color.white)
+                        //         .shadow(color: Color(hex: 0x000000).opacity(0.12), radius: 10, x: 0, y: 6)
+                        //     HStack(spacing: 12) {
+                        //         ForEach(buttons) { button in
+                        //             Button {
+                        //                 showComingSoonToast(button.message)
+                        //             } label: {
+                        //                 VStack(spacing: 6) {
+                        //                     Image(systemName: button.icon)
+                        //                         .resizable()
+                        //                         .scaledToFit()
+                        //                         .frame(width: 30, height: 30)
+                                            
+                        //                     Text(button.title)
+                        //                         .font(.custom("Nunito-Black", size: 15))
+                        //                 }
+                        //                 .foregroundColor(Color(hex: 0xFFFFFF))
+                        //                 .frame(maxWidth: .infinity)
+                        //                 .padding(.vertical, 15)
+                        //             }
+                        //             .tint(Color(hex: 0x292A30))
+                        //             .buttonStyle(.glassProminent)
+                        //             .matchedTransitionSource(
+                        //                 id: "menuButtons", in: transition
+                        //             )
+                        //         }
+                        //     }
+                        //     .padding(.vertical, 14)
+                        //     .padding(.horizontal, 16)
+                        // }
+                        // .padding(.horizontal, 20)
+                        // .padding(.top, 12)
+
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 18)
+                                .fill(Color.white)
+                                .shadow(color: Color(hex: 0x000000).opacity(0.12), radius: 10, x: 0, y: 6)
+                            VStack(spacing: 10) {
+                                Button {
+                                    showComingSoonToast("Search and filter through all public Rankos from the community – Coming Soon!")
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "magnifyingglass")
+                                            .font(.system(size: 16, weight: .black))
+                                        Text("Search Rankos")
+                                            .font(.custom("Nunito-Black", size: 17))
+                                        Spacer()
+                                        Button {
+                                            
+                                        } label: {
+                                            HStack {
+                                                Image(systemName: "line.3.horizontal.decrease")
+                                                    .font(.system(size: 15, weight: .black))
+                                                Text("Filter")
+                                                    .font(.custom("Nunito-Black", size: 14))
+                                            }
+                                        }
+                                        .buttonStyle(.glassProminent)
+                                        .tint(Color(hex: 0xFFFFFF))
+                                        .foregroundStyle(Color(hex: 0x595959))
+                                        .padding(4)
+                                    }
+                                }
+                                .buttonStyle(.glassProminent)
+                                .tint(Color(hex: 0xE8E8E8))
+                                .foregroundStyle(Color(hex: 0x595959))
+                                HStack(spacing: 15) {
                                     Button {
-                                        showComingSoonToast(button.message)
+                                        showComingSoonToast("Pick a category, set filters, and let Ranko choose random items for you – Coming Soon!")
                                     } label: {
                                         HStack {
-                                            Image(systemName: button.icon)
-                                                .font(.system(size: 14, weight: .black, design: .default))
-                                                .foregroundColor(Color(hex: 0xFFFFFF))
-                                            Text(button.title)
+                                            Image(systemName: "dice.fill")
+                                                .font(.system(size: 14, weight: .black))
+                                            Text("Random Picker")
                                                 .font(.custom("Nunito-Black", size: 15))
-                                                .foregroundColor(Color(hex: 0xFFFFFF))
                                         }
+                                        .padding(4)
                                     }
-                                    .tint(Color(hex: 0x292A30))
                                     .buttonStyle(.glassProminent)
-                                    .matchedTransitionSource(
-                                        id: "menuButtons", in: transition
-                                    )
-                                    .mask(RoundedRectangle(cornerRadius: 15))
+                                    .tint(Color(hex: 0xE8E8E8))
+                                    .foregroundStyle(Color(hex: 0x595959))
+                                    .colorScheme(.light)
+                                    
+                                    Button {
+                                        showComingSoonToast("A future Store may let you trade in-game currency for items, themes, and app icons – Stay tuned!")
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "basket.fill")
+                                                .font(.system(size: 14, weight: .black))
+                                            Text("Ranko Store")
+                                                .font(.custom("Nunito-Black", size: 15))
+                                        }
+                                        .padding(4)
+                                    }
+                                    .buttonStyle(.glassProminent)
+                                    .tint(Color(hex: 0xE8E8E8))
+                                    .foregroundStyle(Color(hex: 0x595959))
+                                    .colorScheme(.dark)
                                 }
                             }
-                            .padding(.top, 10)
                             .padding(.horizontal, 20)
+                            .padding(.vertical, 18)
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 13)
                         
                         
-                        VStack(spacing: 6) {
+                        VStack(spacing: 4) {
                             HStack {
-                                Text("👾 Mini Games")
-                                    .font(.custom("Nunito-Black", size: 25))
-                                    .foregroundStyle(Color(hex: 0x514343))
-                                Spacer()
+                                Text("Mini Games")
+                                    .font(.custom("Nunito-Black", size: 23))
+                                    .foregroundStyle(Color(hex: 0x080808))
+                                Spacer(minLength: 0)
                             }
-                            .padding(.bottom, -10)
                             .padding(.top, 10)
                             .padding(.leading, 25)
                             
-                            // safe setup without 'guard' in ViewBuilder
-                            let original = miniGames
-                            let realCount = original.count
-                            let duplicateMiniGames = miniGames + miniGames + miniGames + miniGames + miniGames
-                            let duplicateCount = duplicateMiniGames.count
-                            
-                            if realCount == 0 {
-                                // fallback ui
-                                Text("no mini games yet")
-                                    .font(.custom("Nunito-Black", size: 16))
-                                    .foregroundStyle(Color(hex: 0x9E9E9C))
-                                    .padding(.vertical, 24)
-                            } else {
-                                // looped data = [last] + original + [first]
-                                let looped = [duplicateMiniGames.last!] + duplicateMiniGames + [duplicateMiniGames.first!]
-                                
-                                VStack(spacing: 16) {
-                                    // CAROUSEL
-                                    // --- PEEKING CAROUSEL ---
-                                    GeometryReader { proxy in
-                                        let spacing: CGFloat = 1
-                                        let offsetSpace = (proxy.size.width - 230) / 2
-                                        
-                                        ScrollView(.horizontal, showsIndicators: false) {
-                                            LazyHStack(spacing: spacing) {
-                                                ForEach(looped.indices, id: \.self) { i in
-                                                    GeometryReader { geo in
-                                                        let frame = geo.frame(in: .named("carousel"))
-                                                        let mid = proxy.size.width / 2
-                                                        let distance = abs(frame.midX - mid)
-                                                        let scale = max(0.9, 1.0 - (distance / 800))
-                                                        let opacity = max(0.5, 1.0 - (distance / 600))
-                                                        
-                                                        let game = looped[i]
-                                                        
-                                                        VStack(spacing: 15) {
-                                                            Image(game.image)
-                                                                .resizable()
-                                                                .aspectRatio(contentMode: .fill)
-                                                                .frame(width: 230, height: 230)
-                                                                .clipShape(RoundedRectangle(cornerRadius: 20))
-                                                                .matchedTransitionSource(id: game.name, in: transition)
-                                                            
-                                                            Button {
-                                                                if game.unlocked != "yes" {
-                                                                    showComingSoonToast(game.message)
-                                                                } else {
-                                                                    switch game.name {
-                                                                    case "Blind Sequence":
-                                                                        showBlindSequence = true
-                                                                    default:
-                                                                        showComingSoonToast("New Feature Coming Soon!")
-                                                                    }
-                                                                }
-                                                            } label: {
-                                                                Text(game.unlocked == "yes" ? "PLAY" : "SOON")
-                                                                    .font(.custom("Nunito-Black", size: 22))
-                                                                    .foregroundStyle(Color(hex: 0xFFFFFF))
-                                                                    .padding(.vertical, 2)
-                                                                    .padding(.horizontal, 40)
-                                                            }
-                                                            .tint(game.unlocked == "yes" ? game.color : Color(hex: 0x9E9E9C))
-                                                            .buttonStyle(.glassProminent)
-                                                            .mask(RoundedRectangle(cornerRadius: 20))
-                                                            .padding(.bottom)
-                                                        }
-                                                        .scaleEffect(scale)
-                                                        .opacity(opacity)
-                                                    }
-                                                    .frame(width: 230, height: 320)
-                                                    .id(i)
-                                                }
-                                            }
-                                            .scrollTargetLayout()
-                                            .padding(.leading, offsetSpace)
-                                            .onAppear {
-                                                DispatchQueue.main.async { activeIndex = 11 }
-                                            }
-                                        }
-                                        .coordinateSpace(name: "carousel")
-                                        .scrollTargetBehavior(.viewAligned)
-                                        .scrollPosition(id: $activeIndex)
-                                    }
-                                    .frame(height: 360)
-                                    // --- end peeking carousel ---
-                                    .onAppear {
-                                        // set after layout so it lands dead center
-                                        DispatchQueue.main.async { activeIndex = 11 }
-                                    }
-                                    .onChange(of: activeIndex) { _, new in
-                                        guard let i = new else { return }
-                                        if i == 0 { withAnimation(.none) { activeIndex = duplicateCount } }
-                                        else if i == duplicateCount + 1 { withAnimation(.none) { activeIndex = 1 } }
-                                    }
-                                    
-                                    // INDICATOR DOTS
-                                    HStack(spacing: 8) {
-                                        let current = ((activeIndex ?? 1) - 1 + realCount) % realCount
-                                        ForEach(0..<realCount, id: \.self) { idx in
-                                            Circle()
-                                                .frame(width: idx == current ? 9 : 6, height: idx == current ? 9 : 6)
-                                                .opacity(idx == current ? 1.0 : 0.35)
-                                                .animation(.easeInOut(duration: 0.2), value: activeIndex)
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .center)          // ✅ dots centered across full width
-                                    .padding(.top, -35)
-                                }
+                            HStack {
+                                Text("Enjoy some of these mini games, made for fun")
+                                    .font(.custom("Nunito-Black", size: 15))
+                                    .foregroundStyle(Color(hex: 0x929292))
+                                Spacer(minLength: 0)
                             }
+                            .padding(.leading, 25)
+
+                            GeometryReader { geo in
+                                let cardWidth = geo.size.width * 0.55
+                                
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    LazyHStack(spacing: 16) {
+                                        ForEach(miniGames) { game in
+                                            Button {
+                                                if game.unlocked != "yes" {
+                                                    showComingSoonToast(game.message)
+                                                } else {
+                                                    switch game.name {
+                                                    case "Blind Sequence":
+                                                        showBlindSequence = true
+                                                    default:
+                                                        showComingSoonToast("New Feature Coming Soon!")
+                                                    }
+                                                }
+                                            } label: {
+                                                VStack {
+                                                    VStack {
+                                                        Image(game.image)
+                                                            .resizable()
+                                                            .aspectRatio(contentMode: .fill)
+                                                            .frame(height: 139)
+                                                            .frame(maxWidth: .infinity)
+                                                    }
+                                                    .frame(width: cardWidth, height: 139)
+                                                    .background(
+                                                        RoundedRectangle(cornerRadius: 9)
+                                                            .fill(game.color)
+                                                    )
+                                                    VStack(spacing: 4) {
+                                                        HStack {
+                                                            Text(game.name)
+                                                                .font(.custom("Nunito-Black", size: 20))
+                                                                .foregroundStyle(Color(hex: 0x080808))
+                                                            Spacer(minLength: 0)
+                                                        }
+                                                        .padding(.top, 10)
+                                                        
+                                                        if game.unlocked == "yes" {
+                                                            HStack(alignment: .center) {
+                                                                Text("4.2")
+                                                                    .font(.custom("Nunito-Black", size: 15))
+                                                                    .foregroundStyle(Color(hex: 0x080808))
+                                                                Image(systemName: "star.fill")
+                                                                    .font(.custom("Nunito-Black", size: 14))
+                                                                    .foregroundStyle(Color(hex: 0x080808))
+                                                                    .padding(.bottom, 2)
+                                                                Text("2+ Playing Right Now")
+                                                                    .font(.custom("Nunito-Black", size: 15))
+                                                                    .foregroundStyle(Color(hex: 0x929292))
+                                                                Spacer(minLength: 0)
+                                                            }
+                                                        } else {
+                                                            HStack {
+                                                                Image(systemName: "timer")
+                                                                    .font(.custom("Nunito-Black", size: 15))
+                                                                    .foregroundStyle(Color(hex: 0x929292))
+                                                                Text("April 2026")
+                                                                    .font(.custom("Nunito-Black", size: 15))
+                                                                    .foregroundStyle(Color(hex: 0x929292))
+                                                                Spacer(minLength: 0)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                .frame(width: cardWidth)
+                                            }
+                                            .id(game.id)
+                                        }
+                                    }
+                                    .scrollTargetLayout()
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 5)
+                                }
+                                .scrollTargetBehavior(.viewAligned)
+                                .scrollPosition(id: $miniGameScrollID)
+                            }
+                            .frame(height: 235)
                         }
                         .padding(.top, 7)
                         
@@ -558,13 +613,21 @@ struct ExploreView: View {
                         
                         VStack(spacing: 6) {
                             HStack {
-                                Text("🔥 Trending Today")
-                                    .font(.custom("Nunito-Black", size: 25))
-                                    .foregroundStyle(Color(hex: 0x514343))
-                                Spacer()
+                                Text("Trending Today")
+                                    .font(.custom("Nunito-Black", size: 23))
+                                    .foregroundStyle(Color(hex: 0x080808))
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.top, 10)
+                            .padding(.leading, 25)
+                            
+                            HStack {
+                                Text("Check out today's top 100")
+                                    .font(.custom("Nunito-Black", size: 15))
+                                    .foregroundStyle(Color(hex: 0x929292))
+                                Spacer(minLength: 0)
                             }
                             .padding(.leading, 25)
-                            .padding(.bottom, 0)
 
                             ScrollView(.horizontal, showsIndicators: false) {
                                 if isLoadingLists || (feedLists.isEmpty && isFetchingBatch) {
@@ -616,9 +679,6 @@ struct ExploreView: View {
                             .scrollTargetBehavior(.viewAligned)
                             .safeAreaPadding(.trailing, 15)
                         }
-                        .padding(.top, 7)
-                        
-                        
                     }
                     .padding(.bottom, 100)
                 }
@@ -642,7 +702,7 @@ struct ExploreView: View {
         .fullScreenCover(isPresented: $showBlindSequence) {
             BlindSequence()
                 .navigationTransition(
-                    .zoom(sourceID: "Blind Sequence", in: transition)
+                    .zoom(sourceID: "Blind Sequence Button", in: transition)
                 )
                 .interactiveDismissDisabled()
         }
@@ -670,6 +730,9 @@ struct ExploreView: View {
         .onAppear {
             user_data.userID = Auth.auth().currentUser?.uid ?? "0"
             listViewID = UUID()
+            if miniGameScrollID == nil {
+                miniGameScrollID = miniGames.first?.id
+            }
             
             if isSimulator {
                 // show mocked feed if you want
