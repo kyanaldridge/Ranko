@@ -11,7 +11,7 @@ import UIKit
 import SwiftUI
 import FirebaseAuth
 import FirebaseStorage
-import FirebaseDatabase
+import FirebaseFirestore
 import FirebaseAnalytics
 import PhotosUI
 import AlgoliaSearchClient
@@ -58,6 +58,12 @@ private func colorToHex(_ color: Color) -> Int {
 }
 #endif
 
+private extension UInt {
+    func toHexStringUpper() -> String {
+        String(format: "0x%06X", self & 0x00FF_FFFF)
+    }
+}
+
 struct DefaultListPersonal: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var user_data = UserInformation.shared
@@ -76,6 +82,7 @@ struct DefaultListPersonal: View {
     @State private var categoryName: String
     @State private var categoryIcon: String
     @State private var categoryColour: UInt
+    @State private var tags: [String] = []
     
     // Original values (to revert if needed)
     @State private var originalRankoName: String = ""
@@ -1033,12 +1040,13 @@ struct DefaultListPersonal: View {
     }
     
     private func loadListFromFirebase() {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(rankoID)
-        
+        Task { await loadListFromFirestore() }
+    }
+
+    private func loadListFromFirestore() async {
+        let docRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
+
         func parseColourToUInt(_ any: Any?) -> UInt {
-            // accepts: "0xFFCF00", "#FFCF00", "FFCF00", 16763904, NSNumber, etc.
             if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
             if let i = any as? Int { return UInt(i & 0x00FF_FFFF) }
             if let s = any as? String {
@@ -1050,113 +1058,77 @@ struct DefaultListPersonal: View {
             }
             return 0x446D7A
         }
-        
-        ref.observeSingleEvent(of: .value) { snap in
-            guard let root = snap.value as? [String: Any] else { return }
-            
-            // ---------- NEW SCHEMA ----------
-            let details = root["RankoDetails"] as? [String: Any]
-            let privacy = root["RankoPrivacy"] as? [String: Any]
-            let cat     = root["RankoCategory"] as? [String: Any]
-            let items   = root["RankoItems"] as? [String: Any] ?? [:]
-            
-            if details != nil || privacy != nil || cat != nil {
-                // details
-                let name = (details?["name"] as? String) ?? ""
-                let des  = (details?["description"] as? String) ?? ""
-                let priv = (privacy?["private"] as? Bool) ?? false
-                
-                // category
-                let catName  = (cat?["name"] as? String) ?? ""
-                let catIcon  = (cat?["icon"] as? String) ?? "circle"
-                let catColour = (cat?["colour"] as? String) ?? "0x000000"
-                
-                // items
-                let parsedItems: [RankoItem] = items.compactMap { (k, v) in
+
+        do {
+            let snap = try await docRef.getDocument()
+            guard let data = snap.data() else { return }
+
+            let name = (data["name"] as? String) ?? ""
+            let des  = (data["description"] as? String) ?? ""
+            let priv = (data["privacy"] as? Bool) ?? false
+            let catName  = (data["category"] as? String) ?? ""
+            let catMeta  = data["category_meta"] as? [String: Any]
+            let catIcon  = (catMeta?["icon"] as? String) ?? "circle"
+            let catColour = (catMeta?["colour"] as? String) ?? "0x000000"
+            let fetchedTags = (data["tags"] as? [String]) ?? []
+
+            var parsedItems: [RankoItem] = []
+
+            if let itemsMap = data["RankoItems"] as? [String: Any] { // fallback if imported as map
+                parsedItems = itemsMap.compactMap { (k, v) in
                     guard let it = v as? [String: Any] else { return nil }
-                    guard
-                        let itemName  = it["ItemName"] as? String,
-                        let itemDesc  = it["ItemDescription"] as? String,
-                        let itemImage = it["ItemImage"] as? String,
-                        let itemGIF    = it["ItemGIF"] as? String,
-                        let itemVideo    = it["ItemVideo"] as? String,
-                        let itemAudio    = it["ItemAudio"] as? String
-                    else { return nil }
-                    let rank  = intFromAny(it["ItemRank"])  ?? 0
-                    let votes = intFromAny(it["ItemVotes"]) ?? 0
+                    let itemName  = it["ItemName"] as? String ?? (it["name"] as? String ?? "")
+                    let itemDesc  = it["ItemDescription"] as? String ?? (it["description"] as? String ?? "")
+                    let itemImage = it["ItemImage"] as? String ?? (it["image"] as? String ?? "")
+                    let itemGIF   = it["ItemGIF"] as? String ?? (it["gif"] as? String ?? "")
+                    let itemVideo = it["ItemVideo"] as? String ?? (it["video"] as? String ?? "")
+                    let itemAudio = it["ItemAudio"] as? String ?? (it["audio"] as? String ?? "")
+                    guard !itemName.isEmpty else { return nil }
+                    let rank  = intFromAny(it["ItemRank"] ?? it["rank"])  ?? 0
+                    let votes = intFromAny(it["ItemVotes"] ?? it["votes"]) ?? 0
+                    let plays = intFromAny(it["PlayCount"] ?? it["plays"]) ?? 0
                     let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                    let plays = intFromAny(it["PlayCount"]) ?? 0
                     return RankoItem(id: k, rank: rank, votes: votes, record: rec, playCount: plays)
                 }
-                
-                // assign UI state
-                rankoName = name
-                description = des
-                isPrivate = priv
-                categoryName = catName
-                categoryIcon = catIcon
-                categoryColour = UInt(catColour) ?? 0xFFFFFF
-                
-                selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
-                
-                // originals (for revert)
-                originalRankoName = name
-                originalDescription = des
-                originalIsPrivate = priv
-                originalCategoryName = catName
-                originalCategoryIcon = catIcon
-                originalCategoryColour = UInt(catColour) ?? 0xFFFFFF
-                return
+            } else {
+                let itemsSnap = try await docRef.collection("items").getDocuments()
+                parsedItems = itemsSnap.documents.compactMap { d in
+                    let it = d.data()
+                    let itemName  = it["name"] as? String ?? ""
+                    let itemDesc  = it["description"] as? String ?? ""
+                    let itemImage = it["image"] as? String ?? ""
+                    let itemGIF   = it["gif"] as? String ?? ""
+                    let itemVideo = it["video"] as? String ?? ""
+                    let itemAudio = it["audio"] as? String ?? ""
+                    guard !itemName.isEmpty else { return nil }
+                    let rank  = intFromAny(it["rank"])  ?? 0
+                    let votes = intFromAny(it["votes"]) ?? 0
+                    let plays = intFromAny(it["plays"]) ?? 0
+                    let rec = RankoRecord(objectID: d.documentID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                    return RankoItem(id: d.documentID, rank: rank, votes: votes, record: rec, playCount: plays)
+                }
             }
-            
-            // ---------- OLD SCHEMA (fallback) ----------
-            let name = (root["RankoName"] as? String) ?? ""
-            let des  = (root["RankoDescription"] as? String) ?? ""
-            let priv = (root["RankoPrivacy"] as? Bool) ?? false
-            
-            var catName = ""
-            var catIcon = "circle"
-            var catColour = "0x000000"
-            if let catObj = root["RankoCategory"] as? [String: Any] {
-                catName = (catObj["name"] as? String) ?? ""
-                catIcon = (catObj["icon"] as? String) ?? "circle"
-                catColour = (catObj["colour"] as? String) ?? "0x000000"
-            } else if let catStr = root["RankoCategory"] as? String {
-                catName = catStr
-            }
-            
-            let itemsDict = root["RankoItems"] as? [String: [String: Any]] ?? [:]
-            let parsedItems: [RankoItem] = itemsDict.compactMap { (itemID, it) in
-                guard
-                    let itemName  = it["ItemName"] as? String,
-                    let itemDesc  = it["ItemDescription"] as? String,
-                    let itemImage = it["ItemImage"] as? String,
-                    let itemGIF    = it["ItemGIF"] as? String,
-                    let itemVideo    = it["ItemVideo"] as? String,
-                    let itemAudio    = it["ItemAudio"] as? String
-                else { return nil }
-                let rank  = intFromAny(it["ItemRank"])  ?? 0
-                let votes = intFromAny(it["ItemVotes"]) ?? 0
-                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                let plays = intFromAny(it["PlayCount"]) ?? 0
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
-            }
-            
+
             // assign UI state
             rankoName = name
             description = des
             isPrivate = priv
             categoryName = catName
             categoryIcon = catIcon
-            categoryColour = UInt(catColour) ?? 0xFFFFFF
+            categoryColour = parseColourToUInt(catColour)
+            tags = fetchedTags
+
             selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
-            
+
+            // originals (for revert)
             originalRankoName = name
             originalDescription = des
             originalIsPrivate = priv
             originalCategoryName = catName
             originalCategoryIcon = catIcon
-            originalCategoryColour = UInt(catColour) ?? 0xFFFFFF
+            originalCategoryColour = parseColourToUInt(catColour)
+        } catch {
+            print("Firestore load error:", error.localizedDescription)
         }
     }
     
@@ -1622,16 +1594,9 @@ struct DefaultListPersonal: View {
     
     private func deleteRanko(completion: @escaping (Bool) -> Void
     ) {
-        let db = Database.database().reference()
-        
-        let statusUpdate: [String: Any] = [
-            "RankoStatus": "deleted"
-        ]
-        
-        let listRef = db.child("RankoData").child(rankoID)
-        
-        // ✅ Update list fields
-        listRef.updateChildValues(statusUpdate) { error, _ in
+        let docRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
+
+        docRef.setData(["status": "deleted"], merge: true) { error in
             if let err = error {
                 print("❌ Failed to update list fields: \(err.localizedDescription)")
             } else {
@@ -1670,47 +1635,16 @@ struct DefaultListPersonal: View {
             return
         }
         
-        let featuredRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserRankos")
-            .child("UserFeaturedRankos")
+        let featuredRef = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(uid)
+            .collection("featured_rankos")
+            .document(rankoID)
         
-        // 1) Load all featured slots
-        featuredRef.getData { error, snapshot in
+        featuredRef.delete { error in
             if let error = error {
                 completion(.failure(error))
-                return
-            }
-            
-            guard let snap = snapshot, snap.exists() else {
-                // No featured entries at all
-                completion(.success(()))
-                return
-            }
-            
-            // 2) Find the slot whose value == rankoID
-            var didRemove = false
-            for case let child as DataSnapshot in snap.children {
-                if let value = child.value as? String, value == rankoID {
-                    didRemove = true
-                    // 3) Remove that child entirely
-                    featuredRef.child(child.key).removeValue { removeError, _ in
-                        if let removeError = removeError {
-                            completion(.failure(removeError))
-                        } else {
-                            // Optionally reload your local state here:
-                            // self.tryLoadFeaturedRankos()
-                            completion(.success(()))
-                        }
-                    }
-                    break
-                }
-            }
-            
-            // 4) If no match was found, still report success
-            if !didRemove {
+            } else {
                 completion(.success(()))
             }
         }
@@ -1718,9 +1652,19 @@ struct DefaultListPersonal: View {
     
     // MARK: - Firebase Update
     private func updateListInFirebase(completion: @escaping (_ success: Bool, _ errorMessage: String?) -> Void) {
-        let db = Database.database().reference()
-        let listRef = db.child("RankoData").child(rankoID)
-        
+        Task {
+            do {
+                try await updateListInFirestore()
+                completion(true, nil)
+            } catch {
+                completion(false, error.localizedDescription)
+            }
+        }
+    }
+
+    private func updateListInFirestore() async throws {
+        let docRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
+
         // AEDT/AEST timestamp
         let now = Date()
         let fmt = DateFormatter()
@@ -1728,64 +1672,60 @@ struct DefaultListPersonal: View {
         fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
         fmt.dateFormat = "yyyyMMddHHmmss"
         let ts = fmt.string(from: now)
-        
+
         // resolve category fields from either chip or separate fields
         let catNameOut  = categoryName
         let catIconOut  = categoryIcon
-        let colourOut   = categoryColour
-        
-        // fan-out partial updates to nested paths
+        let colourOut   = categoryColour.toHexStringUpper()
+        let normalizedTags: [String] = tags.isEmpty ? ["ranko", catNameOut.lowercased()] : tags.map { $0.lowercased() }
+
         let updates: [String: Any] = [
-            "RankoDetails/name":        rankoName,
-            "RankoDetails/description": description,
-            
-            "RankoPrivacy/private":     isPrivate,
-            
-            "RankoCategory/name":       catNameOut,
-            "RankoCategory/icon":       catIconOut,
-            "RankoCategory/colour":     colourOut,
-            
-            "RankoDateTime/updated":    ts
+            "name":        rankoName,
+            "description": description,
+            "privacy":     isPrivate,
+            "category":    catNameOut,
+            "category_meta": [
+                "colour": colourOut,
+                "icon": catIconOut,
+                "name": catNameOut
+            ],
+            "time.updated": ts,
+            "tags": normalizedTags
         ]
-        
-        // rebuild RankoItems blob
-        var itemsUpdate: [String: Any] = [:]
-        for it in selectedRankoItems {
-            itemsUpdate[it.id] = [
-                "ItemID":          it.id,
-                "ItemName":        it.record.ItemName,
-                "ItemDescription": it.record.ItemDescription,
-                "ItemImage":       it.record.ItemImage,
-                "ItemRank":        it.rank,
-                "ItemVotes":       it.votes,
-                "ItemGIF":         "",
-                "ItemVideo":       "",
-                "ItemAudio":       "",
-                "PlayCount":       0
-            ]
+
+        try await docRef.setData(updates, merge: true)
+
+        // rebuild RankoItems blob into the items subcollection
+        let itemsRef = docRef.collection("items")
+
+        // purge removed items
+        let existing = try await itemsRef.getDocuments()
+        let keepIDs = Set(selectedRankoItems.map { $0.id })
+        for doc in existing.documents where !keepIDs.contains(doc.documentID) {
+            try await doc.reference.delete()
         }
-        
-        // run both writes
-        let group = DispatchGroup()
-        var ok1 = false, ok2 = false
-        var err: String?
-        
-        group.enter()
-        listRef.updateChildValues(updates) { e, _ in
-            ok1 = (e == nil)
-            if let e = e { err = "details/privacy/category: \(e.localizedDescription)" }
-            group.leave()
-        }
-        
-        group.enter()
-        listRef.child("RankoItems").setValue(itemsUpdate) { e, _ in
-            ok2 = (e == nil)
-            if let e = e, err == nil { err = "items: \(e.localizedDescription)" }
-            group.leave()
-        }
-        
-        group.notify(queue: .main) {
-            completion(ok1 && ok2, ok1 && ok2 ? nil : (err ?? "unknown firebase error"))
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for it in selectedRankoItems {
+                group.addTask {
+                    try await itemsRef.document(it.id).setData(
+                        [
+                            "id": it.id,
+                            "name": it.record.ItemName,
+                            "description": it.record.ItemDescription,
+                            "image": it.record.ItemImage,
+                            "gif": it.record.ItemGIF ?? "",
+                            "video": it.record.ItemVideo ?? "",
+                            "audio": it.record.ItemAudio ?? "",
+                            "rank": it.rank,
+                            "votes": it.votes,
+                            "plays": it.playCount
+                        ],
+                        merge: true
+                    )
+                }
+            }
+            try await group.waitForAll()
         }
     }
     
@@ -1916,4 +1856,3 @@ private extension RankoItem {
         )
     }
 }
-

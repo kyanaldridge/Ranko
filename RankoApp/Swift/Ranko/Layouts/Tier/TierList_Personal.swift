@@ -8,8 +8,30 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseStorage
-import FirebaseDatabase
+import FirebaseFirestore
 import AlgoliaSearchClient
+
+// Reuse RankoItem for tier rows
+private typealias TierItem = RankoItem
+
+// Group tier items by encoded rank (row*10000 + position)
+private func groupTierItems(_ items: [TierItem]) -> [[TierItem]] {
+    guard !items.isEmpty else { return [[]] }
+    var buckets: [Int: [TierItem]] = [:]
+    for it in items {
+        let row = max(1, it.rank / 10000)
+        buckets[row, default: []].append(it)
+    }
+    let maxRow = max(buckets.keys.max() ?? 1, 1)
+    var grouped = Array(repeating: [TierItem](), count: maxRow)
+    for (row, arr) in buckets {
+        let idx = row - 1
+        if idx >= 0 && idx < grouped.count {
+            grouped[idx] = arr.sorted { $0.rank < $1.rank }
+        }
+    }
+    return grouped
+}
 
 private extension CGFloat {
     func clamped(_ a: CGFloat, _ b: CGFloat) -> CGFloat {
@@ -1250,198 +1272,136 @@ struct TierListPersonal: View {
 
     // MARK: - Loader
     private func loadListFromFirebase() {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(rankoID)
-        
-        dbg("➡️ starting load for path: /RankoData/\(rankoID)")
+        Task { await loadListFromFirestore() }
+    }
+
+    private func loadListFromFirestore() async {
+        let docRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
+
+        dbg("➡️ starting Firestore load for ranko/\(rankoID)")
         progressLoading = true
-        
-        ref.observeSingleEvent(of: .value, with: { snap in
-            guard snap.exists() else {
+
+        func parseColourToUInt(_ any: Any?) -> UInt {
+            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+            if let i = any as? Int { return UInt(i & 0x00FF_FFFF) }
+            if let s = any as? String {
+                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
+                if hex.hasPrefix("#") { hex.removeFirst() }
+                if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
+            }
+            return 0x446D7A
+        }
+
+        do {
+            let snap = try await docRef.getDocument()
+            guard let data = snap.data() else {
                 dbg("❌ snapshot doesn't exist for \(self.rankoID)")
-                DispatchQueue.main.async { self.progressLoading = false }
+                progressLoading = false
                 return
             }
-            guard let dict = snap.value as? [String: Any] else {
-                dbg("❌ couldn't cast snapshot.value → [String:Any]. raw=\(String(describing: snap.value))")
-                DispatchQueue.main.async { self.progressLoading = false }
+
+            guard let name = data["name"] as? String,
+                  let desc = data["description"] as? String else {
+                dbg("❌ missing name/description")
+                progressLoading = false
                 return
             }
-            dbg("Checkpoint A — root keys: \(Array(dict.keys).sorted())")
-            
-            // ── DETAILS (name/desc/type/user) ─────────────────────────────────
-            let details = dict["RankoDetails"] as? [String: Any] ?? [:]
-            dbg("Checkpoint B — RankoDetails keys: \(Array(details.keys).sorted())")
-            
-            guard
-                let name   = details["name"] as? String,
-                let desc   = details["description"] as? String
-            else {
-                dbg("❌ DETAILS guard failed. values: " +
-                    "name=\(String(describing: details["name"])) " +
-                    "desc=\(String(describing: details["description"])) " +
-                    "type=\(String(describing: details["type"])) " +
-                    "user_id=\(String(describing: details["user_id"]))")
-                DispatchQueue.main.async { self.progressLoading = false }
-                return
-            }
-            
-            let tags = details["tags"] as? [String] ?? []
-            
-            // ── PRIVACY (nested object) ───────────────────────────────────────
-            let privacy = dict["RankoPrivacy"] as? [String: Any] ?? [:]
-            let privacyBool = (privacy["private"] as? Bool) ?? false
-            dbg("Checkpoint C — privacy.private=\(privacyBool)")
-            
-            // ── DATE/TIME (nested object) ─────────────────────────────────────
-            let dt = dict["RankoDateTime"] as? [String: Any] ?? [:]
-            let created = (dt["created"] as? String) ?? ""
-            let updated = (dt["updated"] as? String) ?? created
-            dbg("Checkpoint D — created=\(created) updated=\(updated)")
-            
-            // ── CATEGORY (nested) ─────────────────────────────────────────────
-            let cat = dict["RankoCategory"] as? [String: Any] ?? [:]
-            let catName  = (cat["name"] as? String) ?? ""
-            let catIcon  = (cat["icon"] as? String) ?? ""
-            let catColourUInt: UInt = {
-                if let s = cat["colour"] as? String { return parseHexUInt(s) ?? 0xFFFFFF }
-                if let n = cat["colour"] as? Int   { return UInt(n) }
-                return 0xFFFFFF
-            }()
-            dbg("Checkpoint E — Category name='\(catName)' icon='\(catIcon)' colour=\(String(format:"0x%06X", catColourUInt))")
-            
-            // ── TIERS (array, 1-based, first element null) ────────────────────
-            // Example (index 1..7): { Code:"S", ColorHex:12862774, Index:1, Label:"Legendary" }
-            let tiersAny = dict["RankoTiers"]
-            let tiersArray = tiersAny as? [Any] ?? []     // allow null @ index 0
-            dbg("Checkpoint F — tiers array count=\(tiersArray.count) (expect >= 2 with index 0 null)")
-            
+            let tags = data["tags"] as? [String] ?? []
+            let privacyBool = (data["privacy"] as? Bool) ?? false
+
+            let catName  = (data["category"] as? String) ?? ""
+            let catMeta  = data["category_meta"] as? [String: Any]
+            let catIcon  = (catMeta?["icon"] as? String) ?? ""
+            let catColour = (catMeta?["colour"] as? String) ?? "0x000000"
+            let catColourUInt = parseColourToUInt(catColour)
+
+            let tiersDict = data["tiers"] as? [String: Any]
             struct RankoTierLight { let index:Int; let code:String; let label:String; let colorHexInt:Int }
-            
-            let loadedTiers: [RankoTierLight] = tiersArray.compactMap { e in
-                guard let t = e as? [String: Any] else { return nil }    // skips the leading null
-                guard
-                    let idx = intFromAny(t["Index"]),
-                    let code = t["Code"] as? String,
-                    let label = t["Label"] as? String
-                else { return nil }
-                // ColorHex in your export is an Int (e.g., 12862774)
-                let colorInt = intFromAny(t["ColorHex"]) ?? 0xBFA254
-                return RankoTierLight(index: idx, code: code, label: label, colorHexInt: colorInt)
-            }
-                .sorted { $0.index < $1.index }
-            
-            dbg("Checkpoint G — parsed tiers: \(loadedTiers.map { "#\($0.index)=\($0.code):\($0.label)@\(String(format:"0x%06X", $0.colorHexInt))" })")
-            
-            let finalTierConfigs: [TierConfig] = {
-                let mapped = loadedTiers.map { TierConfig(code: $0.code, label: $0.label, colorHex: $0.colorHexInt) }
-                return mapped.isEmpty ? TierConfig.starter(3) : mapped
-            }()
-            dbg("Checkpoint H — TierConfig count: \(finalTierConfigs.count)")
-            
-            // ── ITEMS ─────────────────────────────────────────────────────────
-            let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
-            dbg("Checkpoint I — items node found: \(itemsDict.count) entries")
-            
-            let items: [RankoItem] = itemsDict.compactMap { (itemID, item) -> RankoItem? in
-                guard
-                    let itemName  = item["ItemName"] as? String,
-                    let itemDesc  = item["ItemDescription"] as? String,
-                    let itemImage = item["ItemImage"] as? String
-                else {
-                    dbg("⚠️ item '\(itemID)' missing required fields. keys=\(Array(item.keys))")
-                    return nil
+            let loadedTiers: [RankoTierLight] = tiersDict?
+                .compactMap { (k,v) in
+                    guard let idx = Int(k), let t = v as? [String: Any] else { return nil }
+                    let code = t["Code"] as? String ?? t["code"] as? String ?? ""
+                    let label = t["Label"] as? String ?? t["label"] as? String ?? ""
+                    let colorInt = intFromAny(t["ColorHex"] ?? t["colorHex"] ?? t["color"]) ?? 0xBFA254
+                    guard !code.isEmpty else { return nil }
+                    return RankoTierLight(index: idx, code: code, label: label, colorHexInt: colorInt)
                 }
-                
-                let rankFloat  = doubleFromAny(item["ItemRank"]) ?? 0.0
-                let votes      = intFromAny(item["ItemVotes"]) ?? 0
-                
-                let record = RankoRecord(
-                    objectID: itemID,
-                    ItemName: itemName,
-                    ItemDescription: itemDesc,
-                    ItemCategory: (item["ItemCategory"] as? String) ?? "category",
-                    ItemImage: itemImage,
-                    ItemGIF: (item["ItemGIF"] as? String).nilIfEmpty,
-                    ItemVideo: (item["ItemVideo"] as? String).nilIfEmpty,
-                    ItemAudio: (item["ItemAudio"] as? String).nilIfEmpty
-                )
-                
-                return RankoItem(
-                    id: itemID,
-                    rank: Int(rankFloat * 10000),     // keep a stable sort if needed
-                    votes: votes,
-                    record: record,
-                    playCount: intFromAny(item["PlayCount"]) ?? 0
-                )
-            }
-            
-            dbg("Checkpoint J — parsed items: \(items.count)")
-            
-            // group by tier index:
-            // if no explicit per-item tier index exists, derive it from integer part of ItemRank (e.g., 1.0001 → tier 1)
-            let tierCount = max(finalTierConfigs.count, 1)
-            var rows = Array(repeating: [RankoItem](), count: tierCount)
-            
-            // quick map for lookup
-            let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
-            
-            // try explicit keys first; if none, fallback to derived
-            var hadExplicit = false
-            for (itemID, raw) in itemsDict {
-                if let idx1 = ["ItemTierIndex", "TierIndex", "Tier"].compactMap({ intFromAny(raw[$0]) }).first,
-                   let itm = byID[itemID], idx1 >= 1, idx1 <= tierCount {
-                    rows[idx1 - 1].append(itm)
-                    hadExplicit = true
+                .sorted { $0.index < $1.index } ?? []
+
+            var parsedItems: [TierItem] = []
+            if let map = data["RankoItems"] as? [String: Any] {
+                for (k, v) in map {
+                    guard let it = v as? [String: Any] else { continue }
+                    let itemName  = it["ItemName"] as? String ?? (it["name"] as? String ?? "")
+                    let itemDesc  = it["ItemDescription"] as? String ?? (it["description"] as? String ?? "")
+                    let itemImage = it["ItemImage"] as? String ?? (it["image"] as? String ?? "")
+                    guard !itemName.isEmpty else { continue }
+                    let itemGIF   = it["ItemGIF"] as? String ?? (it["gif"] as? String ?? "")
+                    let itemVideo = it["ItemVideo"] as? String ?? (it["video"] as? String ?? "")
+                    let itemAudio = it["ItemAudio"] as? String ?? (it["audio"] as? String ?? "")
+                    let rankAny   = it["ItemRank"] ?? it["rank"]
+                    let votes     = intFromAny(it["ItemVotes"] ?? it["votes"]) ?? 0
+                    let plays     = intFromAny(it["PlayCount"] ?? it["plays"]) ?? 0
+                    let (row, pos): (Int, Int) = {
+                        if let d = rankAny as? Double { return rowPos(from: d) }
+                        if let s = rankAny as? String, let d = Double(s) { return rowPos(from: d) }
+                        if let i = rankAny as? Int { return (i, 1) }
+                        if let n = rankAny as? NSNumber { return rowPos(from: n.doubleValue) }
+                        return (row: 1, pos: 1)
+                    }()
+                    let tierColorInt = intFromAny(it["ColorHex"] ?? it["colorHex"])
+                    let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                    let tierItem = TierItem(id: k, rank: row * 10000 + pos, votes: votes, record: rec, playCount: plays)
+                    parsedItems.append(tierItem)
+                }
+            } else {
+                let itemsSnap = try await docRef.collection("items").getDocuments()
+                parsedItems = itemsSnap.documents.compactMap { d in
+                    let it = d.data()
+                    let itemName  = it["name"] as? String ?? ""
+                    let itemDesc  = it["description"] as? String ?? ""
+                    let itemImage = it["image"] as? String ?? ""
+                    guard !itemName.isEmpty else { return nil }
+                    let itemGIF   = it["gif"] as? String ?? ""
+                    let itemVideo = it["video"] as? String ?? ""
+                    let itemAudio = it["audio"] as? String ?? ""
+                    let rankAny   = it["rank"]
+                    let votes     = intFromAny(it["votes"]) ?? 0
+                    let plays     = intFromAny(it["plays"]) ?? 0
+                    let (row, pos): (Int, Int) = {
+                        if let d = rankAny as? Double { return rowPos(from: d) }
+                        if let s = rankAny as? String, let d = Double(s) { return rowPos(from: d) }
+                        if let i = rankAny as? Int { return (i, 1) }
+                        if let n = rankAny as? NSNumber { return rowPos(from: n.doubleValue) }
+                        return (row: 1, pos: 1)
+                    }()
+                    let tierColorInt = intFromAny(it["ColorHex"] ?? it["colorHex"])
+                    let rec = RankoRecord(objectID: d.documentID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                    return TierItem(id: d.documentID, rank: row * 10000 + pos, votes: votes, record: rec, playCount: plays)
                 }
             }
-            
-            if !hadExplicit {
-                dbg("ℹ️ no explicit per-item tier index found; deriving from ItemRank’s integer part")
-                for (itemID, raw) in itemsDict {
-                    let rankFloat = doubleFromAny(raw["ItemRank"]) ?? 0.0
-                    let idx = min(max(Int(floor(rankFloat)), 1), tierCount)   // 1-based
-                    if let itm = byID[itemID] {
-                        rows[idx - 1].append(itm)
-                    }
-                }
-            }
-            
-            let finalRows: [[RankoItem]] = rows.map { $0.sorted { $0.rank < $1.rank } }
-            dbg("Checkpoint K — grouped rows counts by tier: \(finalRows.map(\.count))")
-            
-            // ── PUSH INTO UI (MAIN THREAD) ────────────────────────────────────
+
             DispatchQueue.main.async {
                 self.progressLoading = false
-                
-                // toolbar title stack inputs
-                self.rankoName      = name
-                self.description    = desc
-                self.isPrivate      = privacyBool
-                self.categoryName   = catName
-                self.categoryIcon   = catIcon
-                self.categoryColour = UInt("0x" + String(catColourUInt, radix: 16, uppercase: true)) ?? 0xFFFFFF
-                self.tags           = tags
-                
-                // tiers + items
-                self.tiers          = finalTierConfigs
-                self.unGroupedItems = items.sorted { $0.rank < $1.rank }
-                self.groupedItems   = finalRows
-                
-                // originals (for revert)
-                self.originalRankoName = self.rankoName
-                self.originalDescription = self.description
-                self.originalIsPrivate = self.isPrivate
-                self.originalCategoryName = self.categoryName
-                self.originalCategoryIcon = self.categoryIcon
-                self.originalCategoryColour = self.categoryColour
-                
-                self.imageReloadToken = UUID()
-                
-                dbg("✅ UI state updated — name='\(self.rankoName)' tiers=\(self.tiers.count) rows=\(self.groupedItems.count)")
+                self.rankoName = name
+                self.description = desc
+                self.isPrivate = privacyBool
+                self.categoryName = catName
+                self.categoryIcon = catIcon
+                self.categoryColour = catColourUInt
+                self.tags = tags
+                let mappedTiers: [TierConfig] = loadedTiers.map { t in
+                    TierConfig(code: t.code, label: t.label, colorHex: t.colorHexInt)
+                }
+                if !mappedTiers.isEmpty { self.tiers = mappedTiers }
+                self.groupedItems = groupTierItems(parsedItems)
             }
-        })
+        } catch {
+            dbg("❌ Firestore load error: \(error.localizedDescription)")
+            progressLoading = false
+        }
     }
 
     /// Parses "YYYYMMDDhhmmss" or seconds-since-epoch to Date.
@@ -3419,8 +3379,6 @@ struct TierListPersonal: View {
     }
     
     private func updateTierListInFirebase(completion: @escaping (Bool, String?) -> Void) {
-        let db = Database.database().reference()
-
         // 1) Items map (id -> fields)
         // Row indices are 1-based (tier 1..N). Position is 1..rowCount.
         var itemsDict: [String: Any] = [:]
@@ -3509,30 +3467,58 @@ struct TierListPersonal: View {
         ]
 
         // 6) Run both writes like you do elsewhere (list + mirror under user)
-        let listRef  = db.child("RankoData").child(rankoID)
-        let userRef  = db.child("UserData").child(user_data.userID)
-                        .child("UserRankos").child("UserActiveRankos").child(rankoID)
+        let docRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
+        let itemsRef = docRef.collection("items")
 
-        let writes = DispatchGroup()
-        var ok1 = false, ok2 = false
-        var err: String?
+        Task {
+            do {
+                // write list doc
+                try await docRef.setData(
+                    [
+                        "id": rankoID,
+                        "name": rankoName,
+                        "description": description,
+                        "lang": "en",
+                        "time": ["created": now, "updated": now],
+                        "category": categoryName,
+                        "country": "AUS",
+                        "privacy": isPrivate,
+                        "status": "active",
+                        "type": "tier",
+                        "user_id": user_data.userID,
+                        "tags": normalizedTags,
+                        "category_meta": categoryDict,
+                        "tiers": tiersDict
+                    ],
+                    merge: true
+                )
 
-        writes.enter()
-        listRef.setValue(payload) { e, _ in
-            ok1 = (e == nil)
-            if let e = e { err = "set list: \(e.localizedDescription)" }
-            writes.leave()
-        }
+                // purge removed items
+                let existing = try await itemsRef.getDocuments()
+                let keepIDs = Set(itemsDict.keys)
+                for doc in existing.documents where !keepIDs.contains(doc.documentID) {
+                    try await doc.reference.delete()
+                }
 
-        writes.enter()
-        userRef.setValue(categoryName) { e, _ in
-            ok2 = (e == nil)
-            if let e = e, err == nil { err = "mirror user node: \(e.localizedDescription)" }
-            writes.leave()
-        }
+                // write items
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    for (itemID, v) in itemsDict {
+                        group.addTask {
+                            try await itemsRef.document(itemID).setData(v as! [String: Any], merge: true)
+                        }
+                    }
+                    try await group.waitForAll()
+                }
 
-        writes.notify(queue: .main) {
-            completion(ok1 && ok2, ok1 && ok2 ? nil : (err ?? "unknown firebase error"))
+                // mirror pointer for user
+                try await docRef.collection("userPointers")
+                    .document(user_data.userID)
+                    .setData(["category": categoryName], merge: true)
+
+                DispatchQueue.main.async { completion(true, nil) }
+            } catch {
+                DispatchQueue.main.async { completion(false, error.localizedDescription) }
+            }
         }
     }
     
@@ -3576,60 +3562,22 @@ struct TierListPersonal: View {
             return
         }
         
-        let featuredRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserRankos")
-            .child("UserFeaturedRankos")
+        let featuredRef = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(user_data.userID)
+            .collection("featured_rankos")
+            .document(rankoID)
         
-        // 1) Load all featured slots
-        featuredRef.getData { error, snapshot in
+        featuredRef.delete { error in
             if let error = error {
                 completion(.failure(error))
-                return
-            }
-            
-            guard let snap = snapshot, snap.exists() else {
-                // No featured entries at all
-                completion(.success(()))
-                return
-            }
-            
-            // 2) Find the slot whose value == rankoID
-            var didRemove = false
-            for case let child as DataSnapshot in snap.children {
-                if let value = child.value as? String, value == rankoID {
-                    didRemove = true
-                    // 3) Remove that child entirely
-                    featuredRef.child(child.key).removeValue { removeError, _ in
-                        if let removeError = removeError {
-                            completion(.failure(removeError))
-                        } else {
-                            // Optionally reload your local state here:
-                            // self.tryLoadFeaturedRankos()
-                            completion(.success(()))
-                        }
-                    }
-                    break
-                }
-            }
-            
-            // 4) If no match was found, still report success
-            if !didRemove {
+            } else {
                 completion(.success(()))
             }
         }
     }
     
     // Wrap Firebase setValue into async/await
-    private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            ref.setValue(value) { err, _ in
-                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
-            }
-        }
-    }
     
     private func tiersPayload(from tiers: [TierConfig]) -> [String: Any] {
         var dict: [String: Any] = [:]
@@ -3647,23 +3595,15 @@ struct TierListPersonal: View {
     
     private func deleteRanko(completion: @escaping (Bool) -> Void
     ) {
-        let db = Database.database().reference()
-        
-        let statusUpdate: [String: Any] = [
-            "RankoStatus": "deleted"
-        ]
-        
-        let listRef = db.child("RankoData").child(rankoID)
-        
-        // ✅ Update list fields
-        listRef.updateChildValues(statusUpdate) { error, _ in
+        let docRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
+        docRef.setData(["status": "deleted"], merge: true) { error in
             if let err = error {
                 print("❌ Failed to update list fields: \(err.localizedDescription)")
             } else {
                 print("✅ List fields updated successfully")
             }
         }
-        
+
         let client = SearchClient(
             appID: ApplicationID(rawValue: Secrets.algoliaAppID),
             apiKey: APIKey(rawValue: Secrets.algoliaAPIKey)

@@ -8,7 +8,7 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseStorage
-import FirebaseDatabase
+import FirebaseFirestore
 import AlgoliaSearchClient
 
 private extension CGFloat {
@@ -26,20 +26,6 @@ private extension CGPoint {
     var length: CGFloat { sqrt(x*x + y*y) }
     var normalized: CGPoint { let L = max(length, 0.0001); return .init(x: x/L, y: y/L) }
     func dot(_ p: CGPoint) -> CGFloat { x*p.x + y*p.y }
-}
-
-extension DatabaseReference {
-    func setValueAsync(_ value: Any) async throws {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            self.setValue(value) { err, _ in
-                if let err = err {
-                    cont.resume(throwing: err)
-                } else {
-                    cont.resume()
-                }
-            }
-        }
-    }
 }
 
 protocol OrderedKnob: CaseIterable, Hashable, Identifiable {
@@ -2790,14 +2776,6 @@ struct TierListView: View {
                 setUploadSuccess(image: img, url: finalURL(for: draftID), for: draftID)
                 print("image uploaded successfully for itemID: \(draftID)")
 
-                // (optional) also mirror a tiny index in Realtime DB like your profile fn:
-                // try? await setValueAsync(
-                //   Database.database().reference()
-                //     .child("RankoData").child(rankoID)
-                //     .child("RankoItemImages").child(draftID),
-                //   value: ["path": path, "modified": metadata.customMetadata?["uploadedAt"] ?? ""]
-                // )
-
             } catch {
                 let msg: String
                 if error is TimeoutErr { msg = "upload timed out, please try again." }
@@ -3477,41 +3455,8 @@ struct TierListView: View {
             return
         }
 
-        let db = Database.database().reference()
-
-        // 2) Build items with decimal ranks + tier linkage
-        var rankoItemsDict: [String: Any] = [:]
-
-        for (rowIdx, row) in groupedItems.enumerated() {
-            let rowNumber = rowIdx + 1
-            _ = tierConfigForRow(rowIdx)
-
-            for (posIdx, item) in row.enumerated() {
-                let position = posIdx + 1
-                let rankDouble = decimalRank(rowNumber: rowNumber, position: position)
-
-                // unique key per item node in RankoItems
-                let itemID = UUID().uuidString
-
-                rankoItemsDict[itemID] = [
-                    "ItemID":          itemID,
-                    "ItemName":        item.itemName,
-                    "ItemDescription": item.itemDescription,
-                    "ItemImage":       item.itemImage,
-
-                    // 👇 NEW: decimal rank format
-                    "ItemRank":        rankDouble,       // Double: 1.0001, 4.0012, …
-
-                    "ItemVotes":       0,
-
-                    // keep your extra media/stat fields
-                    "ItemGIF":         item.itemGIF,
-                    "ItemVideo":       item.itemVideo,
-                    "ItemAudio":       item.itemAudio,
-                    "PlayCount":       item.playCount
-                ]
-            }
-        }
+        let docRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
+        let itemsRef = docRef.collection("items")
 
         // 3) Timestamps
         let now = Date()
@@ -3563,51 +3508,74 @@ struct TierListView: View {
         // 6) NEW: tiers block
         let rankoTiers = tiersPayload(from: tiers)
 
-        // 7) Full payload (single write shape)
+        // 7) Full payload (Firestore shape)
         let payload: [String: Any] = [
-            // blocks shaped like your sample schema
-            "RankoDetails":      rankoDetails,
-            "RankoCategory":     categoryDict,
-            "RankoPrivacy":   rankoPrivacy,
-            "RankoStatistics":   rankoStats,
-            "RankoDateTime":     ["updated": rankoDateTime, "created": rankoDateTime],
-            "RankoTiers":        rankoTiers,
-            "RankoItems":        rankoItemsDict,
-
-            // init empty maps
-            "RankoLikes":        [:],
-            "RankoComments":     [:]
+            "id":          rankoID,
+            "name":        rankoName,
+            "description": description,
+            "lang":        "en",
+            "time": ["created": rankoDateTime, "updated": rankoDateTime],
+            "category":    categoryName,
+            "country":     "AUS",
+            "privacy":     isPrivate,
+            "status":      "active",
+            "type":        "tier",
+            "user_id":     user_data.userID,
+            "tags":        normalizedTags,
+            "category_meta": categoryDict,
+            "tiers":       rankoTiers
         ]
 
-        // 8) Write the Ranko and mirror under the user (async/await)
+        try await docRef.setData(payload, merge: true)
+
+        // rebuild items with decimal rank + tier linkage in subcollection
+        // purge removed items first
+        let existing = try await itemsRef.getDocuments()
+        let keepIDs = Set(groupedItems.flatMap { $0 }.map { $0.id })
+        for doc in existing.documents where !keepIDs.contains(doc.documentID) {
+            try await doc.reference.delete()
+        }
+
         try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                try await db.child("RankoData")
-                            .child(self.rankoID)
-                            .setValueAsync(payload)
-            }
-            group.addTask {
-                try await db.child("UserData")
-                            .child(self.user_data.userID)
-                            .child("UserRankos")
-                            .child("UserActiveRankos")
-                            .child(self.rankoID)
-                            .setValueAsync(categoryName)
+            for (rowIdx, row) in groupedItems.enumerated() {
+                let rowNumber = rowIdx + 1
+                _ = tierConfigForRow(rowIdx)
+
+                for (posIdx, item) in row.enumerated() {
+                    let position = posIdx + 1
+                    let rankDouble = decimalRank(rowNumber: rowNumber, position: position)
+                    let itemID = item.id
+
+                    group.addTask {
+                        try await itemsRef.document(itemID).setData(
+                            [
+                                "id": itemID,
+                                "name": item.itemName,
+                                "description": item.itemDescription,
+                                "image": item.itemImage,
+                                "rank": rankDouble,
+                                "votes": 0,
+                                "gif": item.itemGIF ?? "",
+                                "video": item.itemVideo ?? "",
+                                "audio": item.itemAudio ?? "",
+                                "plays": item.playCount,
+                                "row": rowNumber,
+                                "position": position
+                            ],
+                            merge: true
+                        )
+                    }
+                }
             }
             try await group.waitForAll()
         }
 
-        print("✅ List saved with decimal ranks + tier metadata")
-    }
-    
-    
-    // Wrap Firebase setValue into async/await
-    private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            ref.setValue(value) { err, _ in
-                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
-            }
-        }
+        // mirror lightweight pointer for the user
+        try await docRef.collection("userPointers")
+            .document(user_data.userID)
+            .setData(["category": categoryName], merge: true)
+
+        print("✅ List saved to Firestore with decimal ranks + tier metadata")
     }
     
     private func tiersPayload(from tiers: [TierConfig]) -> [String: Any] {
@@ -4165,4 +4133,3 @@ private extension RankoItem {
         )
     }
 }
-

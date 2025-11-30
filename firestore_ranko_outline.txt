@@ -1,0 +1,56 @@
+Firestore structure (recommended)
+- Collection: rankos (one doc per list)
+  - Fields: name (string), tags (array<string>), description (string), image (string URL), language (string, e.g., "en"), region (string), type (string), user_id (string), privacy flags (cloneable/comments/likes/private/saves/shares/status), created (timestamp/int), updated (timestamp/int), category fields (colour/icon/name)
+  - Subcollection: items (or flatten into a top-level items collection if you need cross-list search)
+    - Fields per item: name (ItemName), description (ItemDescription), image (ItemImage), gif/audio/video (optional), rank (ItemRank), votes (ItemVotes), play_count (PlayCount), language (e.g., "en"), list_id (parent ranko id if flattened), tags (inherited or item-specific), search_blob (optional, concatenated lowercased name + tags for client contains checks)
+
+Searching behavior (FirestoreStepView)
+- Firestore applies only the where filters you configure (firebaseFilters + runtime/chip/button filters) and order(by) for sorting.
+- Firestore does not perform substring text search; it returns filtered and sorted pages (limit = hitsPerPage) with cursors.
+- The app then client-filters rows where name or desc contains the search text; image, list_id, and other fields are ignored unless added to search_blob or rendered into desc.
+
+Fields that influence search
+- Will affect search if included: name, description (desc), tags, search_blob (if you add it).
+- Will not affect search unless explicitly used: image, gif, audio, video, rank, votes, play_count, list_id, language, region, privacy flags.
+
+Language handling
+- Keep language as the string "en" (no need to convert to 1). It will not be matched by the client search unless you add it to search_blob or render it into desc.
+
+Structure diagram (ranko document with items subcollection)
+rankos (collection)
+└── <ranko_id> (document)
+    ├── name: string
+    ├── tags: array<string>
+    ├── description: string
+    ├── image: string (URL)
+    ├── language: string ("en")
+    ├── region: string
+    ├── type: string
+    ├── user_id: string
+    ├── category:
+    │     ├── colour: int
+    │     ├── icon: string
+    │     └── name: string
+    ├── privacy:
+    │     ├── cloneable: bool
+    │     ├── comments: bool
+    │     ├── likes: bool
+    │     ├── private: bool
+    │     ├── saves: bool
+    │     ├── shares: bool
+    │     └── status: string
+    ├── created: timestamp/int
+    ├── updated: timestamp/int
+    └── items (subcollection)
+          └── <item_id> (document)
+              ├── name: string
+              ├── description: string
+              ├── image: string (URL)
+              ├── gif/audio/video: string (optional)
+              ├── rank: int
+              ├── votes: int
+              ├── play_count: int
+              ├── tags: array<string> (optional)
+              ├── language: string ("en")
+              ├── list_id: string (parent ranko_id; omit if nested)
+              └── search_blob: string (optional, for client contains)

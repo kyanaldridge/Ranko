@@ -11,7 +11,7 @@ import UIKit
 import SwiftUI
 import FirebaseAuth
 import FirebaseStorage
-import FirebaseDatabase
+import FirebaseFirestore
 import FirebaseAnalytics
 import PhotosUI
 import AlgoliaSearchClient
@@ -1018,31 +1018,14 @@ struct DefaultListView: View {
     private func saveRankedListToFirebaseAsync() async throws {
         guard categoryName != "Unknown" else { throw PublishErr.missingCategory }
 
-        let db = Database.database().reference()
+        let db = FirestoreProvider.dbFilters
+        let docRef = db.collection("ranko").document(rankoID)
         let rawUID = Auth.auth().currentUser?.uid ?? user_data.userID
-        let invalidSet = CharacterSet(charactersIn: ".#$[]")
-        let safeUID = rawUID.components(separatedBy: invalidSet).joined()
-        guard !safeUID.isEmpty else { throw PublishErr.invalidUserID }
+        guard !rawUID.isEmpty else { throw PublishErr.invalidUserID }
 
-        // Build Items payload (keep original IDs)
-        var rankoItemsDict: [String: Any] = [:]
-        for item in selectedRankoItems {
-            let itemID = item.id
-            rankoItemsDict[itemID] = [
-                "ItemDescription": item.itemDescription,
-                "ItemID":         itemID,
-                "ItemImage":      item.itemImage,     // URL or storage path
-                "ItemName":       item.itemName,
-                "ItemRank":       item.rank,
-                "ItemVotes":      item.votes,
-
-                // Extra media/stat fields to match your sample schema
-                "ItemGIF":   item.itemGIF,
-                "ItemVideo": item.itemVideo,
-                "ItemAudio": item.itemAudio,
-                "PlayCount": item.playCount
-            ]
-        }
+        // Build Items payload (keep original IDs) for the items subcollection
+        let itemsRef = docRef.collection("items")
+        let normalizedTags: [String] = tags.isEmpty ? ["ranko", categoryName.lowercased()] : tags.map { $0.lowercased() }
 
         // Timestamp (AEST/AEDT) → "yyyyMMddHHmmss"
         let now = Date()
@@ -1052,87 +1035,64 @@ struct DefaultListView: View {
         formatter.dateFormat = "yyyyMMddHHmmss"
         let ts = formatter.string(from: now)
 
-        let categoryDict: [String: Any] = [
-            "colour": String(categoryColour),
-            "icon":   categoryIcon,
-            "name":   categoryName
-        ]
-
-        // Details (fill tags/region/lang with smart defaults if you don't have UI for them yet)
-        let normalizedTags: [String] = tags.isEmpty ? ["ranko", categoryName.lowercased()] : tags
-
-        let rankoDetails: [String: Any] = [
-            "id":          rankoID,
-            "name":        rankoName,
-            "description": description,
-            "type":        "default",
-            "user_id":     safeUID,
-            "tags":        normalizedTags,
-            "region":      "AUS",
-            "language":    "en",
-            "downloaded":  true
-        ]
-
-        // Privacy block (match your example)
-        let rankoPrivacy: [String: Any] = [
-            "private":   isPrivate,
-            "cloneable": true,
-            "comments":  true,
-            "likes":     true,
-            "shares":    true,
-            "saves":     true,
-            "status":    "active"
-        ]
-
-        // Statistics (start at 0; your sample shows some nonzero values — adjust if you keep history)
-        let rankoStats: [String: Any] = [
-            "views":  0,
-            "saves":  0,
-            "shares": 0,
-            "clones": 0
-        ]
-
-        // Full payload shaped like your sample
+        // Ranko document shaped like import_ranko.py output
         let payload: [String: Any] = [
-            "RankoDetails":   rankoDetails,
-            "RankoCategory":  categoryDict,
-            "RankoPrivacy":   rankoPrivacy,
-            "RankoDateTime":  ["updated": ts, "created": ts],   // <- exact keys
-            "RankoStatistics": rankoStats,
-            "RankoLikes":     [:], // empty map to start
-            "RankoComments":  [:], // empty map to start
-            "RankoItems":     rankoItemsDict
+            "id": rankoID,
+            "name": rankoName,
+            "description": description,
+            "lang": "en",
+            "time": ["created": ts, "updated": ts],
+            "category": categoryName,
+            "country": "AUS",
+            "privacy": isPrivate,
+            "status": "active",
+            "type": "default",
+            "user_id": rawUID,
+            "tags": normalizedTags,
+            "category_meta": [
+                "colour": String(categoryColour),
+                "icon":   categoryIcon,
+                "name":   categoryName
+            ]
         ]
 
-        // write the Ranko and mirror minimal info under the user
+        try await docRef.setData(payload, merge: true)
+
+        // purge removed items
+        let existing = try await itemsRef.getDocuments()
+        let keepIDs = Set(selectedRankoItems.map { $0.id })
+        for doc in existing.documents where !keepIDs.contains(doc.documentID) {
+            try await doc.reference.delete()
+        }
+
+        // write items
         try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask {
-                try await setValueAsync(
-                    db.child("RankoData").child(self.rankoID),
-                    value: payload
-                )
-            }
-            group.addTask {
-                // keep a lightweight pointer under the user (you can mirror more later)
-                try await setValueAsync(
-                    db.child("UserData").child(safeUID)
-                      .child("UserRankos").child("UserActiveRankos")
-                      .child(self.rankoID),
-                    value: categoryName
-                )
+            for item in selectedRankoItems {
+                group.addTask {
+                    try await itemsRef.document(item.id).setData(
+                        [
+                            "id": item.id,
+                            "name": item.itemName,
+                            "description": item.itemDescription,
+                            "image": item.itemImage,
+                            "gif": item.itemGIF ?? "",
+                            "video": item.itemVideo ?? "",
+                            "audio": item.itemAudio ?? "",
+                            "rank": item.rank,
+                            "votes": item.votes,
+                            "plays": item.playCount
+                        ],
+                        merge: true
+                    )
+                }
             }
             try await group.waitForAll()
         }
-    }
 
-
-    // Wrap Firebase setValue into async/await
-    private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            ref.setValue(value) { err, _ in
-                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
-            }
-        }
+        // mirror lightweight pointer for the user
+        try await docRef.collection("userPointers")
+            .document(rawUID)
+            .setData(["category": categoryName], merge: true)
     }
 
     // MARK: - Errors

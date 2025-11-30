@@ -10,7 +10,7 @@ import InstantSearchSwiftUI
 import InstantSearchCore
 import FirebaseAuth
 import FirebaseStorage
-import FirebaseDatabase
+import FirebaseFirestore
 import Foundation
 import AlgoliaSearchClient
 import UIKit
@@ -584,12 +584,13 @@ struct DefaultListSpectate: View {
     }
     
     private func loadListFromFirebase() {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(rankoID)
+        Task { await loadListFromFirestore() }
+    }
+
+    private func loadListFromFirestore() async {
+        let docRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
 
         func parseColourToUInt(_ any: Any?) -> UInt {
-            // accepts: "0xFFCF00", "#FFCF00", "FFCF00", 16763904, NSNumber, etc.
             if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
             if let i = any as? Int { return UInt(i & 0x00FF_FFFF) }
             if let s = any as? String {
@@ -602,104 +603,63 @@ struct DefaultListSpectate: View {
             return 0x446D7A
         }
 
-        ref.observeSingleEvent(of: .value) { snap in
-            guard let root = snap.value as? [String: Any] else { return }
+        do {
+            let snap = try await docRef.getDocument()
+            guard let data = snap.data() else { return }
 
-            // ---------- NEW SCHEMA ----------
-            let details = root["RankoDetails"] as? [String: Any]
-            let privacy = root["RankoPrivacy"] as? [String: Any]
-            let cat     = root["RankoCategory"] as? [String: Any]
-            let items   = root["RankoItems"] as? [String: Any] ?? [:]
+            let name = (data["name"] as? String) ?? ""
+            let des  = (data["description"] as? String) ?? ""
+            let priv = (data["privacy"] as? Bool) ?? false
 
-            if details != nil || privacy != nil || cat != nil {
-                // details
-                let name = (details?["name"] as? String) ?? ""
-                let des  = (details?["description"] as? String) ?? ""
-                let priv = (privacy?["private"] as? Bool) ?? false
+            let catName  = (data["category"] as? String) ?? ""
+            let catMeta  = data["category_meta"] as? [String: Any]
+            let catIcon  = (catMeta?["icon"] as? String) ?? "circle"
+            let catColour = (catMeta?["colour"] as? String) ?? "0x000000"
 
-                // category
-                let catName  = (cat?["name"] as? String) ?? ""
-                let catIcon  = (cat?["icon"] as? String) ?? "circle"
-                let catColour = (cat?["colour"] as? String) ?? "0x000000"
+            var parsedItems: [RankoItem] = []
 
-                // items
-                let parsedItems: [RankoItem] = items.compactMap { (k, v) in
+            if let itemsMap = data["RankoItems"] as? [String: Any] {
+                parsedItems = itemsMap.compactMap { (k, v) in
                     guard let it = v as? [String: Any] else { return nil }
-                    guard
-                        let itemName  = it["ItemName"] as? String,
-                        let itemDesc  = it["ItemDescription"] as? String,
-                        let itemImage = it["ItemImage"] as? String,
-                        let itemGIF    = it["ItemGIF"] as? String,
-                        let itemVideo    = it["ItemVideo"] as? String,
-                        let itemAudio    = it["ItemAudio"] as? String
-                    else { return nil }
-                    let rank  = intFromAny(it["ItemRank"])  ?? 0
-                    let votes = intFromAny(it["ItemVotes"]) ?? 0
+                    let itemName  = it["ItemName"] as? String ?? (it["name"] as? String ?? "")
+                    let itemDesc  = it["ItemDescription"] as? String ?? (it["description"] as? String ?? "")
+                    let itemImage = it["ItemImage"] as? String ?? (it["image"] as? String ?? "")
+                    let itemGIF   = it["ItemGIF"] as? String ?? (it["gif"] as? String ?? "")
+                    let itemVideo = it["ItemVideo"] as? String ?? (it["video"] as? String ?? "")
+                    let itemAudio = it["ItemAudio"] as? String ?? (it["audio"] as? String ?? "")
+                    guard !itemName.isEmpty else { return nil }
+                    let rank  = intFromAny(it["ItemRank"] ?? it["rank"])  ?? 0
+                    let votes = intFromAny(it["ItemVotes"] ?? it["votes"]) ?? 0
+                    let plays = intFromAny(it["PlayCount"] ?? it["plays"]) ?? 0
                     let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                    let plays = intFromAny(it["PlayCount"]) ?? 0
                     return RankoItem(id: k, rank: rank, votes: votes, record: rec, playCount: plays)
                 }
-
-                // assign UI state
-                rankoName = name
-                description = des
-                isPrivate = priv
-                categoryName = catName
-                categoryIcon = catIcon
-                categoryColour = UInt(catColour) ?? 0xFFFFFF
-
-                selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
-
-                // originals (for revert)
-                originalRankoName = name
-                originalDescription = des
-                originalIsPrivate = priv
-                originalCategoryName = catName
-                originalCategoryIcon = catIcon
-                originalCategoryColour = UInt(catColour) ?? 0xFFFFFF
-                return
+            } else {
+                let itemsSnap = try await docRef.collection("items").getDocuments()
+                parsedItems = itemsSnap.documents.compactMap { d in
+                    let it = d.data()
+                    let itemName  = it["name"] as? String ?? ""
+                    let itemDesc  = it["description"] as? String ?? ""
+                    let itemImage = it["image"] as? String ?? ""
+                    let itemGIF   = it["gif"] as? String ?? ""
+                    let itemVideo = it["video"] as? String ?? ""
+                    let itemAudio = it["audio"] as? String ?? ""
+                    guard !itemName.isEmpty else { return nil }
+                    let rank  = intFromAny(it["rank"])  ?? 0
+                    let votes = intFromAny(it["votes"]) ?? 0
+                    let plays = intFromAny(it["plays"]) ?? 0
+                    let rec = RankoRecord(objectID: d.documentID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
+                    return RankoItem(id: d.documentID, rank: rank, votes: votes, record: rec, playCount: plays)
+                }
             }
 
-            // ---------- OLD SCHEMA (fallback) ----------
-            let name = (root["RankoName"] as? String) ?? ""
-            let des  = (root["RankoDescription"] as? String) ?? ""
-            let priv = (root["RankoPrivacy"] as? Bool) ?? false
-
-            var catName = ""
-            var catIcon = "circle"
-            var catColourUInt = "0x000000"
-            if let catObj = root["RankoCategory"] as? [String: Any] {
-                catName = (catObj["name"] as? String) ?? ""
-                catIcon = (catObj["icon"] as? String) ?? "circle"
-                catColourUInt = (catObj["colour"] as? String) ?? "0x000000"
-            } else if let catStr = root["RankoCategory"] as? String {
-                catName = catStr
-            }
-
-            let itemsDict = root["RankoItems"] as? [String: [String: Any]] ?? [:]
-            let parsedItems: [RankoItem] = itemsDict.compactMap { (itemID, it) in
-                guard
-                    let itemName  = it["ItemName"] as? String,
-                    let itemDesc  = it["ItemDescription"] as? String,
-                    let itemImage = it["ItemImage"] as? String,
-                    let itemGIF    = it["ItemGIF"] as? String,
-                    let itemVideo    = it["ItemVideo"] as? String,
-                    let itemAudio    = it["ItemAudio"] as? String
-                else { return nil }
-                let rank  = intFromAny(it["ItemRank"])  ?? 0
-                let votes = intFromAny(it["ItemVotes"]) ?? 0
-                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                let plays = intFromAny(it["PlayCount"]) ?? 0
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
-            }
-
-            // assign UI state
             rankoName = name
             description = des
             isPrivate = priv
             categoryName = catName
             categoryIcon = catIcon
-            categoryColour = UInt(catColourUInt) ?? 0xFFFFFF
+            categoryColour = parseColourToUInt(catColour)
+
             selectedRankoItems = parsedItems.sorted { $0.rank < $1.rank }
 
             originalRankoName = name
@@ -707,7 +667,9 @@ struct DefaultListSpectate: View {
             originalIsPrivate = priv
             originalCategoryName = catName
             originalCategoryIcon = catIcon
-            originalCategoryColour = UInt(catColourUInt) ?? 0xFFFFFF
+            originalCategoryColour = parseColourToUInt(catColour)
+        } catch {
+            print("Firestore load error:", error.localizedDescription)
         }
     }
 

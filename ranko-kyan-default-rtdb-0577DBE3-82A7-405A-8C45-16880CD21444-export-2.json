@@ -1,0 +1,160 @@
+{
+  "RankoCategory": {
+    "colour": 16764672,
+    "icon": "cat.fill",
+    "name": "Cats"
+  },
+  "RankoDateTime": {
+    "created": 20250917044326,
+    "updated": "20250917044326"
+  },
+  "RankoDetails": {
+    "description": "",
+    "downloaded": false,
+    "id": "0577DBE3-82A7-405A-8C45-16880CD21444",
+    "language": "en",
+    "name": "My Favourite Breeds of Domestic Cat",
+    "region": "AUS",
+    "tags": [
+      "Cats",
+      "Pets",
+      "Animals"
+    ],
+    "type": "default",
+    "user_id": "ZNhZwy5NalYDRCPusrHwep63VlG2"
+  },
+  "RankoItems": {
+    "0618EEC4-6F58-492A-A382-974F582714EC": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "0618EEC4-6F58-492A-A382-974F582714EC",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/Australian-mist-cat-compressed-1-540x360.jpg",
+      "ItemName": "Australian Mist Cat",
+      "ItemRank": 10,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    },
+    "2055D284-A7E6-4636-9C89-1E2F1D6C99BA": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "2055D284-A7E6-4636-9C89-1E2F1D6C99BA",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/Chantilly-Tiffany-cat-compressed-540x360.jpg",
+      "ItemName": "Chantilly / Tiffany Cat",
+      "ItemRank": 8,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    },
+    "29DAE4B9-1476-417B-90B9-223A24EBFFB0": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "29DAE4B9-1476-417B-90B9-223A24EBFFB0",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/Siamese-Cat-compressed-1-540x360.jpg",
+      "ItemName": "Siamese Cat",
+      "ItemRank": 2,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    },
+    "324FCF0C-DE50-47D8-8648-436D8449D50F": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "324FCF0C-DE50-47D8-8648-436D8449D50F",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/Egyptian-Mau-cat-compressed-540x360.jpg",
+      "ItemName": "Egyptian Mau Cat",
+      "ItemRank": 6,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    },
+    "5B33B793-3680-404A-BFE0-CF8B0526B5EF": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "5B33B793-3680-404A-BFE0-CF8B0526B5EF",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/Ragdoll-cat-compressed-1-540x360.jpg",
+      "ItemName": "Ragdoll Cat",
+      "ItemRank": 1,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    },
+    "64ABF054-FC0F-48AE-A6D2-1810AFA17437": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "64ABF054-FC0F-48AE-A6D2-1810AFA17437",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/Exotic-shorthair-cat-compressed-540x360.jpg",
+      "ItemName": "Exotic Shorthair Cat",
+      "ItemRank": 5,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    },
+    "78B4B6A6-04D3-4AA0-8C6C-6D67519C8E4C": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "78B4B6A6-04D3-4AA0-8C6C-6D67519C8E4C",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/Scottish-Fold-cat-compressed-1-540x360.jpg",
+      "ItemName": "Scottish Fold Cat",
+      "ItemRank": 3,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    },
+    "95D7C705-6AFC-484B-A501-D2DA1D8B9BD4": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "95D7C705-6AFC-484B-A501-D2DA1D8B9BD4",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/European-Shorthair-cat-compressed-540x360.jpg",
+      "ItemName": "European Shorthair Cat",
+      "ItemRank": 7,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    },
+    "9C755EDD-4C94-43B2-B85A-BFDEBD4E5022": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "9C755EDD-4C94-43B2-B85A-BFDEBD4E5022",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/Korat-cat-compressed-1-540x360.jpg",
+      "ItemName": "Korat Cat",
+      "ItemRank": 4,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    },
+    "CB337E71-8B52-45FF-B4A7-687FC83BC719": {
+      "ItemAudio": "",
+      "ItemDescription": "Felis Catus",
+      "ItemGIF": "",
+      "ItemID": "CB337E71-8B52-45FF-B4A7-687FC83BC719",
+      "ItemImage": "https://cats.com/wp-content/uploads/2020/10/Abyssinian-cat-540x360.png",
+      "ItemName": "Abyssinian Cat",
+      "ItemRank": 9,
+      "ItemVideo": "",
+      "ItemVotes": 0,
+      "PlayCount": 0
+    }
+  },
+  "RankoLikes": {
+    "ZNhZwy5NalYDRCPusrHwep63VlG2": 20250917045332
+  },
+  "RankoPrivacy": {
+    "cloneable": true,
+    "comments": true,
+    "likes": true,
+    "private": false,
+    "saves": true,
+    "shares": true,
+    "status": "active"
+  }
+}
