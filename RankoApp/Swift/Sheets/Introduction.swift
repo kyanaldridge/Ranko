@@ -7,7 +7,7 @@
 
 import SwiftUI
 import FirebaseAuth
-import FirebaseDatabase
+import FirebaseFirestore
 import AlgoliaSearchClient
 
 extension View {
@@ -142,7 +142,6 @@ struct TrayView: View {
     }
     
     func saveDetailsToDatabase() {
-        
         let now = Date()
         let aedtFormatter = DateFormatter()
         aedtFormatter.locale = Locale(identifier: "en_US_POSIX")
@@ -157,95 +156,60 @@ struct TrayView: View {
         }
         
         user_data.userProfilePicturePath = "default-profilePicture.jpg"
+        let uid = Auth.auth().currentUser!.uid
+        
+        let payload: [String: Any] = [
+            "id": uid,
+            "name": user_data.username,
+            "description": "",
+            "privacy": "public",
+            "interests": user_data.userInterests.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) },
+            "joined": rankoDateTime,
+            "year": user_data.userYear,
+            "foundUs": selectedAction?.title ?? "",
+            "signIn": user_data.userLoginService,
+            "image": [
+                "path": user_data.userProfilePicturePath,
+                "modified": rankoDateTime
+            ],
+            "stats": [
+                "rankos": 0,
+                "followers": 0,
+                "following": 0
+            ]
+        ]
+        
+        FirestoreProvider.dbFilters
+            .collection("users")
+            .document(uid)
+            .setData(payload, merge: true) { error in
+                if let error = error {
+                    print("❌ Error saving user to Firestore:", error.localizedDescription)
+                } else {
+                    print("✅ User information saved to Firestore")
+                }
+            }
+        
+        // Optional: sync minimal record to Algolia if still desired
+        struct AlgoliaUserRecord: Encodable {
+            let objectID: String
+            let name: String
+            let description: String
+            let foundUs: String
+            let joined: String
+            let year: Int
+        }
 
-        // 1) Build Group List Codable Struct
-        
-        
-        let rankoUserDetails = RankoUserDetails(
-            UserID: Auth.auth().currentUser!.uid,
-            UserName: user_data.username,
-            UserDescription: "",
-            UserPrivacy: "Public",
-            UserInterests: user_data.userInterests,
-            UserJoined: rankoDateTime,
-            UserYear: user_data.userYear,
-            UserFoundUs: selectedAction!.title,
-            UserSignInMethod: user_data.userLoginService
-        )
-        
-        let rankoUserProfilePicture = RankoUserProfilePicture(
-            UserProfilePicturePath: user_data.userProfilePicturePath,
-            UserProfilePictureModified: rankoDateTime,
-            UserProfilePictureFile: "image"
-        )
-        
-        let rankoUserStats = RankoUserStats(
-            UserRankoCount: 0,
-            UserFollowerCount: 0,
-            UserFollowingCount: 0,
-        )
-        
-        let userRecord = RankoUserInformation(
-            objectID: Auth.auth().currentUser!.uid,
-            userDetails: rankoUserDetails,
-            userProfilePicture: rankoUserProfilePicture,
-            userStats: rankoUserStats
-        )
-        
-        let userDetails: [String: Any] = [
-            "UserID": Auth.auth().currentUser!.uid,
-            "UserName": user_data.username,
-            "UserDescription": "",
-            "UserPrivacy": "Public",
-            "UserInterests": user_data.userInterests,
-            "UserJoined": rankoDateTime,
-            "UserYear": user_data.userYear,
-            "UserFoundUs": selectedAction!.title,
-            "UserSignInMethod": user_data.userLoginService
-        ]
-        
-        let userProfilePicture: [String: Any] = [
-            "UserProfilePicturePath": user_data.userProfilePicturePath,
-            "UserProfilePictureModified": rankoDateTime,
-            "UserProfilePictureFile": "image"
-        ]
-        
-        let userRankos: [String: Any] = [
-            "UserActiveRankos": "",
-            "UserFeaturedRankos": "",
-            "UserSavedRankos": "",
-            "UserArchivedRankos": "",
-            "UserDeletedRankos": ""
-        ]
-        
-        let userSocial: [String: Any] = [
-            "UserFollowRequests": "",
-            "UserFollowers": "",
-            "UserFollowing": ""
-        ]
-        
-        let userStats: [String: Any] = [
-            "UserFollowerCount": 0,
-            "UserFollowingCount": 0,
-            "UserRankoCount": 0
-        ]
-        
-        let db = Database.database().reference()
-        let userRef = db.child("UserData").child(Auth.auth().currentUser!.uid)
-        
-        userRef.child("UserDetails").updateChildValues(userDetails)
-        userRef.child("UserProfilePicture").updateChildValues(userProfilePicture)
-        userRef.child("UserRankos").updateChildValues(userRankos)
-        userRef.child("UserSocial").updateChildValues(userSocial)
-        userRef.child("UserStats").updateChildValues(userStats)
-        
-
-        // 3) Upload to Algolia
-        let group = DispatchGroup()
-        
         let usersIndex = client.index(withName: "RankoUsers")
+        let userRecord = AlgoliaUserRecord(
+            objectID: uid,
+            name: user_data.username,
+            description: "",
+            foundUs: selectedAction?.title ?? "",
+            joined: rankoDateTime,
+            year: user_data.userYear
+        )
 
-        group.enter()
         usersIndex.saveObject(userRecord) { result in
             switch result {
             case .success:
@@ -253,11 +217,6 @@ struct TrayView: View {
             case .failure(let error):
                 print("❌ Error uploading user information: \(error)")
             }
-            group.leave()
-        }
-
-        group.notify(queue: .main) {
-            print("🎉 Upload to Algolia completed")
         }
     }
     

@@ -9,7 +9,7 @@ import SwiftUI
 import UIKit
 import FirebaseAuth
 import FirebaseStorage
-import FirebaseDatabase
+import FirebaseFirestore
 
 // MARK: - Detail sheet for a single item
 struct ItemDetailView: View {
@@ -770,12 +770,12 @@ struct EditItemView: View {
         }
 
         do {
-            // 1) write ItemImage directly to RTDB
-            let ref = Database.database().reference()
-                .child("RankoData").child(rankoID)
-                .child("RankoItems").child(item.id)
-                .child("ItemImage")
-            try await setValueAsync(ref, value: finalURL)
+            // 1) write ItemImage directly to Firestore
+            let fieldPath = "items.\(item.id).image"
+            try await FirestoreProvider.dbFilters
+                .collection("ranko")
+                .document(rankoID)
+                .setData([fieldPath: finalURL], merge: true)
 
             // 2) hand name/desc back to parent
             onSave(editedName, editedDescription)
@@ -785,16 +785,6 @@ struct EditItemView: View {
         } catch {
             await MainActor.run {
                 errorMessage = (error as NSError).localizedDescription
-            }
-        }
-    }
-
-    // MARK: - Small async helpers
-
-    private func setValueAsync(_ ref: DatabaseReference, value: Any) async throws {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            ref.setValue(value) { err, _ in
-                if let err = err { cont.resume(throwing: err) } else { cont.resume() }
             }
         }
     }

@@ -13,6 +13,7 @@ import InstantSearchSwiftUI
 import Foundation
 import FirebaseAuth
 import FirebaseDatabase
+import FirebaseFirestore
 import PhotosUI
 import SwiftData
 
@@ -544,34 +545,36 @@ struct ProfileView: View {
                     .zoom(sourceID: "customiseApp", in: transition)
                 )
         }
-        .sheet(item: $slotToSelect) { slot in
-            SelectFeaturedRankosView { selected in
-                // Dismiss sheet first
-                DispatchQueue.main.async {
-                    slotToSelect = nil
-                }
+                .sheet(item: $slotToSelect) { slot in
+                    SelectFeaturedRankosView { selected in
+                        // Dismiss sheet first
+                        DispatchQueue.main.async {
+                            slotToSelect = nil
+                        }
 
-                // Delay slightly to ensure dismissal is finished
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    // Save to Firebase
-                    let ref = Database.database()
-                        .reference()
-                        .child("UserData")
-                        .child(user_data.userID)
-                        .child("UserRankos")
-                        .child("UserFeaturedRankos")
-                        .child("\(slot)")
-                    ref.setValue(selected.id)
+                        // Delay slightly to ensure dismissal is finished
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            // Save to Firestore
+                            let userRef = FirestoreProvider.dbFilters
+                                .collection("users")
+                                .document(user_data.userID)
+                                .collection("featured_rankos")
+                                .document("\(slot)")
+                            userRef.setData(["ranko_id": selected.id, "slot": slot], merge: true)
 
-                    // Update local UI state
-                    featuredLists[slot] = selected
-                    
-                    cache.rebuildFromRemote(uid: user_data.userID) { fresh in
-                        self.featuredLists = fresh
+                            // also mark the ranko doc with featured slot
+                            let rankoRef = FirestoreProvider.dbFilters.collection("ranko").document(selected.id)
+                            rankoRef.setData(["featured": slot], merge: true)
+
+                            // Update local UI state
+                            featuredLists[slot] = selected
+                            
+                            cache.rebuildFromRemote(uid: user_data.userID) { fresh in
+                                self.featuredLists = fresh
+                            }
+                        }
                     }
                 }
-            }
-        }
         .fullScreenCover(item: $selectedFeaturedList) { list in
             if list.type == "default" {
                 DefaultListPersonal(
@@ -801,10 +804,10 @@ struct ProfileView: View {
                 switch result {
                 case .success(let response):
                     let totalResults = response.nbHits
-                    user_data.userStatsRankos = totalResults!
-                    let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserRankoCount")
-                    dbRef.setValue(totalResults!)
+                    let count = totalResults ?? 0
+                    user_data.userStatsRankos = count
+                    let userDoc = FirestoreProvider.dbFilters.collection("users").document(user_data.userID)
+                    userDoc.setData(["stats.rankos": count], merge: true)
                 case .failure(let error):
                     print("❌ Error fetching Algolia results: \(error)")
                 }
@@ -836,28 +839,26 @@ struct ProfileView: View {
                 return
             }
             
-            let dbRef = Database.database().reference()
-                .child("UserData")
-                .child(user_data.userID)
-                .child("UserProfilePicture")
-                .child("UserProfilePicturePath")
-            dbRef.setValue(filePath) { _, _ in
-                // 3️⃣ Now download it back and cache
-                downloadAndCacheProfileImage(from: filePath)
-            }
-            
             let now = Date()
             let fmt = DateFormatter()
             fmt.locale = Locale(identifier: "en_US_POSIX")
             fmt.timeZone = TimeZone(identifier: "Australia/Sydney")
             fmt.dateFormat = "yyyyMMddHHmmss"
             let ts = fmt.string(from: now)
-            Database.database().reference()
-                .child("UserData")
-                .child(user_data.userID)
-                .child("UserProfilePicture")
-                .child("UserProfilePictureModified")
-                .setValue(ts)
+
+            let userDoc = FirestoreProvider.dbFilters.collection("users").document(user_data.userID)
+            userDoc.setData(
+                [
+                    "image": [
+                        "path": filePath,
+                        "modified": ts
+                    ]
+                ],
+                merge: true
+            ) { _ in
+                // 3️⃣ Now download it back and cache
+                downloadAndCacheProfileImage(from: filePath)
+            }
         }
     }
     
@@ -912,108 +913,80 @@ struct ProfileView: View {
     }
     
     private func syncUserDataFromFirebase() {
+        Task { await syncUserDataFromFirestore() }
+    }
+
+    private func syncUserDataFromFirestore() async {
         guard let uid = Auth.auth().currentUser?.uid else {
             print("❌ No current user logged in. Aborting sync.")
             return
         }
-        
-        let userDetails = Database.database().reference().child("UserData").child(uid).child("UserDetails")
-        let userProfilePicture = Database.database().reference().child("UserData").child(uid).child("UserProfilePicture")
-        let userStats = Database.database().reference().child("UserData").child(uid).child("UserStats")
-        
+
         print("UserID: \(uid)")
-        
-        userDetails.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed To Fetch User Data From Firebase.")
+        let docRef = FirestoreProvider.dbFilters.collection("users").document(uid)
+
+        do {
+            let snap = try await docRef.getDocument()
+            guard let value = snap.data() else {
+                print("❌ Failed To Fetch User Data From Firestore.")
                 return
             }
-            
-            user_data.userID = value["UserID"] as? String ?? ""
-            user_data.username = value["UserName"] as? String ?? ""
-            user_data.userDescription = value["UserDescription"] as? String ?? ""
-            user_data.userPrivacy = value["UserPrivacy"] as? String ?? ""
-            user_data.userInterests = value["UserInterests"] as? String ?? ""
-            user_data.userJoined = value["UserJoined"] as? String ?? ""
-            user_data.userYear = value["UserYear"] as? Int ?? 0
-            user_data.userFoundUs = value["UserFoundUs"] as? String ?? ""
-            user_data.userLoginService = value["UserSignInMethod"] as? String ?? ""
-            
-            print("✅ Successfully Loaded User Details.")
-            
-        }
-        
-        userProfilePicture.observe(.value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed To Fetch User Data From Firebase.")
-                return
-            }
-            
-            user_data.userProfilePictureFile = value["UserProfilePictureFile"] as? String ?? ""
-            let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
-            user_data.userProfilePicturePath = value["UserProfilePicturePath"] as? String ?? ""
-            
-            print("✅ Successfully Loaded Profile Picture Details.")
-            print("🤔 Checking For New Image...")
-            
-            // Only load profile image if the modified string has changed
-            if modifiedTimestamp != user_data.userProfilePictureModified {
-                print("🔁 Profile Picture Modified Date Changed, Reloading Image...")
-                user_data.userProfilePictureModified = modifiedTimestamp
-                imageService.refreshFromRemote(path: user_data.userProfilePicturePath)
+
+            user_data.userID = value["id"] as? String ?? uid
+            user_data.username = value["name"] as? String ?? ""
+            user_data.userDescription = value["description"] as? String ?? ""
+            user_data.userPrivacy = value["privacy"] as? String ?? ""
+            if let interests = value["interests"] as? [String] {
+                user_data.userInterests = interests.joined(separator: ", ")
             } else {
-                print("✅ Using Cached Profile Image From Disk.")
-                imageService.reloadFromDisk()
+                user_data.userInterests = ""
             }
-        }
-        
-        userStats.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed To Fetch User Data From Firebase.")
-                return
+            user_data.userJoined = value["joined"] as? String ?? ""
+            user_data.userYear = value["year"] as? Int ?? 0
+            user_data.userFoundUs = value["foundUs"] as? String ?? ""
+            user_data.userLoginService = value["signIn"] as? String ?? ""
+
+            if let stats = value["stats"] as? [String: Any] {
+                user_data.userStatsFollowers = (stats["followers"] as? Int) ?? 0
+                user_data.userStatsFollowing = (stats["following"] as? Int) ?? 0
+                user_data.userStatsRankos = (stats["rankos"] as? Int) ?? 0
             }
-            
-            user_data.userStatsFollowers = value["UserFollowerCount"] as? Int ?? 0
-            user_data.userStatsFollowing = value["UserFollowingCount"] as? Int ?? 0
-            user_data.userStatsRankos = value["UserRankoCount"] as? Int ?? 0
-            
-            print("✅ Successfully Loaded Statistics Details.")
-            print("✅ Successfully Loaded All User Data.")
+
+            if let image = value["image"] as? [String: Any] {
+                let modifiedTimestamp = String(describing: image["modified"] ?? "")
+                user_data.userProfilePicturePath = image["path"] as? String ?? ""
+                if modifiedTimestamp != user_data.userProfilePictureModified {
+                    print("🔁 Profile Picture Modified Date Changed, Reloading Image...")
+                    user_data.userProfilePictureModified = modifiedTimestamp
+                    imageService.refreshFromRemote(path: user_data.userProfilePicturePath)
+                } else {
+                    print("✅ Using Cached Profile Image From Disk.")
+                    imageService.reloadFromDisk()
+                }
+            }
+
+            print("✅ Successfully Loaded All User Data from Firestore.")
+        } catch {
+            print("❌ Failed To Fetch User Data From Firestore: \(error.localizedDescription)")
         }
     }
     
     private func loadFollowStats() {
         guard !user_data.userID.isEmpty else { print("Skipping loadFollowStats: userID is empty"); return }
-        
-        let db = Database.database().reference()
-        let group = DispatchGroup()
-
-        group.enter()
-        db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowers")
-            .observeSingleEvent(of: .value) { snapshot in
-                DispatchQueue.main.async {
-                    self.user_data.userStatsFollowers = Int(snapshot.childrenCount)
-                    let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowerCount")
-                    dbRef.setValue(user_data.userStatsFollowers)
+        Task {
+            do {
+                let userDoc = FirestoreProvider.dbFilters.collection("users").document(user_data.userID)
+                async let followersAgg = userDoc.collection("followers").count.getAggregation(source: .server)
+                async let followingAgg = userDoc.collection("following").count.getAggregation(source: .server)
+                let followers = try await followersAgg
+                let following = try await followingAgg
+                await MainActor.run {
+                    self.user_data.userStatsFollowers = followers.count.intValue
+                    self.user_data.userStatsFollowing = following.count.intValue
                 }
-                group.leave()
+            } catch {
+                print("⚠️ Failed to load follow stats from Firestore: \(error.localizedDescription)")
             }
-
-        group.enter()
-        db.child("UserData").child(user_data.userID).child("UserSocial").child("UserFollowing")
-            .observeSingleEvent(of: .value) { snapshot in
-                DispatchQueue.main.async {
-                    self.user_data.userStatsFollowing = Int(snapshot.childrenCount)
-                    let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(user_data.userID).child("UserStats").child("UserFollowingCount")
-                    dbRef.setValue(user_data.userStatsFollowing)
-                }
-                group.leave()
-            }
-
-        group.notify(queue: .main) {
-            print("✅ Finished loading follow stats")
         }
     }
 
@@ -1034,60 +1007,53 @@ struct ProfileView: View {
             return
         }
 
-        let baseRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(uid)
-            .child("UserRankos")
-            .child("UserFeaturedRankos")
-
-        baseRef.getData { error, snapshot in
-            if let error = error {
-                print("❌ Firebase error: \(error.localizedDescription), retrying...")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
-                return
-            }
-
-            guard let snap = snapshot, snap.exists() else {
-                print("⚠️ No featured rankos found")
-                DispatchQueue.main.async {
-                    self.featuredLists = [:]
-                    self.featuredLoading = false
+        FirestoreProvider.dbFilters
+            .collection("users")
+            .document(uid)
+            .collection("featured_rankos")
+            .getDocuments { snap, error in
+                if let error = error {
+                    print("❌ Firestore error: \(error.localizedDescription), retrying...")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
+                    return
                 }
-                return
-            }
 
-            // ✅ Successfully connected
-            var tempLists: [Int: RankoList] = [:]
-            let group = DispatchGroup()
+                guard let snap = snap, !snap.documents.isEmpty else {
+                    print("⚠️ No featured rankos found")
+                    DispatchQueue.main.async {
+                        self.featuredLists = [:]
+                        self.featuredLoading = false
+                    }
+                    return
+                }
 
-            for child in snap.children.allObjects as? [DataSnapshot] ?? [] {
-                if let slot = Int(child.key), let rankoID = child.value as? String {
-                    group.enter()
-                    fetchFeaturedList(slot: slot, rankoID: rankoID) {
-                        if let list = $0 { tempLists[slot] = list }
-                        group.leave()
+                var tempLists: [Int: RankoList] = [:]
+                let group = DispatchGroup()
+
+                for doc in snap.documents {
+                    if let slot = Int(doc.documentID), let rankoID = doc.data()["ranko_id"] as? String {
+                        group.enter()
+                        fetchFeaturedList(slot: slot, rankoID: rankoID) {
+                            if let list = $0 { tempLists[slot] = list }
+                            group.leave()
+                        }
                     }
                 }
-            }
 
-            group.notify(queue: .main) {
-                self.featuredLists = tempLists
-                self.featuredLoading = false
-                print("✅ Featured Rankos loaded successfully")
+                group.notify(queue: .main) {
+                    self.featuredLists = tempLists
+                    self.featuredLoading = false
+                    print("✅ Featured Rankos loaded successfully")
+                }
             }
-        }
     }
 
     // ✅ Modified fetchFeaturedList to support completion
     private func fetchFeaturedList(slot: Int, rankoID: String, completion: @escaping (RankoList?) -> Void) {
-        let listRef = Database.database()
-            .reference()
-            .child("RankoData")
-            .child(rankoID)
+        let listRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
 
-        listRef.observeSingleEvent(of: .value) { snap in
-            guard let dict = snap.value as? [String: Any],
+        listRef.getDocument { snap, _ in
+            guard let dict = snap?.data(),
                   let rl = parseListData(dict: dict, id: rankoID) else {
                 completion(nil)
                 return
@@ -1294,23 +1260,31 @@ struct ProfileView: View {
     
     private func unpin(_ slot: Int) {
         guard !user_data.userID.isEmpty else { print("Skipping unpin: userID is empty"); return }
-        
-        let ref = Database.database()
-            .reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserRankos")
-            .child("UserFeaturedRankos")
-            .child("\(slot)")
-        ref.removeValue { error, _ in
-            guard error == nil else { return }
-            DispatchQueue.main.async {
-                featuredLists.removeValue(forKey: slot)
+
+        let userRef = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(user_data.userID)
+            .collection("featured_rankos")
+            .document("\(slot)")
+
+        let currentID = featuredLists[slot]?.id
+
+        Task {
+            do {
+                try await userRef.delete()
+                if let rid = currentID {
+                    let rankoRef = FirestoreProvider.dbFilters.collection("ranko").document(rid)
+                    try await rankoRef.updateData(["featured": FieldValue.delete()])
+                }
+                await MainActor.run {
+                    featuredLists.removeValue(forKey: slot)
+                }
+                cache.rebuildFromRemote(uid: user_data.userID) { fresh in
+                    self.featuredLists = fresh
+                }
+            } catch {
+                print("❌ Failed to unpin featured slot \(slot): \(error.localizedDescription)")
             }
-        }
-        
-        cache.rebuildFromRemote(uid: user_data.userID) { fresh in
-            self.featuredLists = fresh
         }
     }
     
@@ -1320,19 +1294,18 @@ struct ProfileView: View {
             return
         }
 
-        let ref = Database.database().reference().child("UserData").child(user_data.userID).child("UserDetails")
-
+        let docRef = FirestoreProvider.dbFilters.collection("users").document(user_data.userID)
         let updates: [String: Any] = [
-            "UserName": name,
-            "UserDescription": description,
-            "UserInterests": interests.joined(separator: ", ")
+            "name": name,
+            "description": description,
+            "interests": interests
         ]
 
-        ref.updateChildValues(updates) { error, _ in
+        docRef.setData(updates, merge: true) { error in
             if let error = error {
-                print("❌ Error updating user data: \(error.localizedDescription)")
+                print("❌ Error updating user data (Firestore): \(error.localizedDescription)")
             } else {
-                print("✅ User data updated successfully")
+                print("✅ User data updated successfully (Firestore)")
             }
         }
     }
@@ -1344,6 +1317,20 @@ func cachedImageURL(uid: String, rankoID: String, idx: Int) -> URL {
         .appendingPathComponent("FeaturedCache")
         .appendingPathComponent(uid)
         .appendingPathComponent("\(rankoID)_img\(idx).jpg")
+}
+
+private extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        guard size > 0 else { return [self] }
+        var result: [[Element]] = []
+        var idx = 0
+        while idx < count {
+            let end = Swift.min(idx + size, count)
+            result.append(Array(self[idx..<end]))
+            idx = end
+        }
+        return result
+    }
 }
 
 final class FeaturedRankoCacheService: ObservableObject {
@@ -1432,23 +1419,25 @@ final class FeaturedRankoCacheService: ObservableObject {
         return out
     }
 
-    /// Build (or rebuild) the entire cache from Firebase. Deletes stale cache first.
+    /// Build (or rebuild) the entire cache from Firestore. Deletes stale cache first.
     func rebuildFromRemote(uid: String, completion: @escaping ([Int: RankoList]) -> Void) {
-        let userRef = Database.database().reference()
-            .child("UserData").child(uid)
-            .child("UserRankos").child("UserFeaturedRankos")
+        let userRef = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(uid)
+            .collection("featured_rankos")
 
-        userRef.observeSingleEvent(of: .value) { snap in
-            guard snap.exists(), let children = snap.children.allObjects as? [DataSnapshot] else {
-                // nothing pinned
+        userRef.getDocuments { snap, error in
+            guard error == nil, let snap = snap, !snap.documents.isEmpty else {
                 self.deleteAll(uid: uid)
                 completion([:]); return
             }
 
             // slot -> rankoID
             var orderSlots: [Int:String] = [:]
-            for c in children {
-                if let slot = Int(c.key), let rankoID = c.value as? String { orderSlots[slot] = rankoID }
+            for doc in snap.documents {
+                if let slot = Int(doc.documentID), let rid = doc.data()["ranko_id"] as? String {
+                    orderSlots[slot] = rid
+                }
             }
 
             // serialize featured map to hash
@@ -1466,15 +1455,13 @@ final class FeaturedRankoCacheService: ObservableObject {
 
             for (slot, rid) in orderSlots {
                 group.enter()
-                let ref = Database.database().reference().child("RankoData").child(rid)
-                ref.observeSingleEvent(of: .value) { rsnap in
+                FirestoreProvider.dbFilters.collection("ranko").document(rid).getDocument { rsnap, _ in
                     defer { group.leave() }
-                    guard let dict = rsnap.value as? [String:Any] else { return }
-                    // hash pref: use updated time if present; else full-JSON hash
+                    guard let dict = rsnap?.data() else { return }
                     let json = (try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys])) ?? Data()
                     rankoJSONForDisk[rid] = json
 
-                    let contentHash = self.rankoContentSignature(dict)   // ⬅️ key change
+                    let contentHash = self.rankoContentSignature(dict)
                     rankoHashes[rid] = contentHash
 
                     if let rl = self.parseListData(dict: dict, id: rid) { slotLists[slot] = rl }
@@ -1545,16 +1532,18 @@ final class FeaturedRankoCacheService: ObservableObject {
             return try? JSONDecoder().decode(Index.self, from: d)
         }()
 
-        let userRef = Database.database().reference()
-            .child("UserData").child(uid)
-            .child("UserRankos").child("UserFeaturedRankos")
+        let userRef = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(uid)
+            .collection("featured_rankos")
 
-        userRef.observeSingleEvent(of: .value) { snap in
-            // compute featuredHash remote
+        userRef.getDocuments { snap, _ in
             var orderSlots: [Int:String] = [:]
-            if let children = snap.children.allObjects as? [DataSnapshot] {
-                for c in children {
-                    if let slot = Int(c.key), let rankoID = c.value as? String { orderSlots[slot] = rankoID }
+            if let docs = snap?.documents {
+                for d in docs {
+                    if let slot = Int(d.documentID), let rid = d.data()["ranko_id"] as? String {
+                        orderSlots[slot] = rid
+                    }
                 }
             }
             let featuredRawStringKeys: [String:String] = Dictionary(
@@ -1577,11 +1566,10 @@ final class FeaturedRankoCacheService: ObservableObject {
 
             for (_, rid) in orderSlots {
                 group.enter()
-                let ref = Database.database().reference().child("RankoData").child(rid)
-                ref.observeSingleEvent(of: .value) { rsnap in
+                FirestoreProvider.dbFilters.collection("ranko").document(rid).getDocument { rsnap, _ in
                     defer { group.leave() }
-                    guard let dict = rsnap.value as? [String:Any] else { mismatch = true; return }
-                    let remoteHash = self.rankoContentSignature(dict)  // ⬅️ key change
+                    guard let dict = rsnap?.data() else { mismatch = true; return }
+                    let remoteHash = self.rankoContentSignature(dict)
                     let localHash  = localIndex?.rankoHashes[rid] ?? "_none"
                     if remoteHash != localHash { mismatch = true }
                 }
@@ -2240,154 +2228,91 @@ struct SearchRankosView: View {
     private func loadOptimizedData() {
         isLoading = true
         errorMessage = nil
-
-        let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-                                  apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
-        let index = client.index(withName: "RankoLists")
-
-        var query = Query("").set(\.hitsPerPage, to: 1000)
-        query.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
-
-        index.search(query: query) { result in
-            switch result {
-            case .success(let response):
-                let objectIDs = response.hits.map { $0.objectID.rawValue }
-                fetchMinimalDataFromFirebase(using: objectIDs)
-            case .failure(let error):
-                DispatchQueue.main.async {
-                    self.errorMessage = "❌ Failed to fetch from Algolia: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
-            }
-        }
+        Task { await loadListsFromFirestore() }
     }
 
-    private func fetchMinimalDataFromFirebase(using objectIDs: [String]) {
-        let rankoDataRef = Database.database().reference().child("RankoData")
-        let dispatchGroup = DispatchGroup()
-        var fetchedLists: [RankoList] = []
+    private func loadListsFromFirestore() async {
+        let db = FirestoreProvider.dbFilters
+        do {
+            let snap = try await db.collection("ranko")
+                .whereField("user_id", isEqualTo: user_data.userID)
+                .whereField("status", isEqualTo: "active")
+                .getDocuments()
 
-        func parseColourUInt(_ any: Any?) -> UInt {
-            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
-            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
-            if let s = any as? String {
-                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
-                if hex.hasPrefix("#")  { hex.removeFirst() }
-                if hex.hasPrefix("0x") { hex.removeFirst(2) }
-                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
-            }
-            return 0x446D7A
-        }
+            let parsed: [RankoList] = snap.documents.compactMap { d in
+                let data = d.data()
 
-        for objectID in objectIDs {
-            dispatchGroup.enter()
-            rankoDataRef.child(objectID).observeSingleEvent(of: .value) { snap in
-                defer { dispatchGroup.leave() }
-                guard let root = snap.value as? [String: Any] else { return }
+                let name        = data["name"] as? String ?? "(untitled)"
+                let description = data["description"] as? String ?? ""
+                let type        = data["type"] as? String ?? "default"
+                let userID      = data["user_id"] as? String ?? ""
+                let isPrivate   = (data["privacy"] as? Bool) ?? false
 
-                if let details = root["RankoDetails"] as? [String: Any] {
-                    let privacy = root["RankoPrivacy"]  as? [String: Any]
-                    let cat     = root["RankoCategory"] as? [String: Any]
-                    let dt      = root["RankoDateTime"] as? [String: Any]
+                let catName   = data["category"] as? String ?? "Unknown"
+                let catMeta   = data["category_meta"] as? [String: Any]
+                let catIcon   = catMeta?["icon"] as? String ?? "circle"
+                let catColour = parseColourUInt(catMeta?["colour"])
 
-                    let name        = (details["name"] as? String) ?? "(untitled)"
-                    let description = (details["description"] as? String) ?? ""
-                    let type        = (details["type"] as? String) ?? "default"
-                    let userID      = (details["user_id"] as? String) ?? ""
-                    let isPrivate   = (privacy?["private"] as? Bool) ?? false
+                let time      = data["time"] as? [String: Any]
+                let created   = (time?["created"] as? String) ?? (time?["created"] as? Int).map(String.init) ?? "19700101000000"
+                let updated   = (time?["updated"] as? String) ?? (time?["updated"] as? Int).map(String.init) ?? created
 
-                    let catName   = (cat?["name"] as? String) ?? "Unknown"
-                    let catIcon   = (cat?["icon"] as? String) ?? "circle"
-                    let catColour = parseColourUInt(cat?["colour"])
-
-                    let created = (dt?["created"] as? String) ?? "19700101000000"
-                    let updated = (dt?["updated"] as? String) ?? created
-
-                    let rankoList = RankoList(
-                        id: objectID,
-                        listName: name,
-                        listDescription: description,
-                        type: type,
-                        categoryName: catName,
-                        categoryIcon: catIcon,
-                        categoryColour: catColour,
-                        isPrivate: isPrivate ? "Private" : "Public",
-                        userCreator: userID,
-                        timeCreated: created,
-                        timeUpdated: updated,
-                        items: []
-                    )
-                    DispatchQueue.main.async { fetchedLists.append(rankoList) }
-                    return
-                }
-
-                // legacy fallback
-                let name        = root["RankoName"] as? String ?? "(untitled)"
-                let description = root["RankoDescription"] as? String ?? ""
-                let type        = root["RankoType"] as? String ?? "default"
-                let isPriv: Bool = {
-                    if let b = root["RankoPrivacy"] as? Bool { return b }
-                    if let s = root["RankoPrivacy"] as? String { return s.lowercased() == "private" }
-                    return false
-                }()
-                let userID = root["RankoUserID"] as? String ?? ""
-
-                var created = "19700101000000"
-                var updated = "19700101000000"
-                if let dt = root["RankoDateTime"] as? [String: Any] {
-                    created = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? created
-                    updated = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? created
-                } else if let s = root["RankoDateTime"] as? String {
-                    created = s; updated = s
-                }
-
-                var catName = "Unknown"
-                var catIcon = "circle"
-                var catColour: UInt = 0x446D7A
-                if let cat = root["RankoCategory"] as? [String: Any] {
-                    catName   = (cat["name"] as? String) ?? catName
-                    catIcon   = (cat["icon"] as? String) ?? catIcon
-                    catColour = parseColourUInt(cat["colour"])
-                } else if let catStr = root["RankoCategory"] as? String {
-                    catName = catStr
-                }
-
-                let rankoList = RankoList(
-                    id: objectID,
+                return RankoList(
+                    id: d.documentID,
                     listName: name,
                     listDescription: description,
                     type: type,
                     categoryName: catName,
                     categoryIcon: catIcon,
                     categoryColour: catColour,
-                    isPrivate: isPriv ? "Private" : "Public",
+                    isPrivate: isPrivate ? "Private" : "Public",
                     userCreator: userID,
                     timeCreated: created,
                     timeUpdated: updated,
                     items: []
                 )
-                DispatchQueue.main.async { fetchedLists.append(rankoList) }
+            }
+
+            await MainActor.run {
+                self.allLists = parsed
+                self.applyPinnedAndSort()
+                self.isLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = "❌ Failed to fetch from Firestore: \(error.localizedDescription)"
+                self.isLoading = false
             }
         }
-
-        dispatchGroup.notify(queue: .main) {
-            // default load order: most recently updated
-            self.allLists = fetchedLists.sorted { (Int($0.timeUpdated) ?? 0) > (Int($1.timeUpdated) ?? 0) }
-            self.isLoading = false
-        }
     }
+
+    private func parseColourUInt(_ any: Any?) -> UInt {
+        if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+        if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
+        if let s = any as? String {
+            var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
+            if hex.hasPrefix("#")  { hex.removeFirst() }
+            if hex.hasPrefix("0x") { hex.removeFirst(2) }
+            if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
+        }
+        return 0x446D7A
+    }
+
+    // Keep API parity; the computed props already apply sorting/grouping.
+    private func applyPinnedAndSort() { }
 
     // MARK: - Load UserSortRankos
 
     private func loadUserSortModel() {
-        let ref = Database.database().reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserSortRankos")
+        let docRef = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(user_data.userID)
+            .collection("meta")
+            .document("UserSortRankos")
 
-        ref.observeSingleEvent(of: .value) { snap in
-            guard let dict = snap.value as? [String: Any] else { return }
+        docRef.getDocument { snap, _ in
+            guard let dict = snap?.data() else { return }
             var model = UserSortModel()
 
             // Custom
@@ -2514,604 +2439,6 @@ private struct SectionModel: Identifiable {
     let titleIcon: String?
     let titleColor: Color
     let rows: [RankoList]
-}
-
-// MARK: - View
-
-struct SearchRankosView2: View {
-    @Environment(\.dismiss) private var dismiss
-    @StateObject private var user_data = UserInformation.shared
-    @FocusState private var searchFocused: Bool
-
-    // Data
-    @State private var allLists: [RankoList] = []
-    @State private var isLoading: Bool = false
-    @State private var errorMessage: String? = nil
-
-    // Query
-    @State private var searchField: String = ""
-    @State private var rankoQuery: String = ""
-
-    // Filters / Sort / Group
-    @State private var showFilters = false
-    @State private var sortMode: SortMode = .dateUpdated
-    @State private var groupMode: GroupMode = .none
-    @State private var selectedTypes = Set<String>()        // e.g. ["default", "group"/"tier"]
-    @State private var selectedCategories = Set<String>()   // category names
-
-    // External selections
-    @State private var selectedList: RankoList?
-
-    // UserSort model
-    @State private var userSort = UserSortModel()
-
-    // MARK: - Derived
-
-    private var allTypes: [String] {
-        let set = Set(allLists.map { $0.type.lowercased() })
-        return Array(set).sorted()
-    }
-
-    private var allCategories: [CategoryMeta] {
-        // Use live RankoList for completeness; fall back to categoryOrder when needed
-        let metas = Dictionary(grouping: allLists, by: { $0.categoryName })
-            .map { (name, lists) -> CategoryMeta in
-                // pick first as source of icon/colour
-                let first = lists.first!
-                return CategoryMeta(
-                    name: name,
-                    icon: first.categoryIcon,
-                    colour: first.categoryColour
-                )
-            }
-        // Merge known order from userSort.categoryOrder (optional nicety)
-        let orderNames = userSort.categoryOrder.map { $0.name }
-        return metas.sorted {
-            let i0 = orderNames.firstIndex(of: $0.name) ?? .max
-            let i1 = orderNames.firstIndex(of: $1.name) ?? .max
-            return (i0, $0.name) < (i1, $1.name)
-        }
-    }
-
-    private var filteredBase: [RankoList] {
-        allLists.filter { list in
-            // text query
-            (rankoQuery.isEmpty || list.listName.range(of: rankoQuery, options: .caseInsensitive) != nil)
-            // type filter
-            && (selectedTypes.isEmpty || selectedTypes.contains(list.type.lowercased()))
-            // category filter
-            && (selectedCategories.isEmpty || selectedCategories.contains(list.categoryName))
-        }
-    }
-
-    private var displayed: [SectionModel] {
-        // 1) sort
-        let sorted: [RankoList]
-        switch sortMode {
-        case .custom:
-            sorted = sortByCustom(filteredBase)
-        case .alphabetical:
-            sorted = filteredBase.sorted { $0.listName.localizedCaseInsensitiveCompare($1.listName) == .orderedAscending }
-        case .category:
-            // stable: category name, then name
-            sorted = filteredBase.sorted {
-                if $0.categoryName != $1.categoryName { return $0.categoryName < $1.categoryName }
-                return $0.listName.localizedCaseInsensitiveCompare($1.listName) == .orderedAscending
-            }
-        case .dateCreated:
-            sorted = filteredBase.sorted { (Int($0.timeCreated) ?? 0) > (Int($1.timeCreated) ?? 0) }
-        case .dateUpdated:
-            sorted = filteredBase.sorted { (Int($0.timeUpdated) ?? 0) > (Int($1.timeUpdated) ?? 0) }
-        }
-
-        // 2) group
-        switch groupMode {
-        case .none:
-            return [SectionModel(
-                title: "\(sorted.count) results",
-                titleIcon: nil,
-                titleColor: Color(hex: 0x514343),
-                rows: sorted
-            )]
-        case .type:
-            let buckets = Dictionary(grouping: sorted, by: { $0.type.lowercased() })
-            let order = ["default", "tier"] // nice order; "group" == tier lists in your data
-            return buckets
-                .sorted { (l, r) in
-                    let i0 = order.firstIndex(of: l.key) ?? .max
-                    let i1 = order.firstIndex(of: r.key) ?? .max
-                    return (i0, l.key) < (i1, r.key)
-                }
-                .map { (key, rows) in
-                    SectionModel(
-                        title: key.capitalized.replacingOccurrences(of: "Group", with: "Tier"),
-                        titleIcon: "square.stack.3d.down.right", // neutral icon
-                        titleColor: Color(hex: 0x514343),
-                        rows: rows
-                    )
-                }
-        case .category:
-            let buckets = Dictionary(grouping: sorted, by: { $0.categoryName })
-            // prefer your stored order if available
-            let orderNames = userSort.categoryOrder.map { $0.name }
-            return buckets
-                .map { (name, rows) -> (CategoryMeta, [RankoList]) in
-                    // pick meta: from userSort if present else from a row
-                    if let meta = userSort.categoryOrder.first(where: { $0.name == name }) {
-                        return (meta, rows)
-                    } else {
-                        let any = rows.first!
-                        return (CategoryMeta(name: name, icon: any.categoryIcon, colour: any.categoryColour), rows)
-                    }
-                }
-                .sorted { lhs, rhs in
-                    let i0 = orderNames.firstIndex(of: lhs.0.name) ?? .max
-                    let i1 = orderNames.firstIndex(of: rhs.0.name) ?? .max
-                    return (i0, lhs.0.name) < (i1, rhs.0.name)
-                }
-                .map { (meta, rows) in
-                    SectionModel(
-                        title: meta.name,
-                        titleIcon: meta.icon,
-                        titleColor: Color(hex: meta.colour),
-                        rows: rows
-                    )
-                }
-        }
-    }
-
-    // MARK: - Body
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                VStack {
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            VStack(spacing: 0) {
-                                
-                                if let error = errorMessage {
-                                    Text(error)
-                                        .foregroundColor(.red)
-                                        .padding()
-                                }
-                                
-                                // Sections
-                                LazyVStack(spacing: 10, pinnedViews: [.sectionHeaders]) {
-                                    ForEach(displayed) { section in
-                                        Section {
-                                            VStack(spacing: 8) {
-                                                ForEach(section.rows) { list in
-                                                    Button {
-                                                        selectedList = list
-                                                    } label: {
-                                                        RankoMiniView(listData: list, type: "", onUnpin: {})
-                                                    }
-                                                    .buttonStyle(.glass)
-                                                    .padding(.horizontal, 15)
-                                                }
-                                            }
-                                            .padding(.bottom, 6)
-                                        } header: {
-                                            HStack(spacing: 8) {
-                                                if let icon = section.titleIcon {
-                                                    Image(systemName: icon)
-                                                }
-                                                Text(section.title)
-                                                    .font(.custom("Nunito-Black", size: 16))
-                                            }
-                                            .foregroundColor(section.titleColor)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(.horizontal, 15)
-                                            .padding(.vertical, 8)
-                                            .background(Color(.systemBackground).opacity(0.95))
-                                        }
-                                    }
-                                }
-                                .padding(.top, 4)
-                            }
-                        }
-                    }
-                }
-
-                if isLoading {
-                    VStack(spacing: 10) {
-                        ThreeRectanglesAnimation(rectangleWidth: 30, rectangleMaxHeight: 80, rectangleSpacing: 4, rectangleCornerRadius: 6, animationDuration: 0.7)
-                        Text("Loading Rankos…")
-                            .font(.custom("Nunito-Black", size: 16))
-                            .foregroundColor(Color(hex: 0xA2A2A1))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 50)
-                    .background(Color(.systemBackground).opacity(0.6).ignoresSafeArea())
-                }
-            }
-            .searchable(text: $searchField, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Rankos")
-            .searchFocused($searchFocused)
-            .scrollDismissesKeyboard(.immediately)
-            .onChange(of: searchField) { _, newVal in
-                rankoQuery = newVal
-            }
-            .navigationTitle("Search Rankos")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarRole(.navigationStack)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .black))
-                    }
-                    .tint(Color(hex: 0x514343))
-                }
-                ToolbarItem(placement: .principal) {
-                    Text("Search Rankos")
-                        .font(.custom("Nunito-Black", size: 24))
-                        .foregroundColor(Color(hex: 0x514343))
-                        .accessibilityAddTraits(.isHeader)
-                }
-            }
-            .sheet(isPresented: $showFilters) {
-                FilterSortGroupSheet(
-                    sortMode: $sortMode,
-                    groupMode: $groupMode,
-                    allTypes: allTypes,
-                    allCategories: allCategories,
-                    selectedTypes: $selectedTypes,
-                    selectedCategories: $selectedCategories
-                )
-                .presentationDetents([.large])
-            }
-            .fullScreenCover(item: $selectedList) { list in
-                if list.type == "default" {
-                    DefaultListPersonal(
-                        rankoID: list.id,
-                        categoryName: list.categoryName,
-                        categoryIcon: list.categoryIcon,
-                        categoryColour: list.categoryColour,
-                        onSave: { _ in dismiss() },
-                        onDelete: { dismiss() }
-                    )
-                } else {
-                    TierListPersonal(
-                        rankoID: list.id,
-                        onSave: { _ in dismiss() },
-                        onDelete: { dismiss() }
-                    )
-                }
-            }
-            .onAppear {
-                if !isSimulator {
-                    loadOptimizedData()
-                    loadUserSortModel() // ← pulls Custom/Category/Date/Type order
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    searchFocused = true
-                }
-            }
-        }
-        .interactiveDismissDisabled(true)
-    }
-
-    // MARK: - Header + chips
-
-    private var headerBar: some View {
-        VStack(spacing: 8) {
-            // Active filters summary chips
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Button {
-                        print("Found \(filteredBase.count) Results")
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("\(filteredBase.count) Results")
-                        }
-                        .font(.custom("Nunito-Black", size: 12))
-                    }
-                    .buttonStyle(.glass)
-                    .tint(Color(hex: 0x514343))
-                    
-                    Button {
-                        showFilters = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                            Text("Filter")
-                        }
-                        .font(.custom("Nunito-Black", size: 12))
-                    }
-                    .buttonStyle(.glass)
-                    .tint(Color(hex: 0x514343))
-                    
-                    if !selectedTypes.isEmpty || !selectedCategories.isEmpty || !rankoQuery.isEmpty {
-                        Button {
-                            rankoQuery = ""; searchField = ""
-                            selectedTypes.removeAll()
-                            selectedCategories.removeAll()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "xmark.circle.fill")
-                                Text("Clear Filters")
-                            }
-                            .font(.custom("Nunito-Black", size: 12))
-                        }
-                        .buttonStyle(.glass)
-                        .tint(Color(hex: 0x514343))
-                        if !rankoQuery.isEmpty {
-                            chip(text: "“\(rankoQuery)”") { rankoQuery = ""; searchField = "" }
-                        }
-                        ForEach(Array(selectedTypes), id: \.self) { t in
-                            chip(text: "Type: \(t.capitalized)") { selectedTypes.remove(t) }
-                        }
-                        ForEach(Array(selectedCategories), id: \.self) { c in
-                            chip(text: "Category: \(c)") { selectedCategories.remove(c) }
-                        }
-                    }
-                }
-                .padding(15)
-            }
-        }
-    }
-
-    private func chip(text: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(text)
-                Image(systemName: "xmark.circle.fill")
-            }
-            .font(.custom("Nunito-Black", size: 12))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0xF5F5F5)))
-        }
-        .buttonStyle(.plain)
-        .foregroundColor(Color(hex: 0x514343))
-    }
-
-    // MARK: - Sorting helpers
-
-    private func sortByCustom(_ input: [RankoList]) -> [RankoList] {
-        // build lookup for fast ID -> RankoList
-        let dict = Dictionary(uniqueKeysWithValues: input.map { ($0.id, $0) })
-
-        var result: [RankoList] = []
-        for node in userSort.customTree {
-            switch node {
-            case .item(let id):
-                if let r = dict[id] { result.append(r) }
-            case .folder(_, let ids):
-                for id in ids {
-                    if let r = dict[id] { result.append(r) }
-                }
-            }
-        }
-        // append any missing ones (not in custom tree) at the end (stable by name)
-        let seen = Set(result.map { $0.id })
-        let missing = input.filter { !seen.contains($0.id) }
-            .sorted { $0.listName.localizedCaseInsensitiveCompare($1.listName) == .orderedAscending }
-        return result + missing
-    }
-
-    // MARK: - Data loads (existing)
-
-    private func loadOptimizedData() {
-        isLoading = true
-        errorMessage = nil
-
-        let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
-                                  apiKey: APIKey(rawValue: Secrets.algoliaAPIKey))
-        let index = client.index(withName: "RankoLists")
-
-        var query = Query("").set(\.hitsPerPage, to: 1000)
-        query.filters = "RankoUserID:\(user_data.userID) AND RankoStatus:active"
-
-        index.search(query: query) { result in
-            switch result {
-            case .success(let response):
-                let objectIDs = response.hits.map { $0.objectID.rawValue }
-                fetchMinimalDataFromFirebase(using: objectIDs)
-            case .failure(let error):
-                DispatchQueue.main.async {
-                    self.errorMessage = "❌ Failed to fetch from Algolia: \(error.localizedDescription)"
-                    self.isLoading = false
-                }
-            }
-        }
-    }
-
-    private func fetchMinimalDataFromFirebase(using objectIDs: [String]) {
-        let rankoDataRef = Database.database().reference().child("RankoData")
-        let dispatchGroup = DispatchGroup()
-        var fetchedLists: [RankoList] = []
-
-        func parseColourUInt(_ any: Any?) -> UInt {
-            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
-            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
-            if let s = any as? String {
-                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
-                if hex.hasPrefix("#")  { hex.removeFirst() }
-                if hex.hasPrefix("0x") { hex.removeFirst(2) }
-                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
-            }
-            return 0x446D7A
-        }
-
-        for objectID in objectIDs {
-            dispatchGroup.enter()
-            rankoDataRef.child(objectID).observeSingleEvent(of: .value) { snap in
-                defer { dispatchGroup.leave() }
-                guard let root = snap.value as? [String: Any] else { return }
-
-                if let details = root["RankoDetails"] as? [String: Any] {
-                    let privacy = root["RankoPrivacy"]  as? [String: Any]
-                    let cat     = root["RankoCategory"] as? [String: Any]
-                    let dt      = root["RankoDateTime"] as? [String: Any]
-
-                    let name        = (details["name"] as? String) ?? "(untitled)"
-                    let description = (details["description"] as? String) ?? ""
-                    let type        = (details["type"] as? String) ?? "default"
-                    let userID      = (details["user_id"] as? String) ?? ""
-                    let isPrivate   = (privacy?["private"] as? Bool) ?? false
-
-                    let catName   = (cat?["name"] as? String) ?? "Unknown"
-                    let catIcon   = (cat?["icon"] as? String) ?? "circle"
-                    let catColour = parseColourUInt(cat?["colour"])
-
-                    let created = (dt?["created"] as? String) ?? "19700101000000"
-                    let updated = (dt?["updated"] as? String) ?? created
-
-                    let rankoList = RankoList(
-                        id: objectID,
-                        listName: name,
-                        listDescription: description,
-                        type: type,
-                        categoryName: catName,
-                        categoryIcon: catIcon,
-                        categoryColour: catColour,
-                        isPrivate: isPrivate ? "Private" : "Public",
-                        userCreator: userID,
-                        timeCreated: created,
-                        timeUpdated: updated,
-                        items: []
-                    )
-                    DispatchQueue.main.async { fetchedLists.append(rankoList) }
-                    return
-                }
-
-                // legacy fallback
-                let name        = root["RankoName"] as? String ?? "(untitled)"
-                let description = root["RankoDescription"] as? String ?? ""
-                let type        = root["RankoType"] as? String ?? "default"
-                let isPriv: Bool = {
-                    if let b = root["RankoPrivacy"] as? Bool { return b }
-                    if let s = root["RankoPrivacy"] as? String { return s.lowercased() == "private" }
-                    return false
-                }()
-                let userID = root["RankoUserID"] as? String ?? ""
-
-                var created = "19700101000000"
-                var updated = "19700101000000"
-                if let dt = root["RankoDateTime"] as? [String: Any] {
-                    created = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? created
-                    updated = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? created
-                } else if let s = root["RankoDateTime"] as? String {
-                    created = s; updated = s
-                }
-
-                var catName = "Unknown"
-                var catIcon = "circle"
-                var catColour: UInt = 0x446D7A
-                if let cat = root["RankoCategory"] as? [String: Any] {
-                    catName   = (cat["name"] as? String) ?? catName
-                    catIcon   = (cat["icon"] as? String) ?? catIcon
-                    catColour = parseColourUInt(cat["colour"])
-                } else if let catStr = root["RankoCategory"] as? String {
-                    catName = catStr
-                }
-
-                let rankoList = RankoList(
-                    id: objectID,
-                    listName: name,
-                    listDescription: description,
-                    type: type,
-                    categoryName: catName,
-                    categoryIcon: catIcon,
-                    categoryColour: catColour,
-                    isPrivate: isPriv ? "Private" : "Public",
-                    userCreator: userID,
-                    timeCreated: created,
-                    timeUpdated: updated,
-                    items: []
-                )
-                DispatchQueue.main.async { fetchedLists.append(rankoList) }
-            }
-        }
-
-        dispatchGroup.notify(queue: .main) {
-            // default load order: most recently updated
-            self.allLists = fetchedLists.sorted { (Int($0.timeUpdated) ?? 0) > (Int($1.timeUpdated) ?? 0) }
-            self.isLoading = false
-        }
-    }
-
-    // MARK: - Load UserSortRankos
-
-    private func loadUserSortModel() {
-        let ref = Database.database().reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserSortRankos")
-
-        ref.observeSingleEvent(of: .value) { snap in
-            guard let dict = snap.value as? [String: Any] else { return }
-            var model = UserSortModel()
-
-            // Custom
-            if let custom = dict["Custom"] as? [String: Any] {
-                let keys = custom.keys.sorted() // 000001..., preserves intended order
-                for k in keys {
-                    if let itemID = custom[k] as? String {
-                        model.customTree.append(.item(id: itemID))
-                    } else if let folder = custom[k] as? [String: Any] {
-                        let name = (folder["name"] as? String) ?? "Folder"
-                        let ids  = (folder["rankos"] as? [String]) ?? []
-                        model.customTree.append(.folder(name: name, ids: ids))
-                    }
-                }
-            }
-
-            // Alphabetical
-            if let alpha = dict["Alphabetical"] as? [String: String] {
-                model.alphabetical = alpha
-            }
-
-            // Category
-            if let category = dict["Category"] as? [String: Any] {
-                if let buckets = category["CategoryData"] as? [String: [String]] {
-                    model.categoryBuckets = buckets
-                }
-                if let order = category["CategorySort"] as? [[String: Any]] {
-                    model.categoryOrder = order.map {
-                        CategoryMeta(
-                            name: ($0["name"] as? String) ?? "Unknown",
-                            icon: ($0["icon"] as? String) ?? "circle",
-                            colour: parseUInt(($0["colour"]))
-                        )
-                    }
-                }
-            }
-
-            // Dates
-            if let created = dict["DateTimeCreated"] as? [String: Any] {
-                model.createdKeys = created.keys.sorted() // "timestamp - id"
-            }
-            if let updated = dict["DateTimeUpdated"] as? [String: Any] {
-                model.updatedKeys = updated.keys.sorted()
-            }
-
-            // Types
-            if let types = dict["Type"] as? [String: [String]] {
-                model.typeBuckets = types
-            }
-
-            self.userSort = model
-        }
-    }
-
-    private func parseUInt(_ any: Any?) -> UInt {
-        if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
-        if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
-        if let s = any as? String {
-            var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
-            if hex.hasPrefix("#")  { hex.removeFirst() }
-            if hex.hasPrefix("0x") { hex.removeFirst(2) }
-            if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
-        }
-        return 0x446D7A
-    }
 }
 
 // MARK: - Filter / Sort / Group Sheet
@@ -3549,166 +2876,84 @@ struct SelectFeaturedRankosView: View {
         }
     }
     
+    private func parseColourUInt(_ any: Any?) -> UInt {
+        if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+        if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
+        if let s = any as? String {
+            var t = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if let dec = Int(t) { return UInt(dec & 0x00FF_FFFF) }
+            if t.hasPrefix("#")  { t.removeFirst() }
+            if t.hasPrefix("0x") { t.removeFirst(2) }
+            if let v = Int(t, radix: 16) { return UInt(v & 0x00FF_FFFF) }
+        }
+        return 0x446D7A
+    }
+
     private func fetchFromFirebase(using objectIDs: [String]) {
-        let rankoDataRef = Database.database().reference().child("RankoData")
-
-        func intFromAny(_ any: Any?) -> Int? {
-            if let n = any as? NSNumber { return n.intValue }
-            if let d = any as? Double   { return Int(d) }
-            if let s = any as? String   { return Int(s) }
-            return nil
+        guard !objectIDs.isEmpty else {
+            self.lists = []
+            self.isLoading = false
+            return
         }
-        func parseColourUInt(_ any: Any?) -> UInt {
-            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
-            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
-            if let s = any as? String {
-                var t = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                if let dec = Int(t) { return UInt(dec & 0x00FF_FFFF) }
-                if t.hasPrefix("#")  { t.removeFirst() }
-                if t.hasPrefix("0x") { t.removeFirst(2) }
-                if let v = Int(t, radix: 16) { return UInt(v & 0x00FF_FFFF) }
-            }
-            return 0x446D7A
-        }
-
-        // ✅ one-parameter closure variant
-        rankoDataRef.observeSingleEvent(of: .value) { snapshot in
-            guard let all = snapshot.value as? [String: Any] else {
-                self.errorMessage = "❌ No data found in Firebase."
-                self.isLoading = false
-                return
-            }
-
+        
+        Task {
             var fetched: [RankoList] = []
-
-            for objectID in objectIDs {
-                guard let dict = all[objectID] as? [String: Any] else { continue }
-
-                // ---------- NEW SCHEMA ----------
-                if let details = dict["RankoDetails"] as? [String: Any] {
-                    let privacy = dict["RankoPrivacy"]  as? [String: Any]
-                    let cat     = dict["RankoCategory"] as? [String: Any]
-                    let dt      = dict["RankoDateTime"] as? [String: Any]
-
-                    let name        = (details["name"] as? String) ?? "(untitled)"
-                    let description = (details["description"] as? String) ?? ""
-                    let type        = (details["type"] as? String) ?? "default"
-                    let userID      = (details["user_id"] as? String) ?? ""
-
-                    let isPriv     = (privacy?["private"] as? Bool) ?? false
-                    let catName    = (cat?["name"] as? String) ?? "Unknown"
-                    let catIcon    = (cat?["icon"] as? String) ?? "circle"
-                    let catColour  = parseColourUInt(cat?["colour"])
-
-                    let created    = (dt?["created"] as? String) ?? "19700101000000"
-                    let updated    = (dt?["updated"] as? String) ?? created
-
-                    // Items may be [String: Any] under new schema
-                    let itemsRaw   = dict["RankoItems"] as? [String: Any] ?? [:]
-                    let items: [RankoItem] = itemsRaw.compactMap { (k, v) in
-                        guard let it = v as? [String: Any],
-                              let itemName  = it["ItemName"] as? String,
-                              let itemDesc  = it["ItemDescription"] as? String,
-                              let itemImage = it["ItemImage"] as? String,
-                              let itemGIF    = it["ItemGIF"] as? String,
-                              let itemVideo    = it["ItemVideo"] as? String,
-                              let itemAudio    = it["ItemAudio"] as? String
-                          else { return nil }
-                          let rank  = intFromAny(it["ItemRank"])  ?? 0
-                          let votes = intFromAny(it["ItemVotes"]) ?? 0
-                          let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                          let plays = intFromAny(it["PlayCount"]) ?? 0
-                          return RankoItem(id: k, rank: rank, votes: votes, record: rec, playCount: plays)
-                    }.sorted { $0.rank < $1.rank }
-
-                    fetched.append(
-                        RankoList(
-                            id: objectID,
+            let chunks = objectIDs.chunked(into: 10)
+            do {
+                for chunk in chunks {
+                    let snap = try await FirestoreProvider.dbFilters
+                        .collection("ranko")
+                        .whereField(FieldPath.documentID(), in: chunk)
+                        .getDocuments()
+                    
+                    for d in snap.documents {
+                        let data = d.data()
+                        let name        = data["name"] as? String ?? "(untitled)"
+                        let description = data["description"] as? String ?? ""
+                        let type        = data["type"] as? String ?? "default"
+                        let userID      = data["user_id"] as? String ?? ""
+                        let isPrivate   = (data["privacy"] as? Bool) ?? false
+                        
+                        let catName   = data["category"] as? String ?? "Unknown"
+                        let catMeta   = data["category_meta"] as? [String: Any]
+                        let catIcon   = catMeta?["icon"] as? String ?? "circle"
+                        let catColour = parseColourUInt(catMeta?["colour"])
+                        
+                        let time      = data["time"] as? [String: Any]
+                        let created   = (time?["created"] as? String) ?? (time?["created"] as? Int).map(String.init) ?? "19700101000000"
+                        let updated   = (time?["updated"] as? String) ?? (time?["updated"] as? Int).map(String.init) ?? created
+                        
+                        let rankoList = RankoList(
+                            id: d.documentID,
                             listName: name,
                             listDescription: description,
                             type: type,
                             categoryName: catName,
                             categoryIcon: catIcon,
                             categoryColour: catColour,
-                            isPrivate: isPriv ? "Private" : "Public",
+                            isPrivate: isPrivate ? "Private" : "Public",
                             userCreator: userID,
                             timeCreated: created,
                             timeUpdated: updated,
-                            items: items
+                            items: []
                         )
-                    )
-                    continue
+                        fetched.append(rankoList)
+                    }
                 }
-
-                // ---------- LEGACY SCHEMA FALLBACK ----------
-                guard
-                    let name        = dict["RankoName"]        as? String,
-                    let description = dict["RankoDescription"] as? String,
-                    let type        = dict["RankoType"]        as? String,
-                    let isPrivBool  = dict["RankoPrivacy"]     as? Bool,
-                    let userID      = dict["RankoUserID"]      as? String
-                else { continue }
-
-                var created = "19700101000000"
-                var updated = "19700101000000"
-                if let dt = dict["RankoDateTime"] as? [String: Any] {
-                    created = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? created
-                    updated = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? created
-                } else if let s = dict["RankoDateTime"] as? String {
-                    created = s; updated = s
+                
+                await MainActor.run {
+                    self.lists = fetched
+                    self.isLoading = false
                 }
-
-                var catName = "Unknown"
-                var catIcon = "circle"
-                var catColour: UInt = 0x446D7A
-                if let cat = dict["RankoCategory"] as? [String: Any] {
-                    catName   = (cat["name"] as? String) ?? catName
-                    catIcon   = (cat["icon"] as? String) ?? catIcon
-                    catColour = parseColourUInt(cat["colour"])
-                } else if let catStr = dict["RankoCategory"] as? String {
-                    catName = catStr
+            } catch {
+                await MainActor.run {
+                    self.lists = []
+                    self.isLoading = false
                 }
-
-                let itemsDict = dict["RankoItems"] as? [String: [String: Any]] ?? [:]
-                let items: [RankoItem] = itemsDict.compactMap { itemID, it in
-                    guard let itemName  = it["ItemName"] as? String,
-                          let itemDesc  = it["ItemDescription"] as? String,
-                          let itemImage = it["ItemImage"] as? String,
-                          let itemGIF    = it["ItemGIF"] as? String,
-                          let itemVideo    = it["ItemVideo"] as? String,
-                          let itemAudio    = it["ItemAudio"] as? String
-                      else { return nil }
-                      let rank  = intFromAny(it["ItemRank"])  ?? 0
-                      let votes = intFromAny(it["ItemVotes"]) ?? 0
-                      let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                      let plays = intFromAny(it["PlayCount"]) ?? 0
-                      return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
-                }.sorted { $0.rank < $1.rank }
-
-                fetched.append(
-                    RankoList(
-                        id: objectID,
-                        listName: name,
-                        listDescription: description,
-                        type: type,
-                        categoryName: catName,
-                        categoryIcon: catIcon,
-                        categoryColour: catColour,
-                        isPrivate: isPrivBool ? "Private" : "Public",
-                        userCreator: userID,
-                        timeCreated: created,
-                        timeUpdated: updated,
-                        items: items
-                    )
-                )
-            }
-
-            DispatchQueue.main.async {
-                self.lists = fetched
-                self.isLoading = false
             }
         }
     }
+
 
 }
 
@@ -3863,46 +3108,42 @@ struct SearchUsersView: View {
     }
 
     private func fetchFromFirebase(using objectIDs: [String]) {
-        let group = DispatchGroup()
-        var loaded: [RankoUser] = []
-        let appendQueue = DispatchQueue(label: "followers.append.queue") // serialize appends
-        
-        for fid in objectIDs {
-            group.enter()
-            let userRef = Database.database().reference()
-                .child("UserData")
-                .child(fid)
-            
-            userRef.observeSingleEvent(of: .value) { snapshot in
-                defer { group.leave() }
-                
-                guard let root = snapshot.value as? [String: Any] else { return }
-                
-                let details = root["UserDetails"] as? [String: Any]
-                let pfp     = root["UserProfilePicture"] as? [String: Any]
-                
-                let name = (details?["UserName"] as? String) ?? "Unknown"
-                let desc = (details?["UserDescription"] as? String) ?? ""
-                let pic  = (pfp?["UserProfilePicturePath"] as? String) ?? ""
-                
-                let user = RankoUser(
-                    id: fid,
-                    userName: name,
-                    userDescription: desc,
-                    userProfilePicture: pic
-                )
-                
-                appendQueue.sync {
-                    loaded.append(user)
+        guard !objectIDs.isEmpty else {
+            self.users = []
+            self.errorMessage = "No users found."
+            self.isLoading = false
+            return
+        }
+
+        Task {
+            var loaded: [RankoUser] = []
+            let chunks = objectIDs.chunked(into: 10)
+            do {
+                for chunk in chunks {
+                    let snap = try await FirestoreProvider.dbFilters
+                        .collection("users")
+                        .whereField(FieldPath.documentID(), in: chunk)
+                        .getDocuments()
+                    for d in snap.documents {
+                        let data = d.data()
+                        let name = data["name"] as? String ?? "Unknown"
+                        let desc = data["description"] as? String ?? ""
+                        let pic  = (data["image"] as? [String: Any])?["path"] as? String ?? ""
+                        loaded.append(RankoUser(id: d.documentID, userName: name, userDescription: desc, userProfilePicture: pic))
+                    }
+                }
+                await MainActor.run {
+                    self.users = loaded
+                    self.errorMessage = loaded.isEmpty ? "No users found." : nil
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.users = []
+                    self.errorMessage = "No users found."
+                    self.isLoading = false
                 }
             }
-        }
-        
-        group.notify(queue: .main) {
-            // Replace `self.followers` with your actual target property
-            self.users = loaded
-            self.errorMessage = loaded.isEmpty ? "No users found." : nil
-            self.isLoading = false
         }
     }
 }
@@ -4067,99 +3308,74 @@ struct SearchFollowersView: View {
         isLoading = true
         errorMessage = nil
 
-        let followersRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserSocial")
-            .child("UserFollowers")
-
-        followersRef.observeSingleEvent(of: .value) { snap in
-            // Handle "no followers" represented as "" or null
-            if snap.value is NSNull || (snap.value as? String) == "" {
-                self.errorMessage = "No followers found."
-                self.isLoading = false
-                return
-            }
-
-            // Expected shape: followerID -> timestampString
-            if let map = snap.value as? [String: Any], !map.isEmpty {
-                // Build (timestampInt, followerID) pairs
-                let sortedPairs: [(Int, String)] = map.compactMap { (fid, tsAny) in
-                    if let s = tsAny as? String, let t = Int(s) { return (t, fid) }
-                    if let t = tsAny as? Int { return (t, fid) }
-                    return nil
+        FirestoreProvider.dbFilters
+            .collection("users")
+            .document(user_data.userID)
+            .collection("followers")
+            .order(by: "time", descending: true)
+            .getDocuments { snap, error in
+                if let _ = error {
+                    self.errorMessage = "No followers found."
+                    self.isLoading = false
+                    return
                 }
-                .sorted(by: { $0.0 > $1.0 }) // newest first
-
-                // Fallback: if timestamps were non-numeric for some reason, just use keys
-                let ids: [String] = sortedPairs.isEmpty
-                    ? Array(map.keys)
-                    : sortedPairs.map { $0.1 }
-
+                let ids = snap?.documents.map { $0.documentID } ?? []
                 guard !ids.isEmpty else {
                     self.errorMessage = "No followers found."
                     self.isLoading = false
                     return
                 }
-
                 self.followerIDs = ids
-                self.fetchFollowerProfiles(ids: ids) // will set isLoading=false when done
-            } else {
-                self.errorMessage = "No followers found."
-                self.isLoading = false
+                self.fetchFollowerProfiles(ids: ids)
             }
-        }
     }
     
     func fetchFollowerProfiles(ids: [String]) {
-        let group = DispatchGroup()
-        var loaded: [RankoUser] = []
-        let appendQueue = DispatchQueue(label: "followers.append.queue") // serialize appends
-        
-        for fid in ids {
-            group.enter()
-            let userRef = Database.database().reference()
-                .child("UserData")
-                .child(fid)
-            
-            userRef.observeSingleEvent(of: .value) { snapshot in
-                defer { group.leave() }
-                
-                guard let root = snapshot.value as? [String: Any] else { return }
-                
-                let details = root["UserDetails"] as? [String: Any]
-                let pfp     = root["UserProfilePicture"] as? [String: Any]
-                
-                let name = (details?["UserName"] as? String) ?? "Unknown"
-                let desc = (details?["UserDescription"] as? String) ?? ""
-                let pic  = (pfp?["UserProfilePicturePath"] as? String) ?? ""
-                
-                let user = RankoUser(
-                    id: fid,
-                    userName: name,
-                    userDescription: desc,
-                    userProfilePicture: pic
-                )
-                
-                appendQueue.sync {
-                    loaded.append(user)
+        guard !ids.isEmpty else {
+            self.users = []
+            self.filteredUsers = []
+            self.errorMessage = "No followers found."
+            self.isLoading = false
+            return
+        }
+
+        Task {
+            var loaded: [RankoUser] = []
+            let chunks = ids.chunked(into: 10)
+            do {
+                for chunk in chunks {
+                    let snap = try await FirestoreProvider.dbFilters
+                        .collection("users")
+                        .whereField(FieldPath.documentID(), in: chunk)
+                        .getDocuments()
+                    for d in snap.documents {
+                        let data = d.data()
+                        let name = data["name"] as? String ?? "Unknown"
+                        let desc = data["description"] as? String ?? ""
+                        let pic  = (data["image"] as? [String: Any])?["path"] as? String ?? ""
+                        loaded.append(RankoUser(id: d.documentID, userName: name, userDescription: desc, userProfilePicture: pic))
+                    }
+                }
+
+                await MainActor.run {
+                    self.users = loaded
+                    if self.userQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        self.filteredUsers = loaded
+                    } else {
+                        let lc = self.userQuery.lowercased()
+                        self.filteredUsers = loaded.filter { $0.userName.lowercased().contains(lc) }
+                    }
+                    self.errorMessage = loaded.isEmpty ? "No followers found." : nil
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.users = []
+                    self.filteredUsers = []
+                    self.errorMessage = "No followers found."
+                    self.isLoading = false
                 }
             }
-        }
-        
-        group.notify(queue: .main) {
-            self.users = loaded
-
-            if self.userQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                self.filteredUsers = loaded
-            } else {
-                let lc = self.userQuery.lowercased()
-                self.filteredUsers = loaded.filter { $0.userName.lowercased().contains(lc) }
-            }
-
-            self.errorMessage = loaded.isEmpty ? "No followers found." : nil
-            self.isLoading = false
         }
     }
 }
@@ -4272,47 +3488,64 @@ struct SearchFollowingView: View {
         isLoading = true
         errorMessage = nil
 
-        let followingRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(user_data.userID)
-            .child("UserSocial")
-            .child("UserFollowing")
+        Task {
+            do {
+                let snap = try await FirestoreProvider.dbFilters
+                    .collection("users")
+                    .document(user_data.userID)
+                    .collection("following")
+                    .order(by: "time", descending: true)
+                    .getDocuments()
 
-        followingRef.observeSingleEvent(of: .value) { snap in
-            // Handle "no following" represented as "" or null
-            if snap.value is NSNull || (snap.value as? String) == "" {
-                self.errorMessage = "No following found."
-                self.isLoading = false
-                return
-            }
-
-            // Expected shape: followingID -> timestampString
-            if let map = snap.value as? [String: Any], !map.isEmpty {
-                // Build (timestampInt, followingID) pairs
-                let sortedPairs: [(Int, String)] = map.compactMap { (fid, tsAny) in
-                    if let s = tsAny as? String, let t = Int(s) { return (t, fid) }
-                    if let t = tsAny as? Int { return (t, fid) }
-                    return nil
-                }
-                .sorted(by: { $0.0 > $1.0 }) // newest first
-
-                // Fallback: if timestamps were non-numeric for some reason, just use keys
-                let ids: [String] = sortedPairs.isEmpty
-                    ? Array(map.keys)
-                    : sortedPairs.map { $0.1 }
-
+                let ids = snap.documents.map { $0.documentID }
                 guard !ids.isEmpty else {
-                    self.errorMessage = "No following found."
-                    self.isLoading = false
+                    await MainActor.run {
+                        self.errorMessage = "No following found."
+                        self.isLoading = false
+                    }
                     return
                 }
 
-                self.followingIDs = ids
-                self.fetchFollowingProfiles(ids: ids) // will set isLoading=false when done
-            } else {
-                self.errorMessage = "No following found."
-                self.isLoading = false
+                loadUsers(ids: ids) { users in
+                    DispatchQueue.main.async {
+                        self.users = users
+                        self.filteredUsers = users
+                        self.isLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = "No following found."
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+
+    // Firestore user loader by IDs
+    private func loadUsers(ids: [String], completion: @escaping ([RankoUser]) -> Void) {
+        guard !ids.isEmpty else { completion([]); return }
+        Task {
+            var loaded: [RankoUser] = []
+            let chunks = ids.chunked(into: 10) // Firestore 'in' limit
+            do {
+                for chunk in chunks {
+                    let snap = try await FirestoreProvider.dbFilters
+                        .collection("users")
+                        .whereField(FieldPath.documentID(), in: chunk)
+                        .getDocuments()
+                    for d in snap.documents {
+                        let data = d.data()
+                        let name = data["name"] as? String ?? ""
+                        let desc = data["description"] as? String ?? ""
+                        let pic  = (data["image"] as? [String: Any])?["path"] as? String ?? ""
+                        loaded.append(RankoUser(id: d.documentID, userName: name, userDescription: desc, userProfilePicture: pic))
+                    }
+                }
+                await MainActor.run { completion(loaded) }
+            } catch {
+                print("⚠️ Failed to load users: \(error.localizedDescription)")
+                await MainActor.run { completion([]) }
             }
         }
     }
@@ -4324,32 +3557,14 @@ struct SearchFollowingView: View {
         
         for fid in ids {
             group.enter()
-            let userRef = Database.database().reference()
-                .child("UserData")
-                .child(fid)
-            
-            userRef.observeSingleEvent(of: .value) { snapshot in
+            FirestoreProvider.dbFilters.collection("users").document(fid).getDocument { snap, _ in
                 defer { group.leave() }
-                
-                guard let root = snapshot.value as? [String: Any] else { return }
-                
-                let details = root["UserDetails"] as? [String: Any]
-                let pfp     = root["UserProfilePicture"] as? [String: Any]
-                
-                let name = (details?["UserName"] as? String) ?? "Unknown"
-                let desc = (details?["UserDescription"] as? String) ?? ""
-                let pic  = (pfp?["UserProfilePicturePath"] as? String) ?? ""
-                
-                let user = RankoUser(
-                    id: fid,
-                    userName: name,
-                    userDescription: desc,
-                    userProfilePicture: pic
-                )
-                
-                appendQueue.sync {
-                    loaded.append(user)
-                }
+                guard let data = snap?.data() else { return }
+                let name = data["name"] as? String ?? "Unknown"
+                let desc = data["description"] as? String ?? ""
+                let pic  = (data["image"] as? [String: Any])?["path"] as? String ?? ""
+                let user = RankoUser(id: fid, userName: name, userDescription: desc, userProfilePicture: pic)
+                appendQueue.sync { loaded.append(user) }
             }
         }
         
@@ -4852,20 +4067,27 @@ struct ProfileSpectateView: View {
 //    }
     
     private func checkFollowStatus() {
-            isCheckingFollowStatus = true
-            let db = Database.database().reference()
-            db.child("UserData")
-              .child(userID)
-              .child("UserSocial")
-              .child("UserFollowers")
-              .child(user_data.userID)
-              .observeSingleEvent(of: .value) { snap in
-                  DispatchQueue.main.async {
-                      followUser = snap.exists()
-                      isCheckingFollowStatus = false
-                  }
-              }
+        isCheckingFollowStatus = true
+        Task {
+            do {
+                let doc = try await FirestoreProvider.dbFilters
+                    .collection("users")
+                    .document(userID)
+                    .collection("followers")
+                    .document(user_data.userID)
+                    .getDocument()
+                await MainActor.run {
+                    followUser = doc.exists
+                    isCheckingFollowStatus = false
+                }
+            } catch {
+                await MainActor.run {
+                    followUser = false
+                    isCheckingFollowStatus = false
+                }
+            }
         }
+    }
         
         private func followUserAction() {
             let now = Date()
@@ -4875,21 +4097,30 @@ struct ProfileSpectateView: View {
             aedtFormatter.dateFormat = "yyyyMMddHHmmss"
             let rankoDateTime = aedtFormatter.string(from: now)
             
-            let db = Database.database().reference()
-            let followerPath = db.child("UserData")
-                                .child(userID)
-                                .child("UserSocial")
-                                .child("UserFollowers")
-                                .child(user_data.userID)
-            let followingPath = db.child("UserData")
-                                .child(user_data.userID)
-                                .child("UserSocial")
-                                .child("UserFollowing")
-                                .child(userID)
-            
-            // write both sides
-            followerPath.setValue(rankoDateTime)
-            followingPath.setValue(rankoDateTime)
+        let followerDoc = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(userID)
+            .collection("followers")
+            .document(user_data.userID)
+        let followingDoc = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(user_data.userID)
+            .collection("following")
+            .document(userID)
+        
+        let payloadFollower: [String: Any] = [
+            "time": Int(rankoDateTime) ?? rankoDateTime,
+            "user_id": user_data.userID,
+            "following": true
+        ]
+        let payloadFollowing: [String: Any] = [
+            "time": Int(rankoDateTime) ?? rankoDateTime,
+            "user_id": userID,
+            "followed": true
+        ]
+        
+        followerDoc.setData(payloadFollower, merge: true)
+        followingDoc.setData(payloadFollowing, merge: true)
             
             followUser = true
             // optionally refresh counts
@@ -4897,20 +4128,19 @@ struct ProfileSpectateView: View {
         }
         
         private func unfollowUserAction() {
-            let db = Database.database().reference()
-            let followerPath = db.child("UserData")
-                                .child(userID)
-                                .child("UserSocial")
-                                .child("UserFollowers")
-                                .child(user_data.userID)
-            let followingPath = db.child("UserData")
-                                .child(user_data.userID)
-                                .child("UserSocial")
-                                .child("UserFollowing")
-                                .child(userID)
-            
-            followerPath.removeValue()
-            followingPath.removeValue()
+        let followerDoc = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(userID)
+            .collection("followers")
+            .document(user_data.userID)
+        let followingDoc = FirestoreProvider.dbFilters
+            .collection("users")
+            .document(user_data.userID)
+            .collection("following")
+            .document(userID)
+        
+        followerDoc.delete()
+        followingDoc.delete()
             
             followUser = false
             loadFollowStats()
@@ -4929,11 +4159,12 @@ struct ProfileSpectateView: View {
             DispatchQueue.main.async {
                 switch result {
                 case .success(let response):
-                    let totalResults = response.nbHits
-                    rankoCount = totalResults!
-                    let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child("UserStats").child(userID).child("UserRankoCount")
-                    dbRef.setValue(totalResults!)
+                    let count = response.nbHits ?? 0
+                    rankoCount = count
+                    FirestoreProvider.dbFilters
+                        .collection("users")
+                        .document(userID)
+                        .setData(["stats.rankos": count], merge: true)
                 case .failure(let error):
                     print("❌ Error fetching Algolia results: \(error)")
                 }
@@ -4941,64 +4172,50 @@ struct ProfileSpectateView: View {
         }
     }
     
-    private func loadProfileData() {
-        let userDetails = Database.database().reference().child("UserData").child(userID).child("UserDetails")
-        let userProfilePicture = Database.database().reference().child("UserData").child(userID).child("UserProfilePicture")
+        private func loadProfileData() {
+            let userDoc = FirestoreProvider.dbFilters.collection("users").document(userID)
 
-        userDetails.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ loadProfileData: no user data at path")
-                return
-            }
+            Task {
+                do {
+                    let snap = try await userDoc.getDocument()
+                guard let value = snap.data() else {
+                    print("❌ loadProfileData: no user data at path")
+                    return
+                }
 
-            // Extract fields
-            let name  = value["UserName"]            as? String ?? ""
-            let desc  = value["UserDescription"]     as? String ?? ""
-            let interestsArray = value["UserInterests"] as? [String]
-            let interests = interestsArray?
-                                .joined(separator: ",")
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-                            ?? (value["UserInterests"] as? String ?? "")
+                let name  = value["name"] as? String ?? ""
+                let desc  = value["description"] as? String ?? ""
+                let interestsArray = value["interests"] as? [String]
+                let interests = interestsArray?
+                    .joined(separator: ",")
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-            DispatchQueue.main.async {
-                // Update all UI state
-                self.username             = name
-                self.userDescription      = desc
-                self.userInterests        = interests
+                let picPath = (value["image"] as? [String: Any])?["path"] as? String ?? ""
 
-                // Animate tags
-                let tags = interests
-                    .split(separator: ",")
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                for (idx, tag) in tags.enumerated() {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2 * Double(idx)) {
-                        _ = withAnimation(.easeOut(duration: 0.4)) {
-                            animatedTags.insert(String(tag))
+                await MainActor.run {
+                    self.username        = name
+                    self.userDescription = desc
+                    self.userInterests   = interests
+                    // keep path in string; image loader will handle UIImages separately
+                    self.profileImage    = nil
+
+                    let tags = interests
+                        .split(separator: ",")
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    for (idx, tag) in tags.enumerated() {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2 * Double(idx)) {
+                            _ = withAnimation(.easeOut(duration: 0.4)) {
+                                animatedTags.insert(String(tag))
+                            }
                         }
                     }
                 }
+            } catch {
+                print("❌ loadProfileData Firestore error:", error.localizedDescription)
             }
-        } withCancel: { error in
-            print("❌ loadProfileData cancelled:", error.localizedDescription)
-        }
-        
-        userProfilePicture.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ loadProfileData: no user data at path")
-                return
-            }
-            
-            let picPath = value["UserProfilePicturePath"] as? String ?? ""
-
-            DispatchQueue.main.async {
-                self.userProfileImagePath = picPath
-
-                loadProfileImage(from: picPath)
-            }
-        } withCancel: { error in
-            print("❌ loadProfileData cancelled:", error.localizedDescription)
         }
     }
+
 
     // MARK: – Download the picture from Storage
     private func loadProfileImage(from path: String) {
@@ -5014,7 +4231,13 @@ struct ProfileSpectateView: View {
 
         storageRef.getData(maxSize: Int64(2 * 1024 * 1024)) { data, error in
             DispatchQueue.main.async {
-                if let error = error {
+                if let error = error as NSError? {
+                    // Quietly ignore missing files so the rest of the profile can load
+                    if StorageErrorCode(rawValue: error.code) == .objectNotFound {
+                        print("⚠️ loadProfileImage: file not found at path \(path)")
+                        self.profileImage = nil
+                        return
+                    }
                     print("❌ loadProfileImage failed:", error.localizedDescription)
                     return
                 }
@@ -5029,36 +4252,29 @@ struct ProfileSpectateView: View {
     
     private func loadFollowStats() {
         guard !userID.isEmpty else { print("Skipping loadFollowStats: userID is empty"); return }
-        
-        let db = Database.database().reference()
-        let group = DispatchGroup()
 
-        group.enter()
-        db.child("UserData").child(userID).child("UserSocial").child("UserFollowers")
-            .observeSingleEvent(of: .value) { snapshot in
-                DispatchQueue.main.async {
-                    self.followersCount = Int(snapshot.childrenCount)
-                    let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(userID).child("UserStats").child("UserFollowerCount")
-                    dbRef.setValue(followersCount)
+        Task {
+            do {
+                let userDoc = FirestoreProvider.dbFilters.collection("users").document(userID)
+                async let followersAgg = userDoc.collection("followers").count.getAggregation(source: .server)
+                async let followingAgg = userDoc.collection("following").count.getAggregation(source: .server)
+                let followers = try await followersAgg
+                let following = try await followingAgg
+                await MainActor.run {
+                    self.followersCount = followers.count.intValue
+                    self.followingCount = following.count.intValue
                 }
-                group.leave()
+                // Optionally update stats on user doc
+                try? await userDoc.setData(
+                    [
+                        "stats.followers": followers.count.intValue,
+                        "stats.following": following.count.intValue
+                    ],
+                    merge: true
+                )
+            } catch {
+                print("⚠️ Failed to load follow stats (spectate): \(error.localizedDescription)")
             }
-
-        group.enter()
-        db.child("UserData").child(userID).child("UserSocial").child("UserFollowing")
-            .observeSingleEvent(of: .value) { snapshot in
-                DispatchQueue.main.async {
-                    self.followingCount = Int(snapshot.childrenCount)
-                    let db = Database.database().reference()
-                    let dbRef = db.child("UserData").child(userID).child("UserStats").child("UserFollowingCount")
-                    dbRef.setValue(followingCount)
-                }
-                group.leave()
-            }
-
-        group.notify(queue: .main) {
-            print("✅ Finished loading follow stats")
         }
     }
     
@@ -5086,57 +4302,53 @@ struct ProfileSpectateView: View {
             return
         }
 
-        let baseRef = Database.database()
-            .reference()
-            .child("UserData")
-            .child(userID)
-            .child("UserRankos")
-            .child("UserFeaturedRankos")
-
-        baseRef.getData { error, snapshot in
-            if let error = error {
-                print("❌ Firebase error: \(error.localizedDescription), retrying...")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
-                return
-            }
-
-            guard let snap = snapshot, snap.exists() else {
-                print("⚠️ No featured rankos found")
-                DispatchQueue.main.async {
-                    self.featuredLists = [:]
-                    self.featuredLoading = false
+        FirestoreProvider.dbFilters
+            .collection("users")
+            .document(userID)
+            .collection("featured_rankos")
+            .getDocuments { snap, error in
+                if let error = error {
+                    print("❌ Firestore error: \(error.localizedDescription), retrying...")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { tryLoadFeaturedRankos() }
+                    return
                 }
-                return
-            }
 
-            // ✅ Successfully connected
-            var tempLists: [Int: RankoList] = [:]
-            let group = DispatchGroup()
+                guard let snap = snap, !snap.documents.isEmpty else {
+                    print("⚠️ No featured rankos found")
+                    DispatchQueue.main.async {
+                        self.featuredLists = [:]
+                        self.featuredLoading = false
+                    }
+                    return
+                }
 
-            for child in snap.children.allObjects as? [DataSnapshot] ?? [] {
-                if let slot = Int(child.key), let rankoID = child.value as? String {
-                    group.enter()
-                    fetchFeaturedList(slot: slot, rankoID: rankoID) {
-                        if let list = $0 { tempLists[slot] = list }
-                        group.leave()
+                var tempLists: [Int: RankoList] = [:]
+                let group = DispatchGroup()
+
+                for doc in snap.documents {
+                    if let slot = Int(doc.documentID), let rankoID = doc.data()["ranko_id"] as? String {
+                        group.enter()
+                        fetchFeaturedList(slot: slot, rankoID: rankoID) {
+                            if let list = $0 { tempLists[slot] = list }
+                            group.leave()
+                        }
                     }
                 }
-            }
 
-            group.notify(queue: .main) {
-                self.featuredLists = tempLists
-                self.featuredLoading = false
-                print("✅ Featured Rankos loaded successfully")
+                group.notify(queue: .main) {
+                    self.featuredLists = tempLists
+                    self.featuredLoading = false
+                    print("✅ Featured Rankos loaded successfully")
+                }
             }
-        }
     }
 
     // ✅ Modified fetchFeaturedList to support completion
     private func fetchFeaturedList(slot: Int, rankoID: String, completion: @escaping (RankoList?) -> Void) {
-        let listRef = Database.database().reference().child("RankoData").child(rankoID)
+        let listRef = FirestoreProvider.dbFilters.collection("ranko").document(rankoID)
 
-        listRef.observeSingleEvent(of: .value) { snap in
-            guard let dict = snap.value as? [String: Any],
+        listRef.getDocument { snap, _ in
+            guard let dict = snap?.data(),
                   let rl = parseListData(dict: dict, id: rankoID) else {
                 completion(nil)
                 return

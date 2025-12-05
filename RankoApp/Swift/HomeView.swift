@@ -8,7 +8,7 @@
 import SwiftUI
 import PhotosUI
 import FirebaseStorage
-import FirebaseDatabase
+import FirebaseFirestore
 import FirebaseAnalytics
 import FirebaseAuth
 import AlgoliaSearchClient
@@ -145,7 +145,7 @@ struct HomeView: View {
 
     // ✅ NEW: fetch (re)fill queue from Algolia and update timestamp
     private func refillIDsFromAlgoliaAndResetTimestamp(completion: (() -> Void)? = nil) {
-        AlgoliaRankoView.shared.fetchTopPublicRankoIDs(limit: 100) { result in
+        AlgoliaRankoView.shared.fetchTopPublicRankoIDs(limit: 20) { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let ids):
@@ -171,11 +171,129 @@ struct HomeView: View {
         return batch
     }
 
-    // ✅ NEW: fetch a single Ranko list from Firebase by objectID
+    // Firestore fetch for a single Ranko list (aligns with ExploreView)
+    private func fetchRankoListNew(_ objectID: String, completion: @escaping (RankoList?) -> Void) {
+        let doc = FirestoreProvider.dbFilters
+            .collection("ranko")
+            .document(objectID)
+
+        func intFromAny(_ any: Any?) -> Int? {
+            if let n = any as? NSNumber { return n.intValue }
+            if let s = any as? String    { return Int(s) }
+            if let d = any as? Double    { return Int(d) }
+            return nil
+        }
+        func parseColourUInt(_ any: Any?) -> UInt {
+            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
+            if let s = any as? String {
+                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
+                if hex.hasPrefix("#")  { hex.removeFirst() }
+                if hex.hasPrefix("0x") { hex.removeFirst(2) }
+                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
+            }
+            return 0x446D7A
+        }
+
+        doc.getDocument { snap, error in
+            guard error == nil, let data = snap?.data() else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            let name        = data["name"] as? String ?? "(untitled)"
+            let description = data["description"] as? String ?? ""
+            let type        = data["type"] as? String ?? "default"
+            let userID      = data["user_id"] as? String ?? ""
+            let status      = data["status"] as? String ?? "active"
+            let privacy     = data["privacy"] as? Bool ?? false
+
+            guard status == "active" else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            let cat       = data["category_meta"] as? [String: Any]
+            let catName   = data["category"] as? String ?? "Unknown"
+            let catIcon   = cat?["icon"] as? String ?? "circle"
+            let catColour = parseColourUInt(cat?["colour"])
+
+            let time      = data["time"] as? [String: Any]
+            let createdStr  = (time?["created"] as? String) ?? (time?["created"] as? Int).map(String.init) ?? "19700101000000"
+            let updatedStr  = (time?["updated"] as? String) ?? (time?["updated"] as? Int).map(String.init) ?? createdStr
+
+            var parsedItems: [RankoItem] = []
+            var itemsNumber: Int? = nil
+            if let num = data["items"] as? Int { itemsNumber = num }
+
+            if let preview = data["preview"] as? [[String: Any]] {
+                parsedItems = preview.enumerated().compactMap { idx, dict in
+                    let id        = dict["id"] as? String ?? UUID().uuidString
+                    let itemName  = dict["name"] as? String ?? ""
+                    let itemImage = dict["image"] as? String ?? ""
+                    let rank      = intFromAny(dict["rank"]) ?? (idx + 1)
+                    let record = RankoRecord(objectID: id, ItemName: itemName, ItemDescription: "", ItemCategory: "", ItemImage: itemImage, ItemGIF: nil, ItemVideo: nil, ItemAudio: nil)
+                    return RankoItem(id: id, rank: rank, votes: 0, record: record, playCount: 0)
+                }
+            } else if let arr = data["items"] as? [[String: Any]] {
+                parsedItems = arr.compactMap { dict in
+                    let id        = dict["id"] as? String ?? UUID().uuidString
+                    let itemName  = dict["name"] as? String ?? ""
+                    let itemDesc  = dict["description"] as? String ?? ""
+                    let itemImage = dict["image"] as? String ?? ""
+                    let itemGIF   = dict["gif"] as? String
+                    let itemVideo = dict["video"] as? String
+                    let itemAudio = dict["audio"] as? String
+                    let rank      = intFromAny(dict["rank"]) ?? 0
+                    let votes     = intFromAny(dict["votes"]) ?? 0
+                    let playCount = intFromAny(dict["playCount"]) ?? 0
+
+                    let record = RankoRecord(
+                        objectID: id,
+                        ItemName: itemName,
+                        ItemDescription: itemDesc,
+                        ItemCategory: "",
+                        ItemImage: itemImage,
+                        ItemGIF: itemGIF,
+                        ItemVideo: itemVideo,
+                        ItemAudio: itemAudio
+                    )
+
+                    return RankoItem(
+                        id: id,
+                        rank: rank,
+                        votes: votes,
+                        record: record,
+                        playCount: playCount
+                    )
+                }
+            }
+
+            let list = RankoList(
+                id: objectID,
+                listName: name,
+                listDescription: description,
+                type: type,
+                categoryName: catName,
+                categoryIcon: catIcon,
+                categoryColour: catColour,
+                isPrivate: privacy ? "Private" : "Public",
+                userCreator: userID,
+                timeCreated: createdStr,
+                timeUpdated: updatedStr,
+                itemsNumber: itemsNumber ?? parsedItems.count,
+                items: parsedItems.sorted { $0.rank < $1.rank }
+            )
+            DispatchQueue.main.async { completion(list) }
+        }
+    }
+
+    // ✅ NEW: fetch a single Ranko list from Firestore by objectID
     private func fetchRankoList(_ objectID: String, completion: @escaping (RankoList?) -> Void) {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(objectID)
+        let doc = FirestoreProvider.dbFilters
+            .collection("ranko")
+            .document(objectID)
 
         func intFromAny(_ any: Any?) -> Int? {
             if let n = any as? NSNumber { return n.intValue }
@@ -244,8 +362,8 @@ struct HomeView: View {
             return (codeBy, labelBy, colorBy)
         }
 
-        ref.observeSingleEvent(of: .value, with: { snap in
-            guard let root = snap.value as? [String: Any] else {
+        doc.getDocument { snap, error in
+            guard error == nil, let root = snap?.data() else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
@@ -416,7 +534,7 @@ struct HomeView: View {
             }
 
             DispatchQueue.main.async { completion(list) }
-        })
+        }
     }
 
     // Helper to safely coerce Firebase numbers/strings into Int
@@ -434,13 +552,13 @@ struct HomeView: View {
         isFetchingBatch = true
 
         func loadFromQueue() {
-            var ids = popNextIDs(6)
+            var ids = popNextIDs(2)
 
             // If queue is empty AFTER popping, we still proceed with what we got;
             // if we got none, refill then try again.
             if ids.isEmpty {
                 refillIDsFromAlgoliaAndResetTimestamp {
-                    ids = self.popNextIDs(6)
+                    ids = self.popNextIDs(2)
                     loadIDs(ids)
                 }
             } else {
@@ -453,22 +571,21 @@ struct HomeView: View {
                 self.isFetchingBatch = false
                 return
             }
-            let group = DispatchGroup()
-            var newLists: [RankoList] = []
-
-            ids.forEach { id in
-                group.enter()
-                fetchRankoList(id) { list in
-                    if let list = list, list.isPrivate == "Public" { newLists.append(list) }
-                    group.leave()
+            Task {
+                var newLists: [RankoList] = []
+                for id in ids {
+                    if let list = await withCheckedContinuation({ (cont: CheckedContinuation<RankoList?, Never>) in
+                        fetchRankoListNew(id) { cont.resume(returning: $0) }
+                    }), list.isPrivate == "Public" {
+                        newLists.append(list)
+                    }
                 }
-            }
-
-            group.notify(queue: .main) {
                 // simple order: newest first by RankoDateTime
-                self.feedLists.append(contentsOf: newLists.sorted { $0.timeUpdated > $1.timeUpdated })
-                self.isFetchingBatch = false
-                self.isLoadingLists = false
+                await MainActor.run {
+                    self.feedLists.append(contentsOf: newLists.sorted { $0.timeUpdated > $1.timeUpdated })
+                    self.isFetchingBatch = false
+                    self.isLoadingLists = false
+                }
             }
         }
 
@@ -684,7 +801,7 @@ struct HomeView: View {
             ensureQueueAndInitialBatch()
             
             if !isSimulator {
-                // pull another 6 on pull-to-refresh
+                // pull another batch on pull-to-refresh
                 loadNextBatch()
             }
         }
@@ -728,71 +845,57 @@ struct HomeView: View {
             return
         }
         
-        let userDetails = Database.database().reference().child("UserData").child(uid).child("UserDetails")
-        let userProfilePicture = Database.database().reference().child("UserData").child(uid).child("UserProfilePicture")
-        let userStats = Database.database().reference().child("UserData").child(uid).child("UserStats")
+        let userDoc = FirestoreProvider.dbFilters.collection("users").document(uid)
         
         print("UserID: \(uid)")
         print("🤔 Checking If Introduction Survey Should Open...")
         
-        userDetails.observeSingleEvent(of: .value, with: { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed To Fetch User Data From Firebase.")
+        Task {
+            do {
+                let snap = try await userDoc.getDocument()
+                guard let value = snap.data() else {
+                    print("❌ Failed To Fetch User Data From Firestore.")
+                    checkIfTrayShouldOpen()
+                    return
+                }
+                
+                user_data.userID = value["id"] as? String ?? uid
+                user_data.username = value["name"] as? String ?? ""
+                user_data.userDescription = value["description"] as? String ?? ""
+                user_data.userPrivacy = value["privacy"] as? String ?? ""
+                user_data.userInterests = (value["interests"] as? [String])?.joined(separator: ",") ?? ""
+                user_data.userJoined = value["joined"] as? String ?? ""
+                user_data.userYear = value["year"] as? Int ?? 0
+                user_data.userFoundUs = value["foundUs"] as? String ?? ""
+                user_data.userLoginService = value["signIn"] as? String ?? ""
+                
+                print("✅ Successfully Loaded User Details.")
+                
+                if let img = value["image"] as? [String: Any] {
+                    user_data.userProfilePictureFile = img["path"] as? String ?? ""
+                    user_data.userProfilePicturePath = img["path"] as? String ?? ""
+                    let modified = img["modified"] as? String ?? ""
+                    let prior = user_data.userProfilePictureModified
+                    user_data.userProfilePictureModified = modified
+                    if modified != prior {
+                        imageService.refreshFromRemote(path: user_data.userProfilePicturePath)
+                    } else {
+                        imageService.reloadFromDisk()
+                    }
+                }
+                
+                if let stats = value["stats"] as? [String: Any] {
+                    user_data.userStatsFollowers = stats["followers"] as? Int ?? 0
+                    user_data.userStatsFollowing = stats["following"] as? Int ?? 0
+                    user_data.userStatsRankos = stats["rankos"] as? Int ?? 0
+                    print("✅ Successfully Loaded Statistics Details.")
+                    print("✅ Successfully Loaded All User Data.")
+                }
+            } catch {
+                print("❌ Firestore error while syncing user data: \(error.localizedDescription)")
                 checkIfTrayShouldOpen()
-                return
             }
-            
-            user_data.userID = value["UserID"] as? String ?? ""
-            user_data.username = value["UserName"] as? String ?? ""
-            user_data.userDescription = value["UserDescription"] as? String ?? ""
-            user_data.userPrivacy = value["UserPrivacy"] as? String ?? ""
-            user_data.userInterests = value["UserInterests"] as? String ?? ""
-            user_data.userJoined = value["UserJoined"] as? String ?? ""
-            user_data.userYear = value["UserYear"] as? Int ?? 0
-            user_data.userFoundUs = value["UserFoundUs"] as? String ?? ""
-            user_data.userLoginService = value["UserSignInMethod"] as? String ?? ""
-            
-            print("✅ Successfully Loaded User Details.")
-            
-        })
-        
-        userProfilePicture.observe(.value, with: { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed To Fetch User Data From Firebase.")
-                return
-            }
-            
-            user_data.userProfilePictureFile = value["UserProfilePictureFile"] as? String ?? ""
-            let modifiedTimestamp = value["UserProfilePictureModified"] as? String ?? ""
-            user_data.userProfilePicturePath = value["UserProfilePicturePath"] as? String ?? ""
-            
-            print("✅ Successfully Loaded Profile Picture Details.")
-            print("🤔 Checking For New Image...")
-            
-            // Only load profile image if the modified string has changed
-            if modifiedTimestamp != user_data.userProfilePictureModified {
-                print("🔁 Profile Picture Modified Date Changed, Reloading Image...")
-                user_data.userProfilePictureModified = modifiedTimestamp
-                imageService.refreshFromRemote(path: user_data.userProfilePicturePath)
-            } else {
-                print("✅ Using Cached Profile Image From Disk.")
-                imageService.reloadFromDisk()
-            }
-        })
-        
-        userStats.observeSingleEvent(of: .value, with: { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Failed To Fetch User Data From Firebase.")
-                return
-            }
-            
-            user_data.userStatsFollowers = value["UserFollowerCount"] as? Int ?? 0
-            user_data.userStatsFollowing = value["UserFollowingCount"] as? Int ?? 0
-            user_data.userStatsRankos = value["UserRankoCount"] as? Int ?? 0
-            
-            print("✅ Successfully Loaded Statistics Details.")
-            print("✅ Successfully Loaded All User Data.")
-        })
+        }
     }
     
     private func checkIfTrayShouldOpen() {
@@ -860,7 +963,6 @@ struct DefaultListHomeView: View {
     @StateObject private var user_data = UserInformation.shared
     
     // Profile & creator info
-    @State private var profileImage: UIImage?
     @State private var creatorName: String = ""
     
     // Likes & comments
@@ -876,17 +978,19 @@ struct DefaultListHomeView: View {
     var onRankoTap: (String) -> Void
     var onProfileTap: (String) -> Void
     
-    private var sortedItems: [RankoItem] {
-        listData.items.sorted { $0.rank < $1.rank }
+    private var previewItems: [RankoItem] {
+        // Use preview items if provided, otherwise fall back to all items sorted by rank
+        let items = listData.items
+        if listData.type.lowercased() == "tier" { return items }
+        let sorted = items.sorted { $0.rank < $1.rank }
+        return Array(sorted.prefix(5))
     }
-    private var firstBlock: [RankoItem] {
-        Array(sortedItems.prefix(5))
-    }
-    private var remainder: [RankoItem] {
-        Array(sortedItems.dropFirst(5))
-    }
-    private var secondBlock: [RankoItem] {
-        Array(remainder.prefix(4))
+    private var firstBlock: [RankoItem] { Array(previewItems.prefix(3)) }
+    private var remainder: [RankoItem] { Array(previewItems.dropFirst(3)) }
+    private var secondBlock: [RankoItem] { Array(remainder.prefix(2)) }
+    
+    private var creatorImageURL: URL? {
+        URL(string: "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media&token=\(user_data.userID)")
     }
     
     // MARK: — Helpers to compute “safe” UID & whether we’ve liked
@@ -908,21 +1012,23 @@ struct DefaultListHomeView: View {
                 .padding(.bottom, 10)
                 .padding(.horizontal, 10)
             HStack(alignment: .top) {
-                Group {
-                    AsyncImage(url: URL(string: "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media&token=\(user_data.userID)")) { phase in
-                        if let img = phase.image {
-                            img.resizable()
-                                .scaledToFill()
-                                .frame(width: 50, height: 50)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                        } else {
-                            SkeletonView(RoundedRectangle(cornerRadius: 10))
-                                .frame(width: 42, height: 42)
-                        }
+                AsyncImage(url: creatorImageURL) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable()
+                            .scaledToFill()
+                    case .empty:
+                        SkeletonView(RoundedRectangle(cornerRadius: 10))
+                    case .failure:
+                        Image(systemName: "person.crop.circle.fill")
+                            .resizable()
+                            .foregroundColor(.gray.opacity(0.4))
+                    @unknown default:
+                        EmptyView()
                     }
-                    .frame(width: 42, height: 42)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
+                .frame(width: 38, height: 38)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
                 .onTapGesture {
                     onProfileTap(listData.userCreator)
                 }
@@ -931,7 +1037,7 @@ struct DefaultListHomeView: View {
                     HStack(spacing: 4) {
                         Text(creatorName)
                             .font(.custom("Nunito-Black", size: 13))
-                            .foregroundColor(Color(hex: 0x000000))
+                        .foregroundColor(Color(hex: 0x6A6A6A))
                         Text("•")
                             .font(.custom("Nunito-Black", size: 11))
                             .foregroundColor(Color(hex: 0x818181))
@@ -1010,6 +1116,16 @@ struct DefaultListHomeView: View {
                 }
                 .padding(.trailing, 8)
                 
+                HStack(spacing: 4) {
+                    Image(systemName: "square.grid.3x3.fill")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                    Text("\(listData.itemsNumber ?? previewItems.count)")
+                        .font(.system(size: 12, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                }
+                .padding(.trailing, 8)
+                
                 Button {
                     openShareView = true
                 } label: {
@@ -1043,12 +1159,19 @@ struct DefaultListHomeView: View {
         .sheet(isPresented: $openShareView) {
             //ProfileSpectateView(userID: (listData.userCreator))
         }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.1), radius: 29, x: 0, y: 4)
+        )
+        .padding(.horizontal, 8)
     }
     
     private func positionForItem(_ item: RankoItem) -> Int? {
         // prefer matching by id; if your RankoItem doesn't have `id`,
         // swap to another unique key (e.g. itemName + image url).
-        if let idx = sortedItems.firstIndex(where: { $0.id == item.id }) {
+        if let idx = previewItems.firstIndex(where: { $0.id == item.id }) {
             return idx + 1
         }
         return nil
@@ -1118,46 +1241,16 @@ struct DefaultListHomeView: View {
             ForEach(secondBlock) { item in
                 itemRow(item)
             }
-            // 10th slot logic…
-            if remainder.count >= 5 {
-                if remainder.count == 5 {
-                    // exactly 10 items → show the 10th
-                    let item10 = remainder[4]
-                    HStack(spacing: 8) {
-                        ZStack(alignment: .bottomTrailing) {
-                            AsyncImage(url: URL(string: item10.itemImage)) { phase in
-                                if let img = phase.image {
-                                    img.resizable()
-                                        .scaledToFill()
-                                        .frame(width: 50, height: 50)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                } else {
-                                    Color.gray.opacity(0.2)
-                                        .frame(width: 50, height: 50)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                            }
-                            if let pos = positionForItem(item10) {
-                                badgeView(forPosition: pos)
-                            }
-                        }
-                        Text(item10.itemName)
-                            .font(.custom("Nunito-Black", size: 14))
+            let extra = max(previewItems.count - 5, 0)
+            if extra > 0 {
+                Color.gray.opacity(0.2)
+                    .frame(width: 47, height: 47)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        Text("+\(extra)")
+                            .font(.custom("Nunito-Black", size: 12))
                             .foregroundColor(Color(hex: 0x666666))
-                            .lineLimit(1)
-                            .padding(.leading, 6)
-                    }
-                } else {
-                    // >10 items → show “+N” where N = total-9
-                    Color.gray.opacity(0.2)
-                        .frame(width: 47, height: 47)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(
-                            Text("+\(listData.items.count - 9)")
-                                .font(.custom("Nunito-Black", size: 12))
-                                .foregroundColor(Color(hex: 0x666666))
-                        )
-                }
+                    )
             }
         }
     }
@@ -1198,9 +1291,11 @@ struct DefaultListHomeView: View {
         isLikeDisabled = true
 
         let ts = currentAEDTString()
-        let dbRef = Database.database().reference()
-        let likePath = "RankoData/\(listData.id)/RankoLikes/\(safeUID)"
-        let likeRef = dbRef.child(likePath)
+        let likeDoc = FirestoreProvider.dbFilters
+            .collection("ranko")
+            .document(listData.id)
+            .collection("likes")
+            .document(safeUID)
 
         // 1) Optimistically update local state
         let currentlyLiked = hasLiked
@@ -1211,12 +1306,23 @@ struct DefaultListHomeView: View {
         }
 
         // 2) Read once to confirm server state
-        likeRef.observeSingleEvent(of: .value, with: { snapshot in
-            if snapshot.exists() {
+        likeDoc.getDocument { snap, error in
+            if let error = error {
+                print("Read error:", error)
+                if currentlyLiked {
+                    likes[safeUID] = ts
+                } else {
+                    likes.removeValue(forKey: safeUID)
+                }
+                isLikeDisabled = false
+                showInlineToast("Network error.")
+                return
+            }
+
+            if let snap = snap, snap.exists {
                 // 👎 Unlike on server
-                likeRef.removeValue { error, _ in
+                likeDoc.delete { error in
                     if let error = error {
-                        // 3a) Roll back if failure
                         likes[safeUID] = ts
                         print("Error removing like:", error)
                         showInlineToast("Couldn’t remove like.")
@@ -1225,9 +1331,8 @@ struct DefaultListHomeView: View {
                 }
             } else {
                 // 👍 Like on server
-                likeRef.setValue(ts) { error, _ in
+                likeDoc.setData(["time": ts]) { error in
                     if let error = error {
-                        // 3b) Roll back if failure
                         likes.removeValue(forKey: safeUID)
                         print("Error adding like:", error)
                         showInlineToast("Couldn’t add like.")
@@ -1235,17 +1340,6 @@ struct DefaultListHomeView: View {
                     isLikeDisabled = false
                 }
             }
-        }) { error in
-            // Handle read error
-            print("Read error:", error)
-            // Roll back optimistic change
-            if currentlyLiked {
-                likes[safeUID] = ts
-            } else {
-                likes.removeValue(forKey: safeUID)
-            }
-            isLikeDisabled = false
-            showInlineToast("Network error.")
         }
     }
     
@@ -1259,33 +1353,36 @@ struct DefaultListHomeView: View {
     
     // MARK: — Data fetches
     private func fetchCreatorName() {
-        let userDetails = Database.database().reference().child("UserData").child(listData.userCreator).child("UserDetails")
+        let userDoc = FirestoreProvider.dbFilters.collection("users").document(listData.userCreator)
 
-        userDetails.observeSingleEvent(of: .value, with: { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
+        userDoc.getDocument { snap, error in
+            guard error == nil, let value = snap?.data() else {
                 print("❌ Could Not Load User Data for HomeView Rankos with UserID: \(listData.userCreator)")
                 return
             }
 
-            self.creatorName = value["UserName"] as? String ?? ""
-        })
+            self.creatorName = value["name"] as? String ?? ""
+        }
     }
     
     // MARK: — Fetch likes
     private func fetchLikes() {
-        let ref = Database.database()
-            .reference()
-            .child("RankoData")
-            .child(listData.id)
-            .child("RankoLikes")
-        
-        ref.observe(.value, with: { snap in
-            if let dict = snap.value as? [String: String] {
-                likes = dict
-            } else {
-                likes = [:]
+        Task {
+            do {
+                let snap = try await FirestoreProvider.dbFilters
+                    .collection("ranko")
+                    .document(listData.id)
+                    .collection("likes")
+                    .getDocuments()
+                var dict: [String: String] = [:]
+                for d in snap.documents {
+                    dict[d.documentID] = d.data()["time"] as? String ?? ""
+                }
+                await MainActor.run { likes = dict }
+            } catch {
+                print("❌ Failed to fetch likes from Firestore:", error.localizedDescription)
             }
-        })
+        }
         
         // ✅ Algolia update
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
@@ -1307,18 +1404,18 @@ struct DefaultListHomeView: View {
     }
     
     private func fetchComments() {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(listData.id)
-            .child("RankoComments")
-
-        ref.observe(.value, with: { snap in
-            if let dict = snap.value as? [String: Any] {
-                commentsCount = dict.count
-            } else {
-                commentsCount = 0
+        Task {
+            do {
+                let snap = try await FirestoreProvider.dbFilters
+                    .collection("ranko")
+                    .document(listData.id)
+                    .collection("comments")
+                    .getDocuments()
+                await MainActor.run { commentsCount = snap.documents.count }
+            } catch {
+                print("❌ Failed to fetch comments from Firestore:", error.localizedDescription)
             }
-        })
+        }
         
         // ✅ Algolia update
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
@@ -1415,7 +1512,6 @@ struct TierListHomeView: View {
     @StateObject private var user_data = UserInformation.shared
     
     // Profile & creator info
-    @State private var profileImage: UIImage?
     @State private var creatorName: String = ""
     
     // Likes & comments
@@ -1437,17 +1533,16 @@ struct TierListHomeView: View {
     var labelByIndex: [Int: String]? = nil
     var colorHexByIndex: [Int: Int]? = nil
     
-    private var sortedItems: [RankoItem] {
-        listData.items.sorted { $0.rank < $1.rank }
+    private var previewItems: [RankoItem] {
+        // For tier lists, preview should already hold the 3x3 grid order; keep as-is
+        listData.items
     }
-    private var firstBlock: [RankoItem] {
-        Array(sortedItems.prefix(5))
-    }
-    private var remainder: [RankoItem] {
-        Array(sortedItems.dropFirst(5))
-    }
-    private var secondBlock: [RankoItem] {
-        Array(remainder.prefix(4))
+    private var firstBlock: [RankoItem] { Array(previewItems.prefix(3)) }
+    private var remainder: [RankoItem] { Array(previewItems.dropFirst(3)) }
+    private var secondBlock: [RankoItem] { Array(remainder.prefix(2)) }
+    
+    private var creatorImageURL: URL? {
+        URL(string: "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media&token=\(user_data.userID)")
     }
     
     // MARK: — Helpers to compute “safe” UID & whether we’ve liked
@@ -1460,39 +1555,34 @@ struct TierListHomeView: View {
     }
     
     var body: some View {
-        LazyVStack {
-            Rectangle()
-                .fill(Color(hex: 0x707070))
-                .opacity(0.15)
-                .frame(maxWidth: .infinity)
-                .frame(height: 2)
-                .padding(.bottom, 10)
-                .padding(.horizontal, 10)
+        LazyVStack(spacing: 14) {
             HStack(alignment: .top) {
-                Group {
-                    AsyncImage(url: URL(string: "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media&token=\(user_data.userID)")) { phase in
-                        if let img = phase.image {
-                            img.resizable()
-                                .scaledToFill()
-                                .frame(width: 50, height: 50)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                        } else {
-                            SkeletonView(RoundedRectangle(cornerRadius: 10))
-                                .frame(width: 42, height: 42)
-                        }
+                AsyncImage(url: creatorImageURL) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable()
+                            .scaledToFill()
+                    case .empty:
+                        SkeletonView(RoundedRectangle(cornerRadius: 7))
+                    case .failure:
+                        Image(systemName: "person.crop.circle.fill")
+                            .resizable()
+                            .foregroundColor(.gray.opacity(0.4))
+                    @unknown default:
+                        EmptyView()
                     }
-                    .frame(width: 42, height: 42)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
+                .frame(width: 38, height: 38)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
                 .onTapGesture {
                     onProfileTap(listData.userCreator)
                 }
                 
-                LazyVStack(alignment: .leading) {
+                LazyVStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 4) {
                         Text(creatorName)
                             .font(.custom("Nunito-Black", size: 13))
-                            .foregroundColor(Color(hex: 0x000000))
+                            .foregroundColor(Color(hex: 0x6A6A6A))
                         Text("•")
                             .font(.custom("Nunito-Black", size: 11))
                             .foregroundColor(Color(hex: 0x818181))
@@ -1504,7 +1594,7 @@ struct TierListHomeView: View {
                     Text(listData.listName)
                         .font(.custom("Nunito-Black", size: 18))
                         .foregroundColor(Color(hex: 0x666666))
-                        .padding(.bottom, -15)
+                        .padding(.bottom, -6)
                 }
                 .padding(.leading, 8)
                 .onTapGesture {
@@ -1580,6 +1670,16 @@ struct TierListHomeView: View {
                 }
                 .padding(.trailing, 8)
                 
+                HStack(spacing: 4) {
+                    Image(systemName: "square.grid.3x3.fill")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                    Text("\(listData.itemsNumber ?? previewItems.count)")
+                        .font(.system(size: 12, weight: .black))
+                        .foregroundColor(Color(hex: 0x666666))
+                }
+                .padding(.trailing, 8)
+                
                 Button {
                     openShareView = true
                 } label: {
@@ -1590,6 +1690,13 @@ struct TierListHomeView: View {
                 Spacer()
             }
         }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color.black.opacity(0.1), radius: 29, x: 0, y: 4)
+        )
+        .padding(.horizontal, 8)
         .overlay(
             Group {
                 if showToast {
@@ -1618,7 +1725,7 @@ struct TierListHomeView: View {
     private func positionForItem(_ item: RankoItem) -> Int? {
         // prefer matching by id; if your RankoItem doesn't have `id`,
         // swap to another unique key (e.g. itemName + image url).
-        if let idx = sortedItems.firstIndex(where: { $0.id == item.id }) {
+        if let idx = previewItems.firstIndex(where: { $0.id == item.id }) {
             return idx + 1
         }
         return nil
@@ -1768,9 +1875,11 @@ struct TierListHomeView: View {
         isLikeDisabled = true
 
         let ts = currentAEDTString()
-        let dbRef = Database.database().reference()
-        let likePath = "RankoData/\(listData.id)/RankoLikes/\(safeUID)"
-        let likeRef = dbRef.child(likePath)
+        let likeDoc = FirestoreProvider.dbFilters
+            .collection("ranko")
+            .document(listData.id)
+            .collection("likes")
+            .document(safeUID)
 
         // 1) Optimistically update local state
         let currentlyLiked = hasLiked
@@ -1781,12 +1890,23 @@ struct TierListHomeView: View {
         }
 
         // 2) Read once to confirm server state
-        likeRef.observeSingleEvent(of: .value, with: { snapshot in
-            if snapshot.exists() {
+        likeDoc.getDocument { snap, error in
+            if let error = error {
+                print("Read error:", error)
+                if currentlyLiked {
+                    likes[safeUID] = ts
+                } else {
+                    likes.removeValue(forKey: safeUID)
+                }
+                isLikeDisabled = false
+                showInlineToast("Network error.")
+                return
+            }
+
+            if let snap = snap, snap.exists {
                 // 👎 Unlike on server
-                likeRef.removeValue { error, _ in
+                likeDoc.delete { error in
                     if let error = error {
-                        // 3a) Roll back if failure
                         likes[safeUID] = ts
                         print("Error removing like:", error)
                         showInlineToast("Couldn’t remove like.")
@@ -1795,9 +1915,8 @@ struct TierListHomeView: View {
                 }
             } else {
                 // 👍 Like on server
-                likeRef.setValue(ts) { error, _ in
+                likeDoc.setData(["time": ts]) { error in
                     if let error = error {
-                        // 3b) Roll back if failure
                         likes.removeValue(forKey: safeUID)
                         print("Error adding like:", error)
                         showInlineToast("Couldn’t add like.")
@@ -1805,17 +1924,6 @@ struct TierListHomeView: View {
                     isLikeDisabled = false
                 }
             }
-        }) { error in
-            // Handle read error
-            print("Read error:", error)
-            // Roll back optimistic change
-            if currentlyLiked {
-                likes[safeUID] = ts
-            } else {
-                likes.removeValue(forKey: safeUID)
-            }
-            isLikeDisabled = false
-            showInlineToast("Network error.")
         }
     }
     
@@ -1829,33 +1937,36 @@ struct TierListHomeView: View {
     
     // MARK: — Data fetches
     private func fetchCreatorName() {
-        let userDetails = Database.database().reference().child("UserData").child(listData.userCreator).child("UserDetails")
+        let userDoc = FirestoreProvider.dbFilters.collection("users").document(listData.userCreator)
 
-        userDetails.observeSingleEvent(of: .value, with: { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
+        userDoc.getDocument { snap, error in
+            guard error == nil, let value = snap?.data() else {
                 print("❌ Could Not Load User Data for HomeView Rankos with UserID: \(listData.userCreator)")
                 return
             }
 
-            self.creatorName = value["UserName"] as? String ?? ""
-        })
+            self.creatorName = value["name"] as? String ?? ""
+        }
     }
     
     // MARK: — Fetch likes
     private func fetchLikes() {
-        let ref = Database.database()
-            .reference()
-            .child("RankoData")
-            .child(listData.id)
-            .child("RankoLikes")
-        
-        ref.observe(.value, with: { snap in
-            if let dict = snap.value as? [String: String] {
-                likes = dict
-            } else {
-                likes = [:]
+        Task {
+            do {
+                let snap = try await FirestoreProvider.dbFilters
+                    .collection("ranko")
+                    .document(listData.id)
+                    .collection("likes")
+                    .getDocuments()
+                var dict: [String: String] = [:]
+                for d in snap.documents {
+                    dict[d.documentID] = d.data()["time"] as? String ?? ""
+                }
+                await MainActor.run { likes = dict }
+            } catch {
+                print("❌ Failed to fetch likes from Firestore:", error.localizedDescription)
             }
-        })
+        }
         
         // ✅ Algolia update
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
@@ -1877,18 +1988,18 @@ struct TierListHomeView: View {
     }
     
     private func fetchComments() {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(listData.id)
-            .child("RankoComments")
-
-        ref.observe(.value, with: { snap in
-            if let dict = snap.value as? [String: Any] {
-                commentsCount = dict.count
-            } else {
-                commentsCount = 0
+        Task {
+            do {
+                let snap = try await FirestoreProvider.dbFilters
+                    .collection("ranko")
+                    .document(listData.id)
+                    .collection("comments")
+                    .getDocuments()
+                await MainActor.run { commentsCount = snap.documents.count }
+            } catch {
+                print("❌ Failed to fetch comments from Firestore:", error.localizedDescription)
             }
-        })
+        }
         
         // ✅ Algolia update
         let client = SearchClient(appID: ApplicationID(rawValue: Secrets.algoliaAppID),
@@ -1975,71 +2086,6 @@ struct TierListHomeView: View {
                 .opacity(show ? 1 : 0)
                 .animation(.interpolatingSpring(stiffness: 170, damping: 15), value: show)
         }
-    }
-}
-
-struct TierListHomeView2: View {
-    // core data
-    let listData: RankoList
-
-    // actions
-    var onCommentTap: (String) -> Void
-    var onRankoTap: (RankoList) -> Void
-    var onProfileTap: (String) -> Void
-
-    // optional (1-based index -> value) maps; pass these if you decode RankoTiers
-    var codeByIndex: [Int: String]? = nil
-    var labelByIndex: [Int: String]? = nil
-    var colorHexByIndex: [Int: Int]? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // header (tap anywhere to open the ranko)
-            HStack(alignment: .top, spacing: 10) {
-                // profile thumb
-                AsyncImage(
-                    url: URL(string:
-                        "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media"
-                    )
-                ) { phase in
-                    if let img = phase.image {
-                        img.resizable().scaledToFill()
-                    } else {
-                        Color.gray.opacity(0.2)
-                    }
-                }
-                .frame(width: 42, height: 42)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .onTapGesture { onProfileTap(listData.userCreator) }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(listData.listName)
-                        .font(.custom("Nunito-Black", size: 18))
-                        .foregroundColor(Color(hex: 0x666666))
-
-                    HStack(spacing: 6) {
-                        HomeCategoryBadge1(
-                            name: listData.categoryName,
-                            colour: listData.categoryColour,
-                            icon: listData.categoryIcon
-                        )
-                        .onTapGesture { onRankoTap(listData) }
-
-                        Spacer(minLength: 0)
-                    }
-                }
-                .onTapGesture { onRankoTap(listData) }
-            }
-
-            
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
-        )
     }
 }
 
@@ -2291,4 +2337,3 @@ struct HomeListSkeletonViewRow: View {
     HomeListSkeletonViewRow()
         .environmentObject(ProfileImageService())
 }
-

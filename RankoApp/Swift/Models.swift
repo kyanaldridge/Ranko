@@ -156,6 +156,7 @@ struct RankoList: Identifiable, Codable {
     let userCreator: String          // from "RankoDateTime" e.g. "2024-04-06-17-42"
     let timeCreated: String       // from "RankoUserID"
     let timeUpdated: String
+    var itemsNumber: Int? = nil
     var items: [RankoItem]
     
     // TierListHomeView)

@@ -6,9 +6,8 @@
 //
 
 import SwiftUI
-import FirebaseDatabase
+import FirebaseFirestore
 import FirebaseAuth
-import FirebaseStorage
 import FirebaseAnalytics
 import AlgoliaSearchClient
 
@@ -148,143 +147,113 @@ struct ExploreView: View {
     }
 
     // ✅ NEW: fetch a single Ranko list from Firebase by objectID
+    func intFromAny(_ any: Any?) -> Int? {
+        if let n = any as? NSNumber { return n.intValue }
+        if let s = any as? String    { return Int(s) }
+        if let d = any as? Double    { return Int(d) }
+        return nil
+    }
+
+    func parseColourUInt(_ any: Any?) -> UInt {
+        if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
+        if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
+        if let s = any as? String {
+            var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
+            if hex.hasPrefix("#")  { hex.removeFirst() }
+            if hex.hasPrefix("0x") { hex.removeFirst(2) }
+            if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
+        }
+        return 0x446D7A
+    }
+    
     private func fetchRankoList(_ objectID: String, completion: @escaping (RankoList?) -> Void) {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(objectID)
+        let doc = FirestoreProvider.dbFilters.collection("ranko").document(objectID)
 
-        func intFromAny(_ any: Any?) -> Int? {
-            if let n = any as? NSNumber { return n.intValue }
-            if let s = any as? String    { return Int(s) }
-            if let d = any as? Double    { return Int(d) }
-            return nil
-        }
-
-        func parseColourUInt(_ any: Any?) -> UInt {
-            // accepts "0xFFCF00", "#FFCF00", "FFCF00", 16763904, NSNumber, etc.
-            if let n = any as? NSNumber { return UInt(truncating: n) & 0x00FF_FFFF }
-            if let i = any as? Int      { return UInt(i & 0x00FF_FFFF) }
-            if let s = any as? String {
-                var hex = s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                if let dec = Int(hex) { return UInt(dec & 0x00FF_FFFF) }
-                if hex.hasPrefix("#")  { hex.removeFirst() }
-                if hex.hasPrefix("0x") { hex.removeFirst(2) }
-                if let v = Int(hex, radix: 16) { return UInt(v & 0x00FF_FFFF) }
-            }
-            return 0x446D7A
-        }
-
-        ref.observeSingleEvent(of: .value, with: { snap in
-            guard let root = snap.value as? [String: Any] else {
+        doc.getDocument { snap, error in
+            guard error == nil, let data = snap?.data() else {
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
 
-            // ======== NEW SCHEMA PREFERRED ========
-            if let details = root["RankoDetails"] as? [String: Any] {
-                let privacy = root["RankoPrivacy"] as? [String: Any]
-                let cat     = root["RankoCategory"] as? [String: Any]
-                let items   = root["RankoItems"] as? [String: Any] ?? [:]
-                let dt      = root["RankoDateTime"] as? [String: Any]
+            let name        = data["name"] as? String ?? ""
+            let description = data["description"] as? String ?? ""
+            let type        = data["type"] as? String ?? "default"
+            let userID      = data["user_id"] as? String ?? ""
+            let status      = data["status"] as? String ?? "active"
+            let privacy     = data["privacy"] as? Bool ?? false
 
-                let name        = (details["name"] as? String) ?? ""
-                let description = (details["description"] as? String) ?? ""
-                let type        = (details["type"] as? String) ?? "default"
-                let userID      = (details["user_id"] as? String) ?? ""
+            guard status == "active" else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
 
-                let isPrivBool  = (privacy?["private"] as? Bool) ?? false
+            let cat       = data["category_meta"] as? [String: Any]
+            let catName   = data["category"] as? String ?? "Unknown"
+            let catIcon   = cat?["icon"] as? String ?? "circle"
+            let catColour = parseColourUInt(cat?["colour"])
 
-                let catName     = (cat?["name"] as? String) ?? ""
-                let catIcon     = (cat?["icon"] as? String) ?? "circle"
-                let catColour   = parseColourUInt(cat?["colour"])
+            let time      = data["time"] as? [String: Any]
+            let createdStr  = (time?["created"] as? String) ?? (time?["created"] as? Int).map(String.init) ?? "19700101000000"
+            let updatedStr  = (time?["updated"] as? String) ?? (time?["updated"] as? Int).map(String.init) ?? createdStr
 
-                let createdStr  = (dt?["created"] as? String) ?? ""
-                let updatedStr  = (dt?["updated"] as? String) ?? createdStr
+            var parsedItems: [RankoItem] = []
+            var itemsNumber: Int? = nil
+            if let num = data["items"] as? Int {
+                itemsNumber = num
+            }
+            if let preview = data["preview"] as? [[String: Any]] {
+                parsedItems = preview.enumerated().compactMap { idx, dict in
+                    let id        = dict["id"] as? String ?? UUID().uuidString
+                    let itemName  = dict["name"] as? String ?? ""
+                    let itemImage = dict["image"] as? String ?? ""
+                    let rank      = intFromAny(dict["rank"]) ?? (idx + 1)
 
-                let parsedItems: [RankoItem] = items.compactMap { (k, v) in
-                    guard let it = v as? [String: Any] else { return nil }
-                    guard
-                        let itemName  = it["ItemName"] as? String,
-                        let itemDesc  = it["ItemDescription"] as? String,
-                        let itemImage = it["ItemImage"] as? String,
-                        let itemGIF    = it["ItemGIF"] as? String,
-                        let itemVideo    = it["ItemVideo"] as? String,
-                        let itemAudio    = it["ItemAudio"] as? String
-                    else { return nil }
-                    let rank  = intFromAny(it["ItemRank"])  ?? 0
-                    let votes = intFromAny(it["ItemVotes"]) ?? 0
-                    let rec = RankoRecord(objectID: k, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                    let plays = intFromAny(it["PlayCount"]) ?? 0
-                    return RankoItem(id: k, rank: rank, votes: votes, record: rec, playCount: plays)
+                    let record = RankoRecord(
+                        objectID: id,
+                        ItemName: itemName,
+                        ItemDescription: "",
+                        ItemCategory: "",
+                        ItemImage: itemImage,
+                        ItemGIF: nil,
+                        ItemVideo: nil,
+                        ItemAudio: nil
+                    )
+                    return RankoItem(id: id, rank: rank, votes: 0, record: record, playCount: 0)
                 }
+            } else if let arr = data["items"] as? [[String: Any]] {
+                parsedItems = arr.compactMap { dict in
+                    let id        = dict["id"] as? String ?? UUID().uuidString
+                    let itemName  = dict["name"] as? String ?? ""
+                    let itemDesc  = dict["description"] as? String ?? ""
+                    let itemImage = dict["image"] as? String ?? ""
+                    let itemGIF   = dict["gif"] as? String
+                    let itemVideo = dict["video"] as? String
+                    let itemAudio = dict["audio"] as? String
 
-                let list = RankoList(
-                    id: objectID,
-                    listName: name,
-                    listDescription: description,
-                    type: type,
-                    categoryName: catName,
-                    categoryIcon: catIcon,
-                    categoryColour: catColour,
-                    isPrivate: isPrivBool ? "Private" : "Public",
-                    userCreator: userID,
-                    timeCreated: createdStr,
-                    timeUpdated: updatedStr,
-                    items: parsedItems.sorted { $0.rank < $1.rank }
-                )
-                DispatchQueue.main.async { completion(list) }
-                return
-            }
+                    let rank      = intFromAny(dict["rank"]) ?? 0
+                    let votes     = intFromAny(dict["votes"]) ?? 0
+                    let playCount = intFromAny(dict["playCount"]) ?? 0
 
-            // ======== LEGACY SCHEMA FALLBACK ========
-            guard
-                let name        = root["RankoName"] as? String,
-                let description = root["RankoDescription"] as? String,
-                let type        = root["RankoType"] as? String,
-                let isPrivBool  = root["RankoPrivacy"] as? Bool,
-                let userID      = root["RankoUserID"] as? String
-            else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
+                    let record = RankoRecord(
+                        objectID: id,
+                        ItemName: itemName,
+                        ItemDescription: itemDesc,
+                        ItemCategory: "",
+                        ItemImage: itemImage,
+                        ItemGIF: itemGIF,
+                        ItemVideo: itemVideo,
+                        ItemAudio: itemAudio
+                    )
 
-            var createdStr = ""
-            var updatedStr = ""
-            if let dt = root["RankoDateTime"] as? [String: Any] {
-                // older keys
-                createdStr = (dt["RankoCreated"] as? String) ?? (dt["created"] as? String) ?? ""
-                updatedStr = (dt["RankoUpdated"] as? String) ?? (dt["updated"] as? String) ?? createdStr
-            } else if let s = root["RankoDateTime"] as? String {
-                createdStr = s
-                updatedStr = s
-            }
-
-            var catName = "Unknown"
-            var catIcon = "circle"
-            var catColourUInt: UInt = 0x446D7A
-            if let catObj = root["RankoCategory"] as? [String: Any] {
-                catName = (catObj["name"] as? String) ?? catName
-                catIcon = (catObj["icon"] as? String) ?? catIcon
-                catColourUInt = parseColourUInt(catObj["colour"])
-            } else if let catStr = root["RankoCategory"] as? String {
-                catName = catStr
-            }
-
-            let itemsDict = root["RankoItems"] as? [String: [String: Any]] ?? [:]
-            let items: [RankoItem] = itemsDict.compactMap { itemID, it in
-                guard
-                    let itemName  = it["ItemName"] as? String,
-                    let itemDesc  = it["ItemDescription"] as? String,
-                    let itemImage = it["ItemImage"] as? String,
-                    let itemGIF    = it["ItemGIF"] as? String,
-                    let itemVideo    = it["ItemVideo"] as? String,
-                    let itemAudio    = it["ItemAudio"] as? String
-                else { return nil }
-                let rank  = intFromAny(it["ItemRank"])  ?? 0
-                let votes = intFromAny(it["ItemVotes"]) ?? 0
-                let rec = RankoRecord(objectID: itemID, ItemName: itemName, ItemDescription: itemDesc, ItemCategory: "", ItemImage: itemImage, ItemGIF: itemGIF, ItemVideo: itemVideo, ItemAudio: itemAudio)
-                let plays = intFromAny(it["PlayCount"]) ?? 0
-                return RankoItem(id: itemID, rank: rank, votes: votes, record: rec, playCount: plays)
+                    return RankoItem(
+                        id: id,
+                        rank: rank,
+                        votes: votes,
+                        record: record,
+                        playCount: playCount
+                    )
+                }
             }
 
             let list = RankoList(
@@ -294,24 +263,17 @@ struct ExploreView: View {
                 type: type,
                 categoryName: catName,
                 categoryIcon: catIcon,
-                categoryColour: catColourUInt,
-                isPrivate: isPrivBool ? "Private" : "Public",
+                categoryColour: catColour,
+                isPrivate: privacy ? "Private" : "Public",
                 userCreator: userID,
                 timeCreated: createdStr,
                 timeUpdated: updatedStr,
-                items: items.sorted { $0.rank < $1.rank }
+                itemsNumber: itemsNumber ?? parsedItems.count,
+                items: parsedItems.sorted { $0.rank < $1.rank }
             )
 
             DispatchQueue.main.async { completion(list) }
-        })
-    }
-    
-    private func intFromAny(_ any: Any?) -> Int? {
-        if let i = any as? Int { return i }
-        if let d = any as? Double { return Int(d) }
-        if let s = any as? String { return Int(s) }
-        if let n = any as? NSNumber { return n.intValue }
-        return nil
+        }
     }
 
     // ✅ NEW: load next batch of 6 (refill queue if needed)
@@ -398,41 +360,6 @@ struct ExploreView: View {
                         }
                         .padding(.horizontal, 30)
                         .padding(.top, 10)
-                        
-                        // ZStack {
-                        //     RoundedRectangle(cornerRadius: 18)
-                        //         .fill(Color.white)
-                        //         .shadow(color: Color(hex: 0x000000).opacity(0.12), radius: 10, x: 0, y: 6)
-                        //     HStack(spacing: 12) {
-                        //         ForEach(buttons) { button in
-                        //             Button {
-                        //                 showComingSoonToast(button.message)
-                        //             } label: {
-                        //                 VStack(spacing: 6) {
-                        //                     Image(systemName: button.icon)
-                        //                         .resizable()
-                        //                         .scaledToFit()
-                        //                         .frame(width: 30, height: 30)
-                                            
-                        //                     Text(button.title)
-                        //                         .font(.custom("Nunito-Black", size: 15))
-                        //                 }
-                        //                 .foregroundColor(Color(hex: 0xFFFFFF))
-                        //                 .frame(maxWidth: .infinity)
-                        //                 .padding(.vertical, 15)
-                        //             }
-                        //             .tint(Color(hex: 0x292A30))
-                        //             .buttonStyle(.glassProminent)
-                        //             .matchedTransitionSource(
-                        //                 id: "menuButtons", in: transition
-                        //             )
-                        //         }
-                        //     }
-                        //     .padding(.vertical, 14)
-                        //     .padding(.horizontal, 16)
-                        // }
-                        // .padding(.horizontal, 20)
-                        // .padding(.top, 12)
 
                         ZStack {
                             RoundedRectangle(cornerRadius: 18)
@@ -449,7 +376,7 @@ struct ExploreView: View {
                                             .font(.custom("Nunito-Black", size: 17))
                                         Spacer()
                                         Button {
-                                            
+                                            showComingSoonToast("Search and filter through all public Rankos from the community – Coming Soon!")
                                         } label: {
                                             HStack {
                                                 Image(systemName: "line.3.horizontal.decrease")
@@ -548,10 +475,9 @@ struct ExploreView: View {
                                                     VStack {
                                                         Image(game.image)
                                                             .resizable()
-                                                            .aspectRatio(contentMode: .fill)
-                                                            .frame(height: 139)
-                                                            .frame(maxWidth: .infinity)
+                                                            .aspectRatio(contentMode: .fit)
                                                     }
+                                                    .padding(.horizontal, 10)
                                                     .frame(width: cardWidth, height: 139)
                                                     .background(
                                                         RoundedRectangle(cornerRadius: 9)
@@ -789,7 +715,6 @@ struct DefaultListExploreView: View {
     @StateObject private var user_data = UserInformation.shared
     
     // Profile & creator info
-    @State private var profileImage: UIImage?
     @State private var creatorName: String = ""
     
     // Likes & comments
@@ -805,14 +730,17 @@ struct DefaultListExploreView: View {
     var onRankoTap: (String) -> Void
     var onProfileTap: (String) -> Void
     
-    private var sortedItems: [RankoItem] {
-        listData.items.sorted { ($1.votes, $0.rank) < ($0.votes, $1.rank) }
+    private var previewItems: [RankoItem] {
+        // Use provided preview items (already mapped into listData.items) and limit to top 5 for defaults
+        let items = listData.items
+        if listData.type.lowercased() == "tier" { return items }
+        return Array(items.prefix(5))
     }
-    private var firstBlock: [RankoItem] {
-        Array(sortedItems.prefix(3))
-    }
-    private var remainder: [RankoItem] {
-        Array(sortedItems)
+    private var firstBlock: [RankoItem] { Array(previewItems.prefix(3)) }
+    private var remainder: [RankoItem] { Array(previewItems.dropFirst(3)) }
+    
+    private var creatorImageURL: URL? {
+        URL(string: "https://firebasestorage.googleapis.com/v0/b/ranko-kyan.firebasestorage.app/o/profilePictures%2F\(listData.userCreator).jpg?alt=media&token=\(user_data.userID)")
     }
     
     // MARK: — Helpers to compute “safe” UID & whether we’ve liked
@@ -827,13 +755,18 @@ struct DefaultListExploreView: View {
     var body: some View {
         VStack {
             HStack(alignment: .top) {
-                Group {
-                    if let img = profileImage {
-                        Image(uiImage: img)
-                            .resizable()
-                    } else {
+                AsyncImage(url: creatorImageURL) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable()
+                    case .empty:
                         SkeletonView(RoundedRectangle(cornerRadius: 10))
-                            .frame(width: 42, height: 42)
+                    case .failure:
+                        Image(systemName: "person.crop.circle.fill")
+                            .resizable()
+                            .foregroundColor(.gray.opacity(0.4))
+                    @unknown default:
+                        EmptyView()
                     }
                 }
                 .frame(width: 42, height: 42)
@@ -957,7 +890,7 @@ struct DefaultListExploreView: View {
     private func positionForItem(_ item: RankoItem) -> Int? {
         // prefer matching by id; if your RankoItem doesn't have `id`,
         // swap to another unique key (e.g. itemName + image url).
-        if let idx = sortedItems.firstIndex(where: { $0.id == item.id }) {
+        if let idx = previewItems.firstIndex(where: { $0.id == item.id }) {
             return idx + 1
         }
         return nil
@@ -1091,9 +1024,11 @@ struct DefaultListExploreView: View {
         isLikeDisabled = true
 
         let ts = currentAEDTString()
-        let dbRef = Database.database().reference()
-        let likePath = "RankoData/\(listData.id)/RankoLikes/\(safeUID)"
-        let likeRef = dbRef.child(likePath)
+        let likeDoc = FirestoreProvider.dbFilters
+            .collection("ranko")
+            .document(listData.id)
+            .collection("likes")
+            .document(safeUID)
 
         // 1) Optimistically update local state
         let currentlyLiked = hasLiked
@@ -1104,12 +1039,24 @@ struct DefaultListExploreView: View {
         }
 
         // 2) Read once to confirm server state
-        likeRef.observeSingleEvent(of: .value) { snapshot in
-            if snapshot.exists() {
+        likeDoc.getDocument { snap, error in
+            if let error = error {
+                print("Read error:", error)
+                // Roll back optimistic change
+                if currentlyLiked {
+                    likes[safeUID] = ts
+                } else {
+                    likes.removeValue(forKey: safeUID)
+                }
+                isLikeDisabled = false
+                showInlineToast("Network error.")
+                return
+            }
+
+            if let snap = snap, snap.exists {
                 // 👎 Unlike on server
-                likeRef.removeValue { error, _ in
+                likeDoc.delete { error in
                     if let error = error {
-                        // 3a) Roll back if failure
                         likes[safeUID] = ts
                         print("Error removing like:", error)
                         showInlineToast("Couldn’t remove like.")
@@ -1118,9 +1065,8 @@ struct DefaultListExploreView: View {
                 }
             } else {
                 // 👍 Like on server
-                likeRef.setValue(ts) { error, _ in
+                likeDoc.setData(["time": ts]) { error in
                     if let error = error {
-                        // 3b) Roll back if failure
                         likes.removeValue(forKey: safeUID)
                         print("Error adding like:", error)
                         showInlineToast("Couldn’t add like.")
@@ -1128,17 +1074,6 @@ struct DefaultListExploreView: View {
                     isLikeDisabled = false
                 }
             }
-        } withCancel: { error in
-            // Handle read error
-            print("Read error:", error)
-            // Roll back optimistic change
-            if currentlyLiked {
-                likes[safeUID] = ts
-            } else {
-                likes.removeValue(forKey: safeUID)
-            }
-            isLikeDisabled = false
-            showInlineToast("Network error.")
         }
     }
     
@@ -1152,43 +1087,41 @@ struct DefaultListExploreView: View {
     
     // MARK: — Data fetches
     private func fetchCreatorName() {
-        let userDetails = Database.database().reference().child("UserData").child(listData.userCreator).child("UserDetails")
-        let userProfilePicture = Database.database().reference().child("UserData").child(listData.userCreator).child("UserProfilePicture")
+        let userDoc = FirestoreProvider.dbFilters.collection("users").document(listData.userCreator)
 
-        userDetails.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
+        Task {
+            do {
+                let snap = try await userDoc.getDocument()
+                guard let value = snap.data() else {
+                    print("❌ Could Not Load User Data for HomeView Rankos with UserID: \(listData.userCreator)")
+                    return
+                }
+
+                self.creatorName = value["name"] as? String ?? ""
+                
+            } catch {
                 print("❌ Could Not Load User Data for HomeView Rankos with UserID: \(listData.userCreator)")
-                return
             }
-
-            self.creatorName = value["UserName"] as? String ?? ""
-        }
-        
-        userProfilePicture.observeSingleEvent(of: .value) { snapshot in
-            guard let value = snapshot.value as? [String: Any] else {
-                print("❌ Could Not Load Profile Photo Data for HomeView Rankos with UserID: \(listData.userCreator)")
-                return
-            }
-
-            let profilePath = value["UserProfilePicturePath"] as? String ?? ""
-
-            loadProfileImage(from: profilePath)
         }
     }
     
     // MARK: — Fetch likes
     private func fetchLikes() {
-        let ref = Database.database()
-            .reference()
-            .child("RankoData")
-            .child(listData.id)
-            .child("RankoLikes")
-        
-        ref.observe(.value) { snap in
-            if let dict = snap.value as? [String: String] {
-                likes = dict
-            } else {
-                likes = [:]
+        Task {
+            do {
+                let snap = try await FirestoreProvider.dbFilters
+                    .collection("ranko")
+                    .document(listData.id)
+                    .collection("likes")
+                    .getDocuments()
+                var dict: [String: String] = [:]
+                for d in snap.documents {
+                    let t = d.data()["time"] as? String ?? ""
+                    dict[d.documentID] = t
+                }
+                await MainActor.run { likes = dict }
+            } catch {
+                print("❌ Failed to fetch likes from Firestore:", error.localizedDescription)
             }
         }
         
@@ -1212,16 +1145,16 @@ struct DefaultListExploreView: View {
     }
     
     private func fetchComments() {
-        let ref = Database.database().reference()
-            .child("RankoData")
-            .child(listData.id)
-            .child("RankoComments")
-
-        ref.observe(.value) { snap in
-            if let dict = snap.value as? [String: Any] {
-                commentsCount = dict.count
-            } else {
-                commentsCount = 0
+        Task {
+            do {
+                let snap = try await FirestoreProvider.dbFilters
+                    .collection("ranko")
+                    .document(listData.id)
+                    .collection("comments")
+                    .getDocuments()
+                await MainActor.run { commentsCount = snap.documents.count }
+            } catch {
+                print("❌ Failed to fetch comments from Firestore:", error.localizedDescription)
             }
         }
         
@@ -1245,15 +1178,6 @@ struct DefaultListExploreView: View {
     }
     
     // MARK: — Helpers
-    private func loadProfileImage(from path: String) {
-        Storage.storage().reference().child("profilePictures").child(path)
-            .getData(maxSize: Int64(2 * 1024 * 1024)) { data, _ in
-                if let data = data, let ui = UIImage(data: data) {
-                    profileImage = ui
-                }
-            }
-    }
-    
     private func timeAgo(from dt: String) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
